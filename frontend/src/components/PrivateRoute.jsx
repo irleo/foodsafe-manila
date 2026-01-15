@@ -1,5 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import Spinner from "./Spinner";
 
 export default function PrivateRoute({ children, allowedRoles }) {
   const { auth, loading } = useAuth();
@@ -7,7 +8,7 @@ export default function PrivateRoute({ children, allowedRoles }) {
 
 
   if (loading) {
-    return <div>Loading...</div>;
+    return <Spinner delay={200}/>;
   }
 
   if (!auth || !auth.accessToken) {

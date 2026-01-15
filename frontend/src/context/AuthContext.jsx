@@ -16,7 +16,8 @@ export const AuthProvider = ({ children }) => {
         // console.log("Refresh response:", res.data);
         setAuth({ 
           accessToken: res.data.accessToken, 
-          role: res.data.user.role 
+          role: res.data.user.role,
+          username: res.data.user.username,
         });
       } catch {
         setAuth(null);

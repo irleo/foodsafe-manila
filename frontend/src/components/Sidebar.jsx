@@ -1,10 +1,10 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
+
 import { HomeIcon, FolderIcon, ChartBarIcon, MapIcon, UserGroupIcon, ArrowRightOnRectangleIcon } from "@heroicons/react/24/outline";
 import { useAuth } from "../context/AuthContext";
 import axios from "axios";
 
-export default function Sidebar({ open, onClose }) {
+export default function Sidebar() {
   const { auth, setAuth } = useAuth();
   const navigate = useNavigate();
 
@@ -20,7 +20,7 @@ export default function Sidebar({ open, onClose }) {
 
   const links = auth?.role === "admin"
     ? [
-        { name: "Dashboard", path: "/dashboard", icon: HomeIcon },
+        { name: "Dashboard", path: "/", icon: HomeIcon },
         { name: "Dataset Upload", path: "/datasets", icon: FolderIcon },
         { name: "Heatmap", path: "/heatmap", icon: MapIcon },
         { name: "Analytics", path: "/analytics", icon: ChartBarIcon },
@@ -28,37 +28,28 @@ export default function Sidebar({ open, onClose }) {
         { name: "User Management", path: "/user-management", icon: UserGroupIcon },
       ]
     : [
-        { name: "Dashboard", path: "/dashboard", icon: HomeIcon },
+        { name: "Dashboard", path: "/", icon: HomeIcon },
         { name: "Heatmap", path: "/heatmap", icon: MapIcon },
         { name: "Analytics", path: "/analytics", icon: ChartBarIcon },
-        { name: "Predictions", path: "/my-predictions", icon: ChartBarIcon },
+        { name: "Predictions", path: "/predictions", icon: ChartBarIcon },
       ];
 
   return (
      <>
-      {/* Backdrop
-      {open && (
-        <div
-          className="fixed inset-0 bg-black/40 z-40"
-          onClick={onClose}
-        />
-      )} */}
-
      <aside
-        className={`fixed top-16 left-0 h-[calc(100%-4rem)] w-64 bg-white shadow z-50
-        transform transition-transform duration-300
-        ${open ? "translate-x-0" : "-translate-x-full"}`}
+        className={`top-16 left-0 h-full w-64 bg-white shadow 
+        transform transition-transform duration-300`}
       >
       <div className="flex flex-col h-full">
       {/* Links */}
-      <nav className="flex-1 px-2 py-4 space-y-3 text-lg">
+      <nav className="p-4 space-y-1">
         {links.map(({ name, path, icon: Icon }) => (
           <Link
             key={path}
             to={path}
-            className="flex items-center gap-2 p-2 rounded hover:bg-gray-200"
+            className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-200"
           >
-            <Icon className="h-5 w-5" />
+            <Icon className="h-5 w-5 me-1" />
             {name}
           </Link>
         ))}
@@ -68,7 +59,7 @@ export default function Sidebar({ open, onClose }) {
       {auth?.accessToken && (
         <button
           onClick={handleLogout}
-          className="mt-auto flex items-center gap-2 text-red-600 px-5 py-4 rounded hover:bg-red-100 text-lg"
+          className="mt-auto flex items-center gap-2 text-red-600 px-4 py-4 rounded hover:bg-red-100 text-md"
         >
           <ArrowRightOnRectangleIcon className="h-5 w-5" />
           Logout

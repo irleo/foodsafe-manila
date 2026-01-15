@@ -1,17 +1,17 @@
 import axios from "axios";
 import { EnvelopeIcon, KeyIcon } from "@heroicons/react/24/outline";
-import logo from "../assets/react.svg"; 
+import logo from "../assets/react.svg";
 
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
 
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const Login = () => {
-  const {setAuth} = useAuth();
+  const { setAuth } = useAuth();
   const navigate = useNavigate();
-  
-
+  const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({
     email: "",
@@ -21,16 +21,28 @@ const Login = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setError(null);         // clear previous errors
+    setLoading(true);       // show loading
+
     try {
       const res = await axios.post("/api/auth/login", form, {
-        withCredentials: true,});
-        setAuth({accessToken: res.data.accessToken, role: res.data.user.role,});
-        console.log(res.data);
-        navigate("/"); // Redirect to home after login
+        withCredentials: true,
+      });
 
+      await delay(600);
+      setAuth({
+        accessToken: res.data.accessToken,
+        role: res.data.user.role,
+        username: res.data.user.username,
+      });
+
+      console.log(res.data);
+      navigate("/"); // Redirect to home after login
     } catch (err) {
       setError("Login failed. Please check your credentials.");
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -100,9 +112,13 @@ const Login = () => {
           <div className="mb-4">
             <button
               type="submit"
-              className="w-full bg-orange-400 hover:bg-orange-500 text-white py-2 rounded-md font-medium transition"
+              className="w-full bg-orange-400 hover:bg-orange-500 text-white py-2 rounded-md font-medium transition flex justify-center items-center gap-2"
+              disabled={loading} // prevent double click
             >
-              Login
+              {loading && (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              )}
+              {loading ? "Logging in..." : "Login"}
             </button>
           </div>
 
