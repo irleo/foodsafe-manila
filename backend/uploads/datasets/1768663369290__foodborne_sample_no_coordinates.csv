@@ -1,0 +1,11 @@
+district,location_name,illness,severity,reportedAt,foodSource,lat,lng
+Tondo,Tondo Wet Market,Salmonella,High,2025-01-04,Raw Seafood,14.6177
+Quiapo,Quiapo Public Market,Food Poisoning,Moderate,2025-01-03,Street Food
+Binondo,Binondo Restaurant Row,Salmonellosis,Moderate,2025-01-05
+Sampaloc,University Belt Canteen,Norovirus,Low,2025-01-07,Handled Food
+Ermita,Ermita Street Food,E. coli,Moderate,2025-01-08,Contaminated Ice
+Paco,Paco Food Stalls,Food Poisoning,Moderate,2025-01-09,Expired Ingredients
+Tondo,Tondo Community Area,Salmonella,High,2025-01-12,Raw Seafood
+Quiapo,Quiapo Sidewalk Vendors,Norovirus,Low,2025-01-14,Street Food
+Binondo,Chinatown Eatery,Food Poisoning,Moderate,2025-01-16,Restaurant
+Sampaloc,Dormitory Canteen,E. coli,High,2025-01-18,Water Contamination

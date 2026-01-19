@@ -56,7 +56,7 @@ export const login = async (req, res) => {
 
     const accessToken = jwt.sign(
       {
-        id: user._id,
+        id: user._id.toString(),
         role: user.role,
       },
       process.env.ACCESS_TOKEN_SECRET,
@@ -67,7 +67,7 @@ export const login = async (req, res) => {
 
     const refreshToken = jwt.sign(
       {
-        id: user._id,
+        id: user._id.toString(),
         role: user.role,
       },
       process.env.REFRESH_TOKEN_SECRET,
@@ -113,7 +113,7 @@ export const refreshToken = async (req, res) => {
 
     const newAccessToken = jwt.sign(
       {
-        id: user._id,
+        id: user._id.toString(),
         role: user.role,
       },
       process.env.ACCESS_TOKEN_SECRET,

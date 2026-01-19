@@ -21,8 +21,14 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* Routes with Navbar */}
-          <Route element={<DashboardLayout />}>
+          {/* Protected dashboard shell */}
+          <Route
+            element={
+              <PrivateRoute>
+                <DashboardLayout />
+              </PrivateRoute>
+            }
+          >
             <Route
               path="/"
               element={
@@ -38,12 +44,12 @@ function App() {
               }
             />
 
-            {/* Routes for Sidebar*/}
             <Route path="analytics" element={<Analytics />} />
             <Route path="heatmap" element={<Heatmap />} />
             <Route path="predictions" element={<Predictions />} />
-            
-            {/* ADMIN ONLY */}
+            <Route path="datasets" element={<DatasetUpload />} />
+
+            {/* Admin-only */}
             <Route
               path="user-management"
               element={
@@ -52,17 +58,9 @@ function App() {
                 </PrivateRoute>
               }
             />
-            <Route
-              path="datasets"
-              element={
-                <PrivateRoute allowedRoles={["admin"]}>
-                  <DatasetUpload />
-                </PrivateRoute>
-              }
-            />
           </Route>
 
-          {/* Routes without Navbar */}
+          {/* Public routes */}
           <Route
             path="/login"
             element={
@@ -77,15 +75,6 @@ function App() {
               <PublicRoute>
                 <Register />
               </PublicRoute>
-            }
-          />
-
-          <Route
-            path="*"
-            element={
-              <h1 className="text-center mt-5 text-3xl font-bold">
-                Page Not Found
-              </h1>
             }
           />
         </Routes>

@@ -1,0 +1,23 @@
+district,location_name,illness,severity,reportedAt,foodSource,lat,lng
+Quiapo,Quiapo Public Market,Food Poisoning,Moderate,2026-01-01,Street Food
+Tondo,Tondo Wet Market,Salmonella,High,2026-01-01,Raw Seafood
+Binondo,Binondo Restaurant Row,Norovirus,Moderate,2026-01-02,Restaurant
+Sampaloc,Sampaloc Carinderia,E. coli,High,2026-01-02,Home Cooked Food
+Ermita,Ermita Food Court,Food Poisoning,Low,2026-01-03,Fast Food
+Malate,Malate Night Market,Norovirus,Moderate,2026-01-03,Street Food
+Quiapo,Quiapo Public Market,Salmonella,High,2026-01-04,Raw Poultry
+Tondo,Tondo Fish Port,Vibrio,High,2026-01-04,Seafood
+Pandacan,Pandacan Eatery,E. coli,Moderate,2026-01-05,Home Cooked Food
+Sta. Cruz,Sta. Cruz Food Stalls,Food Poisoning,Low,2026-01-05,Street Food
+Binondo,Binondo Diner,Norovirus,Moderate,2026-01-06,Restaurant
+Sampaloc,Sampaloc Canteen,Salmonella,High,2026-01-07,Egg-Based Dishes
+Ermita,Ermita Cafeteria,Food Poisoning,Low,2026-01-08,Bakery Items
+Malate,Malate Grill House,E. coli,High,2026-01-09,Undercooked Beef
+Quiapo,Quiapo Public Market,Norovirus,Moderate,2026-01-10,Street Food
+Tondo,Tondo Community Kitchen,Food Poisoning,Low,2026-01-11,Community Meals
+Sta. Ana,Sta. Ana Riverside Stalls,Vibrio,High,2026-01-12,Seafood
+Pandacan,Pandacan Lunch Hub,Salmonella,Moderate,2026-01-13,Meat Dishes
+Binondo,Binondo Food Hall,Food Poisoning,Low,2026-01-14,Fast Food
+Sampaloc,Sampaloc Student Cafeteria,Norovirus,Moderate,2026-01-15,Shared Utensils
+Ermita,Ermita Convenience Store,Food Poisoning,Low,2026-01-16,Ready-to-Eat Meals
+Malate,Malate Beachside Kiosk,Vibrio,High,2026-01-17,Seafood

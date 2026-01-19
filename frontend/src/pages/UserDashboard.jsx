@@ -27,7 +27,7 @@ const UserDashboard = () => {
   }, [auth]);
 
   return (
-    <div className="container mx-auto">
+    <div className="space-y-6">
       <h2 className="text-2xl font-bold mb-4">User Dashboard</h2>
       {error && <p className="text-red-500 mb-4">{error}</p>}
       {profile && (

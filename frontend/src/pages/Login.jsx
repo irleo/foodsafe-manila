@@ -21,8 +21,8 @@ const Login = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setError(null);         // clear previous errors
-    setLoading(true);       // show loading
+    setError(null); // clear previous errors
+    setLoading(true); // show loading
 
     try {
       const res = await axios.post("/api/auth/login", form, {
@@ -36,7 +36,7 @@ const Login = () => {
         username: res.data.user.username,
       });
 
-      console.log(res.data);
+      // console.log(res.data);
       navigate("/"); // Redirect to home after login
     } catch (err) {
       setError("Login failed. Please check your credentials.");

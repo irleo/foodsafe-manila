@@ -1,175 +1,88 @@
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  ArcElement,
-  LineElement,
-  PointElement,
-  Tooltip,
-  Legend,
-} from "chart.js";
+// src/pages/Analytics.jsx
+import { useMemo } from "react";
+import { useAuth } from "../context/AuthContext";
+import { mockReports } from "../data/mockReports";
 
-import { Bar, Doughnut, Line } from "react-chartjs-2";
+import { useReports } from "../hooks/useReports";
+import { buildAnalyticsViewModel } from "../utils/analyticsViewModel";
 
-// Register chart components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  ArcElement,
-  LineElement,
-  PointElement,
-  Tooltip,
-  Legend
-);
+import AnalyticsStats from "../components/analytics/AnalyticsStats";
+import AnalyticsGrid from "../components/analytics/AnalyticsGrid";
 
-// Dummy data (same as Heatmap)
-const reports = [
-  {
-    id: 1,
-    location: "Quiapo Public Market",
-    illness: "Salmonellosis",
-    date: "2025-01-10",
-    severity: "High",
-  },
-  {
-    id: 2,
-    location: "Ermita Street Food",
-    illness: "E. coli Infection",
-    date: "2025-01-08",
-    severity: "Moderate",
-  },
-  {
-    id: 3,
-    location: "University Belt Canteen",
-    illness: "Norovirus",
-    date: "2025-01-05",
-    severity: "Low",
-  },
-  {
-    id: 4,
-    location: "Tondo Wet Market",
-    illness: "Salmonella",
-    date: "2025-01-12",
-    severity: "High",
-  },
-  {
-    id: 5,
-    location: "Paco Food Stalls",
-    illness: "Food Poisoning",
-    date: "2025-01-09",
-    severity: "Moderate",
-  },
-];
-
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false, 
-  layout: {
-      padding: 20, 
-    },
-  plugins: {
-    legend: { position: "top" },
-    tooltip: { enabled: true },
-  },
-};
+const COLORS = ["#ef4444", "#facc15", "#22c55e"];
 
 export default function Analytics() {
-  /* ============================
-     DATA TRANSFORMATIONS
-  ============================= */
+  const { auth } = useAuth();
+  const token = auth?.accessToken;
 
-  // Illness frequency
-  const illnessCount = reports.reduce((acc, r) => {
-    acc[r.illness] = (acc[r.illness] || 0) + 1;
-    return acc;
-  }, {});
+  const { reports, loading, errorMsg } = useReports(token);
 
-  // Severity distribution
-  const severityCount = reports.reduce((acc, r) => {
-    acc[r.severity] = (acc[r.severity] || 0) + 1;
-    return acc;
-  }, {});
+  // Fallback to mock data if API fails or empty
+  const finalReports = reports.length ? reports : mockReports;
 
-  // Cases over time
-  const dateCount = reports.reduce((acc, r) => {
-    acc[r.date] = (acc[r.date] || 0) + 1;
-    return acc;
-  }, {});
-
-  /* ============================
-     CHART CONFIGS
-  ============================= */
-
-  const illnessChart = {
-    labels: Object.keys(illnessCount),
-    datasets: [
-      {
-        label: "Number of Cases",
-        data: Object.values(illnessCount),
-        backgroundColor: "#60a5fa",
-      },
-    ],
-  };
-
-  const severityChart = {
-    labels: Object.keys(severityCount),
-    datasets: [
-      {
-        data: Object.values(severityCount),
-        backgroundColor: ["#22c55e", "#facc15", "#ef4444"],
-      },
-    ],
-  };
-
-  const timelineChart = {
-    labels: Object.keys(dateCount),
-    datasets: [
-      {
-        label: "Reported Cases",
-        data: Object.values(dateCount),
-        borderColor: "#2563eb",
-        backgroundColor: "#93c5fd",
-        tension: 0.3,
-      },
-    ],
-  };
-
-  /* ============================
-     UI
-  ============================= */
+  const vm = useMemo(
+    () => buildAnalyticsViewModel(finalReports),
+    [finalReports]
+  );
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Analytics</h1>
-      <p className="text-gray-600">
-        View trends and statistics related to foodborne illness reports.
-      </p>
-
-      {/* GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Bar Chart */}
-        <div className="bg-white p-4 rounded shadow h-74">
-          <h2 className="font-semibold mb-2">Illness Frequency</h2>
-          <Bar data={illnessChart} options={chartOptions} />
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Analytics & Reports</h1>
+          <p className="text-gray-600">
+            Comprehensive analysis of foodborne disease trends and patterns in Manila City
+          </p>
         </div>
-
-        {/* Doughnut Chart */}
-        <div className="bg-white p-4 rounded shadow h-74">
-          <h2 className="font-semibold mb-2">Severity Distribution</h2>
-          <Doughnut
-            data={severityChart}
-            options={chartOptions}
-          />
-        </div>
-
-        {/* Line Chart */}
-        <div className="bg-white p-4 rounded shadow lg:col-span-2 h-74">
-          <h2 className="font-semibold mb-2">Cases Over Time</h2>
-          <Line data={timelineChart} options={ chartOptions} />
+        <div className="flex gap-2">
+          <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="lucide lucide-download w-4 h-4">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" x2="12" y1="15" y2="3"></line>
+              </svg>Export CSV
+            </button>
+            <button class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="lucide lucide-download w-4 h-4" >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" x2="12" y1="15" y2="3"></line>
+              </svg>Export PNG
+            </button>
         </div>
       </div>
+
+      {errorMsg && (
+        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+          {errorMsg} (Showing sample data.)
+        </div>
+      )}
+
+      {loading ? (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <p className="text-sm text-gray-600">Loading analytics…</p>
+        </div>
+      ) : (
+        <>
+          <AnalyticsStats
+            thisYearCases={vm.thisYearCases}
+            totalCases={vm.totalCases}
+            topDistrict={vm.topDistrict}
+            topIllness={vm.topIllness}
+            districtsCovered={vm.districtsCovered}
+          />
+
+          <AnalyticsGrid
+            dailyTimelineData={vm.dailyTimelineData}
+            monthlyTrendData={vm.monthlyTrendData}
+            illnessData={vm.illnessData}
+            severityData={vm.severityData}
+            districtData={vm.districtData}
+            districtStats={vm.districtStats}
+            colors={COLORS}
+          />
+        </>
+      )}
     </div>
   );
 }
