@@ -131,8 +131,8 @@ export default function DatasetUpload() {
     <div className="space-y-6">
       {/* header + alert ... */}
       <div>
-        <h1 className="text-2xl font-bold mb-2">Dataset Upload</h1>
-        <p className="text-gray-600">Upload and manage datasets here.</p>
+        <h1 className="text-2xl font-bold">Dataset Upload</h1>
+        <p className="text-gray-600 mt-1">Upload and manage datasets here.</p>
       </div>
 
       {(errorMsg || statusMsg) && (

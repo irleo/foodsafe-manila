@@ -9,7 +9,8 @@ export function useReports(token) {
 
   useEffect(() => {
     if (!token) {
-      // Early-return if API requires auth
+      setLoading(false);
+      return
     }
 
     let isMounted = true;
@@ -21,9 +22,8 @@ export function useReports(token) {
         setErrorMsg("");
 
         const res = await fetch(`${API_BASE}/api/reports`, {
-          credentials: "include",
           headers: {
-            Authorization: token ? `Bearer ${token}` : "",
+            Authorization: `Bearer ${token}`,
           },
         });
 

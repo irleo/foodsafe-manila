@@ -20,7 +20,7 @@ export default function DashboardLayout() {
           <main
             className={`
               flex-1 p-4 sm:p-6 lg:p-8
-              transition-all duration-300
+              transition-all duration-300 ml-0 lg:ml-0 
               ${isSidebarOpen ? "ml-64" : "ml-0"}
             `}
           >

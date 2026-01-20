@@ -90,7 +90,7 @@ export default function Predictions() {
             stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"
-            class="lucide lucide-refresh-cw w-4 h-4"
+            className="lucide lucide-refresh-cw w-4 h-4"
             data-fg-cxzx8="1.39:1.11638:/src/app/pages/Predictions.tsx:75:11:2722:71:e:RefreshCw::::::BIqG"
           >
             <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
@@ -113,7 +113,7 @@ export default function Predictions() {
             stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"
-            class="lucide lucide-trending-up w-5 h-5 text-blue-500"
+            className="lucide lucide-trending-up w-5 h-5 text-blue-500"
             data-fg-cxzx14="1.39:1.11638:/src/app/pages/Predictions.tsx:84:13:3131:48:e:TrendingUp::::::D9DP"
           >
             <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
@@ -134,7 +134,7 @@ export default function Predictions() {
             stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"
-            class="lucide lucide-triangle-alert w-5 h-5 text-red-500"
+            className="lucide lucide-triangle-alert w-5 h-5 text-red-500"
             data-fg-cxzx24="1.39:1.11638:/src/app/pages/Predictions.tsx:93:13:3572:50:e:AlertTriangle::::::B5Nd"
           >
             <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path>
@@ -158,7 +158,7 @@ export default function Predictions() {
             stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"
-            class="lucide lucide-calendar w-5 h-5 text-green-500"
+            className="lucide lucide-calendar w-5 h-5 text-green-500"
             data-fg-cxzx33="1.39:1.11638:/src/app/pages/Predictions.tsx:102:13:4019:47:e:Calendar::::::hMX"
           >
             <path d="M8 2v4"></path>
@@ -419,27 +419,27 @@ export default function Predictions() {
           </button>
         </div>
         <div className="overflow-x-auto">
-          <table class="w-full">
+          <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
                 <th className="text-left p-3">Date</th>
-                <th class="text-left p-3">District</th>
-                <th class="text-left p-3">Predicted Cases</th>
-                <th class="text-left p-3">Actual Cases</th>
-                <th class="text-left p-3">Accuracy</th>
-                <th class="text-left p-3">Risk Level</th>
+                <th className="text-left p-3">District</th>
+                <th className="text-left p-3">Predicted Cases</th>
+                <th className="text-left p-3">Actual Cases</th>
+                <th className="text-left p-3">Accuracy</th>
+                <th className="text-left p-3">Risk Level</th>
               </tr>
             </thead>
               <tbody>
-                <tr class="border-b border-gray-100">
-                  <td class="p-3">2026-01-18</td>
-                  <td class="p-3">Tondo</td>
-                  <td class="p-3">45</td>
-                  <td class="p-3">53</td>
-                  <td class="p-3">
+                <tr className="border-b border-gray-100">
+                  <td className="p-3">2026-01-18</td>
+                  <td className="p-3">Tondo</td>
+                  <td className="p-3">45</td>
+                  <td className="p-3">53</td>
+                  <td className="p-3">
                     <span className="text-sm text-yellow-600">84.9%</span>
                   </td>
-                  <td class="p-3">
+                  <td className="p-3">
                     <span className="px-3 py-1 rounded-full text-sm capitalize bg-red-100 text-red-700 border-red-300" >high</span>
                   </td>
                 </tr>
@@ -449,7 +449,7 @@ export default function Predictions() {
                   <td className="p-3">72</td>
                   <td className="p-3">66</td>
                   <td className="p-3">
-                    <span class="text-sm text-green-600">90.9%</span>
+                    <span className="text-sm text-green-600">90.9%</span>
                   </td>
                   <td className="p-3">
                     <span className="px-3 py-1 rounded-full text-sm capitalize bg-green-100 text-green-700 border-green-300">low</span>

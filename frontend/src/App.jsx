@@ -1,25 +1,28 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import "leaflet/dist/leaflet.css";
+import { Toaster } from "sonner";
 
 import Login from "./pages/Login";
-import Register from "./pages/Register";
+import RequestAccess from "./pages/RequestAccess";
 import PrivateRoute from "./components/PrivateRoute";
 import PublicRoute from "./components/PublicRoute";
 import DashboardLayout from "./layouts/DashboardLayout";
 
-import AdminDashboard from "./pages/AdminDashboard";
-import UserDashboard from "./pages/UserDashboard";
 import UserManagement from "./pages/UserManagement";
 import Analytics from "./pages/Analytics";
 import DatasetUpload from "./pages/DatasetUpload";
 import Predictions from "./pages/Predictions";
 import Heatmap from "./pages/Heatmap";
+import Dashboard from "./pages/Dashboard";
+
+
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <Toaster richColors position="top-right" />
         <Routes>
           {/* Protected dashboard shell */}
           <Route
@@ -31,17 +34,7 @@ function App() {
           >
             <Route
               path="/"
-              element={
-                <PrivateRoute>
-                  {(auth) =>
-                    auth.role === "admin" ? (
-                      <AdminDashboard />
-                    ) : (
-                      <UserDashboard />
-                    )
-                  }
-                </PrivateRoute>
-              }
+              element={<Dashboard />}
             />
 
             <Route path="analytics" element={<Analytics />} />
@@ -49,7 +42,6 @@ function App() {
             <Route path="predictions" element={<Predictions />} />
             <Route path="datasets" element={<DatasetUpload />} />
 
-            {/* Admin-only */}
             <Route
               path="user-management"
               element={
@@ -70,10 +62,10 @@ function App() {
             }
           />
           <Route
-            path="/register"
+            path="/request-access"
             element={
               <PublicRoute>
-                <Register />
+                <RequestAccess />
               </PublicRoute>
             }
           />

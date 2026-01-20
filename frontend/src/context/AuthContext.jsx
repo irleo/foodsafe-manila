@@ -13,7 +13,7 @@ export const AuthProvider = ({ children }) => {
         const res = await axios.get("/api/auth/refresh", {
           withCredentials: true,
         });
-        // console.log("Refresh response:", res.data);
+        console.log("Refresh response:", res.data);
         setAuth({ 
           accessToken: res.data.accessToken, 
           role: res.data.user.role,

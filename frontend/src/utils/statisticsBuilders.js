@@ -1,8 +1,3 @@
-/**
- * Build district-level statistics for tables & summaries
- * @param {Array} reports
- */
-
 const sevWeight = (s) => {
   if (s === "High") return 3;
   if (s === "Moderate") return 2;
@@ -16,12 +11,15 @@ export function buildDistrictStatistics(reports = []) {
     const district = r?.location?.district || r?.location;
     if (!district) continue;
 
+    const cases = Number(r?.caseCount ?? 1); // <-- key change
+    if (!Number.isFinite(cases) || cases <= 0) continue;
+
     if (!districtMap[district]) {
       districtMap[district] = {
         district,
         totalCases: 0,
-        incidents: 0,
-        severityScoreSum: 0,
+        incidents: 0, // still counts rows/month entries
+        severityScoreSum: 0, // will be weighted by cases
         highCount: 0,
         moderateCount: 0,
         lowCount: 0,
@@ -30,20 +28,20 @@ export function buildDistrictStatistics(reports = []) {
 
     const sev = r?.severity || "Low";
 
-    districtMap[district].totalCases += 1;
+    districtMap[district].totalCases += cases;
     districtMap[district].incidents += 1;
 
-    districtMap[district].severityScoreSum += sevWeight(sev);
+    // weight severity by number of cases in the row
+    districtMap[district].severityScoreSum += sevWeight(sev) * cases;
 
-    if (sev === "High") districtMap[district].highCount += 1;
-    else if (sev === "Moderate") districtMap[district].moderateCount += 1;
-    else districtMap[district].lowCount += 1;
+    if (sev === "High") districtMap[district].highCount += cases;
+    else if (sev === "Moderate") districtMap[district].moderateCount += cases;
+    else districtMap[district].lowCount += cases;
   }
 
   return Object.values(districtMap).map((d) => {
-    const avgSeverityScore = d.incidents ? d.severityScoreSum / d.incidents : 0;
+    const avgSeverityScore = d.totalCases ? d.severityScoreSum / d.totalCases : 0;
 
-    // Tune these thresholds how you want
     let riskLevel = "Low";
     if (avgSeverityScore >= 2.4) riskLevel = "High";
     else if (avgSeverityScore >= 1.7) riskLevel = "Moderate";
@@ -52,7 +50,7 @@ export function buildDistrictStatistics(reports = []) {
       district: d.district,
       totalCases: d.totalCases,
       incidents: d.incidents,
-      avgCases: Number((d.totalCases / d.incidents).toFixed(1)), // will be 1.0 in your current model
+      avgCasesPerEntry: Number((d.totalCases / d.incidents).toFixed(1)),
       avgSeverityScore: Number(avgSeverityScore.toFixed(2)),
       highCount: d.highCount,
       moderateCount: d.moderateCount,
@@ -60,4 +58,41 @@ export function buildDistrictStatistics(reports = []) {
       riskLevel,
     };
   });
+}
+
+const percentChange = (current, previous) => {
+  if (!previous) return null;
+  return ((current - previous) / previous) * 100;
+};
+
+
+export function buildYoYCaseStats(reports = []) {
+  const now = new Date();
+  const thisYear = now.getFullYear();
+  const lastYear = thisYear - 1;
+
+  let thisYearCases = 0;
+  let lastYearCases = 0;
+
+  for (const r of reports) {
+    const dt = new Date(r?.reportedAt);
+    if (!dt || Number.isNaN(dt.getTime())) continue;
+
+    const cases = Number(r?.caseCount ?? 1);
+    if (!Number.isFinite(cases) || cases < 0) continue;
+
+    const y = dt.getFullYear();
+    if (y === thisYear) thisYearCases += cases;
+    else if (y === lastYear) lastYearCases += cases;
+  }
+
+  const yoyPct = percentChange(thisYearCases, lastYearCases);
+
+  return {
+    thisYear,
+    lastYear,
+    thisYearCases,
+    lastYearCases,
+    yoyPct: Number(yoyPct.toFixed(1)),
+  };
 }
