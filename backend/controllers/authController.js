@@ -4,30 +4,90 @@ import jwt from "jsonwebtoken";
 
 // POST /api/auth/request-access
 export const requestAccess = async (req, res) => {
-  const { username, email, password, organization, position, reason } = req.body;
+  const { username, email, password, organization, position, reason } =
+    req.body;
 
-  if (!username || !email || !password || !organization || !position || !reason) {
+  if (
+    !username ||
+    !email ||
+    !password ||
+    !organization ||
+    !position ||
+    !reason
+  ) {
     return res.status(400).json({ message: "All fields are required" });
+  }
+
+  if (reason.length > 500) {
+    return res
+      .status(400)
+      .json({ message: "Reason must be 500 characters or less" });
   }
 
   try {
     const normalizedEmail = email.toLowerCase().trim();
 
     const existingUser = await User.findOne({ email: normalizedEmail });
+
     if (existingUser) {
-      return res.status(400).json({ message: "User already exists" });
+      // More accurate + user-friendly conflict handling
+      if (existingUser.status === "pending") {
+        return res
+          .status(409)
+          .json({
+            message:
+              "An access request for this email is already pending approval.",
+          });
+      }
+
+      if (existingUser.status === "approved") {
+        return res
+          .status(409)
+          .json({
+            message:
+              "An account with this email already exists. Please sign in.",
+          });
+      }
+
+      if (existingUser.status === "rejected") {
+        // Option A: allow re-apply by updating the existing record (recommended)
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        existingUser.username = username.trim();
+        existingUser.password = hashedPassword;
+        existingUser.organization = organization.trim();
+        existingUser.position = position.trim();
+        existingUser.reason = reason.trim();
+        existingUser.status = "pending";
+        existingUser.approvedAt = undefined;
+        existingUser.approvedBy = undefined;
+
+        await existingUser.save();
+
+        return res.status(200).json({
+          message: "Access request resubmitted. Awaiting approval.",
+          user: {
+            id: existingUser._id,
+            username: existingUser.username,
+            email: existingUser.email,
+            role: existingUser.role,
+            status: existingUser.status,
+          },
+        });
+      }
     }
 
+    // Create new pending user
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = new User({
-      username,
+      username: username.trim(),
       email: normalizedEmail,
       password: hashedPassword,
-      organization,
-      position,
-      reason,
-      // Status defaults to "pending" in the schema
+      organization: organization.trim(),
+      position: position.trim(),
+      reason: reason.trim(),
+      // status defaults to "pending"
     });
 
     await user.save();
@@ -43,6 +103,15 @@ export const requestAccess = async (req, res) => {
       },
     });
   } catch (error) {
+    // If two requests race at the same time, Mongo unique index on email can throw 11000
+    if (error?.code === 11000) {
+      return res
+        .status(409)
+        .json({
+          message:
+            "An account or access request with this email already exists.",
+        });
+    }
     console.error("Error requesting access:", error);
     return res.status(500).json({ message: "Server error" });
   }
@@ -82,13 +151,13 @@ export const login = async (req, res) => {
     const accessToken = jwt.sign(
       { id: user._id.toString(), role: user.role },
       process.env.ACCESS_TOKEN_SECRET,
-      { expiresIn: "15m" }
+      { expiresIn: "15m" },
     );
 
     const refreshToken = jwt.sign(
       { id: user._id.toString(), role: user.role },
       process.env.REFRESH_TOKEN_SECRET,
-      { expiresIn: "7d" }
+      { expiresIn: "7d" },
     );
 
     res.cookie("refreshToken", refreshToken, {
@@ -143,7 +212,7 @@ export const refreshToken = async (req, res) => {
     const newAccessToken = jwt.sign(
       { id: user._id.toString(), role: user.role },
       process.env.ACCESS_TOKEN_SECRET,
-      { expiresIn: "15m" }
+      { expiresIn: "15m" },
     );
 
     return res.status(200).json({

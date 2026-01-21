@@ -11,6 +11,7 @@ import {
   LockClosedIcon,
   UserIcon,
 } from "@heroicons/react/24/outline";
+import { notify } from "../utils/toast";
 
 const MAX_REASON = 500;
 
@@ -19,13 +20,14 @@ const RequestAccess = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [successMsg, setSuccessMsg] = useState(null);
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  const [submitted, setSubmitted] = useState(false);
+
   const [form, setForm] = useState({
-    name: "",
+    username: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -43,7 +45,7 @@ const RequestAccess = () => {
 
   const canSubmit = useMemo(() => {
     const requiredFilled =
-      form.name.trim() &&
+      form.username.trim() &&
       form.email.trim() &&
       form.password &&
       form.confirmPassword &&
@@ -55,11 +57,13 @@ const RequestAccess = () => {
       Boolean(requiredFilled) &&
       passwordsMatch &&
       form.reason.length <= MAX_REASON &&
-      !loading
+      !loading &&
+      !submitted
     );
-  }, [form, passwordsMatch, loading]);
+  }, [form, passwordsMatch, loading, submitted]);
 
   const setField = (key) => (e) => {
+    setError(null);
     const value = e.target.value;
     setForm((prev) => ({
       ...prev,
@@ -69,8 +73,9 @@ const RequestAccess = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (loading || submitted) return;
     setError(null);
-    setSuccessMsg(null);
 
     if (!passwordsMatch) {
       setError("Passwords do not match.");
@@ -83,33 +88,43 @@ const RequestAccess = () => {
     }
 
     setLoading(true);
+
+    let success = false;
+
     try {
-      
-      await axios.post(
-        "/api/auth/request-access",
-        {
-          name: form.name,
-          email: form.email,
-          password: form.password,
-          organization: form.organization,
-          position: form.position,
-          reason: form.reason,
-        },
-        { withCredentials: true }
-      );
+      const payload = {
+        username: form.username,
+        email: form.email,
+        password: form.password,
+        organization: form.organization,
+        position: form.position,
+        reason: form.reason,
+      };
 
-      setSuccessMsg(
-        "Request submitted. DOH administrators will review your application."
-      );
+      const requestPromise = axios.post("/api/auth/request-access", payload, {
+        withCredentials: true,
+      });
 
+      await notify.promise(requestPromise, {
+        loading: "Requesting access…",
+        success: (r) => r?.data?.message || "Request submitted successfully!",
+        error: (e) => e?.response?.data?.message || "Request failed.",
+      });
+
+      // Only reached if request succeeded
+      success = true;
+      setSubmitted(true);
     } catch (err) {
-      setError(
-        err?.response?.data?.message ||
-          "Submission failed. Please try again or contact an administrator."
-      );
       console.error(err);
     } finally {
       setLoading(false);
+    }
+
+    // Navigate ONLY if success is true
+    if (success) {
+      setTimeout(() => {
+        navigate("/login");
+      }, 2000);
     }
   };
 
@@ -158,13 +173,11 @@ const RequestAccess = () => {
             </div>
           )}
 
-          {successMsg && (
-            <div className="mb-5 rounded-lg bg-green-50 border border-green-200 text-green-700 px-4 py-3 text-sm">
-              {successMsg}
-            </div>
-          )}
-
-          <form className="space-y-5" onSubmit={handleSubmit} autoComplete="off">
+          <form
+            className={`space-y-5 ${loading || submitted ? "pointer-events-none opacity-60" : ""}`}
+            onSubmit={handleSubmit}
+            autoComplete="off"
+          >
             {/* Personal Information */}
             <div className="space-y-4">
               <h2 className="text-sm font-medium text-gray-700">
@@ -174,7 +187,7 @@ const RequestAccess = () => {
               {/* Full Name */}
               <div>
                 <label
-                  htmlFor="name"
+                  htmlFor="username"
                   className="block mb-2 text-sm text-gray-700"
                 >
                   Full Name <span className="text-red-500">*</span>
@@ -183,13 +196,13 @@ const RequestAccess = () => {
                 <div className="relative">
                   <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
-                    id="name"
-                    name="name"
+                    id="username"
+                    name="username"
                     type="text"
                     className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all border-gray-300"
                     placeholder="Juan Dela Cruz"
-                    value={form.name}
-                    onChange={setField("name")}
+                    value={form.username}
+                    onChange={setField("username")}
                     disabled={loading}
                     required
                   />
@@ -251,7 +264,9 @@ const RequestAccess = () => {
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                       onClick={() => setShowPassword((v) => !v)}
                       disabled={loading}
-                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      aria-label={
+                        showPassword ? "Hide password" : "Show password"
+                      }
                     >
                       {showPassword ? (
                         <EyeSlashIcon className="w-5 h-5" />
@@ -374,7 +389,8 @@ const RequestAccess = () => {
                   htmlFor="reason"
                   className="block mb-2 text-sm text-gray-700"
                 >
-                  Reason for Access Request <span className="text-red-500">*</span>
+                  Reason for Access Request{" "}
+                  <span className="text-red-500">*</span>
                 </label>
 
                 <textarea

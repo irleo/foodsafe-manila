@@ -10,6 +10,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useAuth } from "../context/AuthContext";
 import axios from "axios";
+import { notify } from "../utils/toast";
 
 export default function Sidebar({ isOpen }) {
   const { auth, setAuth } = useAuth();
@@ -18,6 +19,13 @@ export default function Sidebar({ isOpen }) {
   const handleLogout = async () => {
     try {
       await axios.post("/api/auth/logout", {}, { withCredentials: true });
+
+      await notify.promise(Promise.resolve(), {
+        loading: "Logging you out…",
+        success: "Logged out succesfully!",
+        error: (e) => e?.response?.data?.message || "Logout failed.",
+      });
+
       setAuth(null);
       navigate("/login", { replace: true });
     } catch (error) {
@@ -29,18 +37,38 @@ export default function Sidebar({ isOpen }) {
     auth?.role === "admin"
       ? [
           { name: "Dashboard", path: "/", icon: Squares2X2Icon, end: true },
-          { name: "Dataset Upload", path: "/datasets", icon: ArrowDownOnSquareIcon },
+          {
+            name: "Dataset Upload",
+            path: "/datasets",
+            icon: ArrowDownOnSquareIcon,
+          },
           { name: "Heatmap", path: "/heatmap", icon: MapIcon },
           { name: "Analytics", path: "/analytics", icon: ChartPieIcon },
-          { name: "Predictions", path: "/predictions", icon: ArrowTrendingUpIcon },
-          { name: "User Management", path: "/user-management", icon: UserGroupIcon },
+          {
+            name: "Predictions",
+            path: "/predictions",
+            icon: ArrowTrendingUpIcon,
+          },
+          {
+            name: "User Management",
+            path: "/user-management",
+            icon: UserGroupIcon,
+          },
         ]
       : [
           { name: "Dashboard", path: "/", icon: Squares2X2Icon, end: true },
-          { name: "Dataset Upload", path: "/datasets", icon: ArrowDownOnSquareIcon },
+          {
+            name: "Dataset Upload",
+            path: "/datasets",
+            icon: ArrowDownOnSquareIcon,
+          },
           { name: "Heatmap", path: "/heatmap", icon: MapIcon },
           { name: "Analytics", path: "/analytics", icon: ChartPieIcon },
-          { name: "Predictions", path: "/predictions", icon: ArrowTrendingUpIcon },
+          {
+            name: "Predictions",
+            path: "/predictions",
+            icon: ArrowTrendingUpIcon,
+          },
         ];
 
   return (

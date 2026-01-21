@@ -15,8 +15,7 @@ import DatasetUpload from "./pages/DatasetUpload";
 import Predictions from "./pages/Predictions";
 import Heatmap from "./pages/Heatmap";
 import Dashboard from "./pages/Dashboard";
-
-
+import Welcome from "./pages/Welcome";
 
 function App() {
   return (
@@ -32,10 +31,7 @@ function App() {
               </PrivateRoute>
             }
           >
-            <Route
-              path="/"
-              element={<Dashboard />}
-            />
+            <Route path="/" element={<Dashboard />} />
 
             <Route path="analytics" element={<Analytics />} />
             <Route path="heatmap" element={<Heatmap />} />
@@ -53,6 +49,7 @@ function App() {
           </Route>
 
           {/* Public routes */}
+          <Route path="/welcome" element={<Welcome />} />
           <Route
             path="/login"
             element={

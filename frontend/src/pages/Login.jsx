@@ -48,7 +48,6 @@ const Login = () => {
         err?.response?.data?.message ||
         "Login failed. Please check your credentials.";
 
-      setError(msg);
       notify?.error?.(msg);
       console.error(err);
     } finally {
