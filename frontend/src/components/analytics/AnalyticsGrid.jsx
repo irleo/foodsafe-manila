@@ -1,5 +1,5 @@
 import SwitchableTimelineChart from "../charts/SwitchableTimelineChart";
-import IllnessPieChart from "../charts/IllnessPieChart";
+import IllnessPieChart from "../charts/DiseasePieChart.jsx";
 import TrendsAreaChart from "../charts/TrendsAreaChart";
 import DistrictBarChart from "../charts/DistrictBarChart";
 import SeverityDonutChart from "../charts/SeverityDonutChart";

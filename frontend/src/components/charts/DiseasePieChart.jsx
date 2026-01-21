@@ -7,7 +7,7 @@ import {
   Tooltip,
 } from "recharts";
 
-const renderIllnessLabel = ({
+const renderDiseaseLabel = ({
   cx,
   cy,
   midAngle,
@@ -28,12 +28,13 @@ const renderIllnessLabel = ({
       dominantBaseline="central"
       className="text-s"
     >
-      {payload.illness}
+      {payload.disease}
     </text>
   );
 };
 
-export default function IllnessDistributionChart({ data }) {
+
+export default function DiseaseDistributionChart({ data }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <h2 className="font-semibold mb-6">Illness Distribution</h2>
@@ -43,9 +44,9 @@ export default function IllnessDistributionChart({ data }) {
           <PieChart>
             <Pie
               data={data}
-              dataKey="count"
-              nameKey="illness"
-              label={renderIllnessLabel}
+              dataKey="cases"
+              nameKey="disease"
+              label={renderDiseaseLabel}
               labelLine={false}
             >
               {data.map((_, index) => (

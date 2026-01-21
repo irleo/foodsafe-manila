@@ -1,13 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowTrendingDownIcon, DevicePhoneMobileIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowTrendingDownIcon,
+  DevicePhoneMobileIcon,
+} from "@heroicons/react/24/outline";
 import { useAuth } from "../context/AuthContext";
 
-import { mockReports } from "../data/mockReports";
-import { buildLast7DaysTimeline, buildDistrictData, buildIllnessData } from "../utils/analyticsBuilders";
+import { mockOfficialCases } from "../data/mockOfficialCases";
+import { normalizeToCaseRows } from "../utils/normalizeCases";
+// import { casesByYear, casesByDistrict, casesByDisease } from "../utils/caseAggregations";
+import {
+  buildYearlyTimelineData,
+  buildDistrictCaseData,
+  buildDiseaseData,
+} from "../utils/dashboardBuilders";
 
-import WeeklyLineChart from "../components/charts/WeeklyLineChart";
+import YearlyLineChart from "../components/charts/YearlyLineChart";
 import DistrictBarChartVertical from "../components/charts/DistrictBarChartVertical";
-import IllnessPieChart from "../components/charts/IllnessPieChart";
+import DiseasePieChart from "../components/charts/DiseasePieChart";
 import RecentActivityCard from "../components/RecentActivityCard";
 import { CHART_COLORS } from "../constants/chartColors";
 
@@ -17,9 +26,34 @@ export default function Dashboard() {
   const { auth } = useAuth();
   const token = auth?.accessToken;
 
-  const weeklyData = useMemo(() => buildLast7DaysTimeline(mockReports), []);
-  const districtData = useMemo(() => buildDistrictData(mockReports), []);
-  const illnessData = useMemo(() => buildIllnessData(mockReports), []);
+  const caseRows = useMemo(() => normalizeToCaseRows(mockOfficialCases), []);
+
+  const availableYears = useMemo(() => {
+    const set = new Set(
+      caseRows.map((r) => r.year).filter((y) => Number.isFinite(y)),
+    );
+    return Array.from(set).sort((a, b) => b - a); // newest first
+  }, [caseRows]);
+
+  const [selectedYear, setSelectedYear] = useState("all");
+
+  const districtRows = useMemo(() => {
+    if (selectedYear === "all") return caseRows;
+    const y = Number(selectedYear);
+    return caseRows.filter((r) => r.year === y);
+  }, [caseRows, selectedYear]);
+
+  const yearlyData = useMemo(
+    () => buildYearlyTimelineData(caseRows, 5),
+    [caseRows],
+  );
+
+  const districtData = useMemo(
+    () => buildDistrictCaseData(districtRows),
+    [districtRows],
+  );
+
+  const diseaseData = useMemo(() => buildDiseaseData(caseRows), [caseRows]);
 
   const [activity, setActivity] = useState([]);
 
@@ -62,13 +96,15 @@ export default function Dashboard() {
           </div>
           <div className="flex-1">
             <h2 className="mb-2">
-              {auth?.role === "admin" ? "Administrative Dashboard" : "User Dashboard"}
+              {auth?.role === "admin"
+                ? "Administrative Dashboard"
+                : "User Dashboard"}
             </h2>
             <p className="text-sm text-gray-700 mb-3">
               This web platform is designed for DOH officials, health analysts,
               and researchers to manage and analyze disease outbreak data.
-              <strong className="block mt-2">For Citizens:</strong> Check out the
-              mobile app version of <strong>Foodsafe Manila</strong>.
+              <strong className="block mt-2">For Citizens:</strong> Check out
+              the mobile app version of <strong>Foodsafe Manila</strong>.
             </p>
             <a
               href=""
@@ -83,9 +119,35 @@ export default function Dashboard() {
 
       {/* cards + charts (same for both roles) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <WeeklyLineChart title="Cases (Last 7 Days)" data={weeklyData} />
-        <DistrictBarChartVertical data={districtData} title="Top Districts (Cases)" />
-        <IllnessPieChart data={illnessData} colors={CHART_COLORS} />
+        <YearlyLineChart
+          title="Cases from the past 5 years"
+          data={yearlyData}
+        />
+
+        <DistrictBarChartVertical
+          title={
+            selectedYear === "all"
+              ? "Top Districts (All Years)"
+              : `Top Districts (${selectedYear})`
+          }
+          data={districtData}
+          headerRight={
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+            >
+              <option value="all">All years</option>
+              {availableYears.map((y) => (
+                <option key={y} value={String(y)}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          }
+        />
+
+        <DiseasePieChart data={diseaseData} colors={CHART_COLORS} />
         <RecentActivityCard items={activity} />
       </div>
     </div>

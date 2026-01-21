@@ -10,13 +10,10 @@ import {
   Legend,
 } from "recharts";
 
-function formatDayLabel(isoDate) {
-  // isoDate expected: "YYYY-MM-DD"
+function formatYearLabel(isoDate) {
   const d = new Date(isoDate);
   if (Number.isNaN(d.getTime())) return isoDate;
-
-  // "Jan 1"
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return String(d.getFullYear());
 }
 
 const HollowDot = ({ cx, cy, stroke }) => {
@@ -40,8 +37,8 @@ const HollowDot = ({ cx, cy, stroke }) => {
   );
 };
 
-export default function WeeklyLineChart({
-  title = "Cases (Last 7 Days)",
+export default function YearlyLineChart({
+  title = "Cases (Last 5 Years)",
   data = [],
   height = 300,
 }) {
@@ -63,12 +60,12 @@ export default function WeeklyLineChart({
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
                 dataKey="date"
-                tickFormatter={formatDayLabel}
+                tickFormatter={formatYearLabel}
                 interval="preserveStartEnd"
               />
               <YAxis allowDecimals={false} />
               <Tooltip
-                labelFormatter={(label) => formatDayLabel(label)}
+                labelFormatter={(label) => formatYearLabel(label)}
                 formatter={(value) => [`${value}`, "Cases"]}
               />
               <Line
