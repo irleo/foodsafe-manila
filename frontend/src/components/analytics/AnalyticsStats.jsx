@@ -7,10 +7,9 @@ import {
 export default function AnalyticsStats({
   thisYearCases,
   topDistrict,
-  topIllness,
+  topDisease,
   districtsCovered,
   yoyPct,
-  
 }) 
 {
   const hasYoY = Number.isFinite(yoyPct);
@@ -52,7 +51,7 @@ export default function AnalyticsStats({
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <p className="text-sm text-gray-600 mb-2">Top Illness</p>
-        <p className="text-2xl font-semibold">{topIllness}</p>
+        <p className="text-2xl font-semibold">{topDisease}</p>
         <p className="text-sm text-gray-600 mt-2">Most frequent diagnosis</p>
       </div>
 

@@ -1,30 +1,49 @@
-import SwitchableTimelineChart from "../charts/SwitchableTimelineChart";
-import IllnessPieChart from "../charts/DiseasePieChart.jsx";
-import TrendsAreaChart from "../charts/TrendsAreaChart";
+import SwitchableYearlyChart from "../charts/SwitchableYearlyChart";
+import DiseasePieChart from "../charts/DiseasePieChart.jsx";
 import DistrictBarChart from "../charts/DistrictBarChart";
-import SeverityDonutChart from "../charts/SeverityDonutChart";
+import RiskLevelDonutChart from "../charts/RiskLevelDonutChart.jsx";
+import DiseaseTrendStackedAreaChart from "../charts/DiseaseTrendStackedAreaChart.jsx";
 import DistrictStatisticsTable from "../tables/DistrictStatisticsTable.jsx";
 
 export default function AnalyticsGrid({
-  dailyTimelineData,
-  monthlyTrendData,
-  illnessData,
-  severityData,
+  yearlyTimelineData,
+  diseaseData,
   districtData,
   districtStats,
+  riskLevelData,
+  diseaseTrendData,
+  diseaseTrendKeys,
   colors,
 }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div className="lg:col-span-2">
-        <SwitchableTimelineChart data={dailyTimelineData} />
+        <SwitchableYearlyChart
+          title="Cases Over Time"
+          data={yearlyTimelineData}
+        />
       </div>
 
-      <IllnessPieChart data={illnessData} colors={colors} />
-      <TrendsAreaChart data={monthlyTrendData} />
-      <DistrictBarChart data={districtData} />
-      <SeverityDonutChart data={severityData} colors={colors} />
+      <DistrictBarChart 
+      data={districtData} title="Top Cases (by district)" />
 
+      <DiseasePieChart
+        data={diseaseData}
+        colors={colors}
+        title="Disease Distribution"
+      />
+
+      <RiskLevelDonutChart
+        data={riskLevelData}
+        colors={colors}
+        title="Risk Level Analysis"
+      />
+
+      <DiseaseTrendStackedAreaChart
+        data={diseaseTrendData}
+        keys={diseaseTrendKeys}
+        title="Disease Trends Over Time"
+      />
       <div className="lg:col-span-2">
         <DistrictStatisticsTable data={districtStats} />
       </div>

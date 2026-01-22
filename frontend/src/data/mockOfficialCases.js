@@ -69,6 +69,7 @@ export const mockOfficialCases = [
 
   { _id: "oc042", city: "Manila", district: "Binondo", disease: "Salmonellosis", year: 2025, cases: 19 },
   { _id: "oc043", city: "Manila", district: "Ermita", disease: "Food Poisoning", year: 2025, cases: 33 },
+  
 
   // ===== 2026 (partial / early data) =====
   { _id: "oc044", city: "Manila", district: "Tondo", disease: "Food Poisoning", year: 2026, cases: 22 },

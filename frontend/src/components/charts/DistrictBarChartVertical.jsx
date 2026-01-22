@@ -11,7 +11,7 @@ import {
 
 export default function DistrictBarChartVertical({
   data = [],
-  title = "Cases by District",
+  title = "Cases (by District)",
   headerRight = null,
 }) {
   const safeData = Array.isArray(data) ? data : [];

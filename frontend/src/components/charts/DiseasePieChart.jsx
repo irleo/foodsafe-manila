@@ -34,10 +34,10 @@ const renderDiseaseLabel = ({
 };
 
 
-export default function DiseaseDistributionChart({ data }) {
+export default function DiseaseDistributionChart({ data, title="Disease Distribution" }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <h2 className="font-semibold mb-6">Illness Distribution</h2>
+      <h2 className="font-semibold mb-6">{title}</h2>
 
       <div className="w-full h-[350px]">
         <ResponsiveContainer width="100%" height="100%">

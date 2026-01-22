@@ -228,7 +228,7 @@ export default function UserManagement() {
       <div>
         <h2 className="text-2xl font-bold">User Management</h2>
         <p className="text-gray-600 mt-1">
-          Review, approve, reject, and manage user access
+          User access and role management
         </p>
       </div>
 

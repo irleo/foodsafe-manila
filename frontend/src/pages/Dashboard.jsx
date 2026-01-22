@@ -85,7 +85,7 @@ export default function Dashboard() {
       <div>
         <h1 className="text-2xl font-bold">Dashboard Overview</h1>
         <p className="text-gray-600 mt-1">
-          Monitor disease outbreaks and trends in real-time
+          Overview of foodborne disease burden and trends
         </p>
       </div>
 

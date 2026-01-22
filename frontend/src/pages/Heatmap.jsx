@@ -145,7 +145,7 @@ export default function Heatmap() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Heatmap</h1>
-        <p className="text-gray-600 mt-1">Interactive map showing illness density by location</p>
+        <p className="text-gray-600 mt-1">Interactive map of district-level disease burden</p>
       </div>
 
       {errorMsg && (

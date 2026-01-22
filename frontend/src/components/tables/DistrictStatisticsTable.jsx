@@ -30,7 +30,7 @@ export default function DistrictStatisticsTable({ data = [] }) {
                   <td className="p-3">{row.district}</td>
                   <td className="p-3">{row.totalCases}</td>
                   <td className="p-3">{row.incidents}</td>
-                  <td className="p-3">{row.avgCases}</td>
+                  <td className="p-3">{row.avgCasesPerEntry}</td>
                   <td className="p-3">
                     <span
                       className={`px-2 py-1 rounded-full text-xs font-medium ${

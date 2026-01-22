@@ -132,7 +132,7 @@ export default function DatasetUpload() {
       {/* header + alert ... */}
       <div>
         <h1 className="text-2xl font-bold">Dataset Upload</h1>
-        <p className="text-gray-600 mt-1">Upload and manage datasets here.</p>
+        <p className="text-gray-600 mt-1">Upload and validate official disease datasets</p>
       </div>
 
       {(errorMsg || statusMsg) && (
