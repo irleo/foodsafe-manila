@@ -16,6 +16,8 @@ import Predictions from "./pages/Predictions";
 import Heatmap from "./pages/Heatmap";
 import Dashboard from "./pages/Dashboard";
 import Welcome from "./pages/Welcome";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 function App() {
   return (
@@ -63,6 +65,23 @@ function App() {
             element={
               <PublicRoute>
                 <RequestAccess />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/forgot-password"
+            element={
+              <PublicRoute>
+                <ForgotPassword />
+              </PublicRoute>
+            }
+          />
+
+          <Route
+            path="/reset-password"
+            element={
+              <PublicRoute>
+                <ResetPassword />
               </PublicRoute>
             }
           />

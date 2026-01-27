@@ -12,18 +12,16 @@ function pseudoNoiseFromYear(year) {
  * Builds {year, actual, predicted} rows.
  *
  * method:
- * - "yoy": predicted = last year's actual (simple baseline)
- * - "moving3": predicted = avg of last 3 years actual
- * - "biased": predicted = actual * (1 +/- percent) as a placeholder (demo)
+ * - "yoy": predicted = last year's actual (baseline)
+ * - "moving3": predicted = trailing 3-year average
+ * - "combined": predicted = moving average adjusted by YoY trend
  */
 export function buildYearlyPredictedVsActual(
   yearlyTimelineData = [], // [{date:"YYYY-01-01", cases:number}]
-  method = "yoy",
-  placeholderPercent = 0.12 // 12% placeholder swing for "biased"
+  method = "yoy"
 ) {
   const safe = Array.isArray(yearlyTimelineData) ? yearlyTimelineData : [];
 
-  // Convert to {year, actual}
   const actualRows = safe
     .map((r) => {
       const year = Number(String(r?.date ?? "").slice(0, 4));
@@ -39,25 +37,43 @@ export function buildYearlyPredictedVsActual(
 
   const byYear = new Map(actualRows.map((r) => [r.year, r.actual]));
 
-  return actualRows.map((row, idx) => {
-    const { year, actual } = row;
-
+  return actualRows.map(({ year, actual }) => {
     let predicted = actual;
 
     if (method === "yoy") {
       const last = byYear.get(year - 1);
-      predicted = Number.isFinite(last) ? last : actual; // fallback for first year
+      predicted = Number.isFinite(last) ? last : actual;
+
     } else if (method === "moving3") {
       const vals = [year - 1, year - 2, year - 3]
         .map((y) => byYear.get(y))
         .filter((v) => Number.isFinite(v));
-      predicted = vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : actual;
-    } else if (method === "biased") {
-      // deterministic +/- swing around actual for demo
-      const noise = pseudoNoiseFromYear(year); // 0..1
-      const sign = noise >= 0.5 ? 1 : -1;
-      const factor = 1 + sign * clamp(placeholderPercent, 0, 0.5);
-      predicted = actual * factor;
+
+      predicted = vals.length
+        ? vals.reduce((s, v) => s + v, 0) / vals.length
+        : actual;
+
+    } else if (method === "combined") {
+      // Step 1: trailing 3-year moving average (baseline)
+      const maVals = [year - 1, year - 2, year - 3]
+        .map((y) => byYear.get(y))
+        .filter((v) => Number.isFinite(v));
+
+      const ma = maVals.length
+        ? maVals.reduce((s, v) => s + v, 0) / maVals.length
+        : actual;
+
+      // Step 2: YoY trend (direction)
+      const prev = byYear.get(year - 1);
+      const prevPrev = byYear.get(year - 2);
+
+      const yoy =
+        Number.isFinite(prev) && Number.isFinite(prevPrev) && prevPrev !== 0
+          ? (prev - prevPrev) / prevPrev
+          : 0;
+
+      // Step 3: combined forecast
+      predicted = ma * (1 + yoy);
     }
 
     return {

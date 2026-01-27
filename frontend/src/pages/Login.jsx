@@ -98,7 +98,7 @@ const Login = () => {
                 id="email"
                 type="email"
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                placeholder="user@doh.gov.ph"
+                placeholder="user@sample.com"
                 required
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -156,15 +156,12 @@ const Login = () => {
             </button>
 
             <div className="flex items-center justify-between text-sm">
-              <button
-                type="button"
-                className="text-blue-600 hover:text-blue-700"
-                onClick={() =>
-                  notify?.info?.("Forgot password flow not set up yet.")
-                }
+              <Link
+                to="/forgot-password"
+                className="text-blue-600 hover:text-blue-700 text-sm"
               >
                 Forgot Password?
-              </button>
+              </Link>
 
               <Link
                 to="/request-access"
@@ -190,8 +187,8 @@ const Login = () => {
 
           <div className="mt-6 text-center text-sm text-gray-600">
             <p>Demo Credentials:</p>
-            <p className="mt-2">Admin: admin@doh.gov.ph / @Password1</p>
-            <p>User: user@doh.gov.ph / @Password2</p>
+            <p className="mt-2">Admin: admin@sample.com / @Password1</p>
+            <p>User: user@sample.com / @Password2</p>
           </div>
         </div>
       </div>

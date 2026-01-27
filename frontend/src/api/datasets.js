@@ -5,11 +5,10 @@ async function parseError(res) {
   return j?.message || `Request failed (${res.status})`;
 }
 
-export async function fetchDatasets({ token } = {}) {
-  const res = await fetch(`${API_BASE}/api/datasets`, {
-    headers: {
-      Authorization: token ? `Bearer ${token}` : "",
-    },
+export async function fetchDatasets({ token, status } = {}) {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  const res = await fetch(`${API_BASE}/api/datasets${qs}`, {
+    headers: { Authorization: token ? `Bearer ${token}` : "" },
   });
   if (!res.ok) throw new Error(await parseError(res));
   const data = await res.json();

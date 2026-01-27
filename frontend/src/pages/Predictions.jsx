@@ -25,7 +25,7 @@ export default function Predictions() {
   );
 
   // UI controls for prediction settings
-  const [method, setMethod] = useState("yoy"); // "yoy" | "moving3" | "biased"
+  const [method, setMethod] = useState("combined"); // "yoy" | "moving3" | "combined"
 
   // The "latest generated" run lives here
   const [run, setRun] = useState(null);
@@ -111,7 +111,7 @@ export default function Predictions() {
           >
             <option value="yoy">YOY baseline</option>
             <option value="moving3">3-year moving average</option>
-            <option value="biased">Demo (biased)</option>
+            <option value="combined">Combined (Mock Prediction Logic)</option>
           </select>
           <button
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
@@ -180,12 +180,13 @@ export default function Predictions() {
             stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"
-            className="lucide lucide-triangle-alert w-5 h-5 text-red-500"
-            data-fg-cxzx24="1.39:1.11638:/src/app/pages/Predictions.tsx:93:13:3572:50:e:AlertTriangle::::::B5Nd"
+            className="lucide lucide-calendar w-5 h-5 text-green-500"
+            data-fg-cxzx33="1.39:1.11638:/src/app/pages/Predictions.tsx:102:13:4019:47:e:Calendar::::::hMX"
           >
-            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path>
-            <path d="M12 9v4"></path>
-            <path d="M12 17h.01"></path>
+            <path d="M8 2v4"></path>
+            <path d="M16 2v4"></path>
+            <rect width="18" height="18" x="3" y="4" rx="2"></rect>
+            <path d="M3 10h18"></path>
           </svg>
           <p className="text-sm text-gray-600">Method</p>
           <p className="text-2xl font-semibold">
@@ -209,13 +210,12 @@ export default function Predictions() {
             stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"
-            className="lucide lucide-calendar w-5 h-5 text-green-500"
-            data-fg-cxzx33="1.39:1.11638:/src/app/pages/Predictions.tsx:102:13:4019:47:e:Calendar::::::hMX"
+            className="lucide lucide-triangle-alert w-5 h-5 text-red-500"
+            data-fg-cxzx24="1.39:1.11638:/src/app/pages/Predictions.tsx:93:13:3572:50:e:AlertTriangle::::::B5Nd"
           >
-            <path d="M8 2v4"></path>
-            <path d="M16 2v4"></path>
-            <rect width="18" height="18" x="3" y="4" rx="2"></rect>
-            <path d="M3 10h18"></path>
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path>
+            <path d="M12 9v4"></path>
+            <path d="M12 17h.01"></path>
           </svg>
           <p className="text-sm text-gray-600">Error Rate (Latest Year)</p>
           <p className="text-3xl">

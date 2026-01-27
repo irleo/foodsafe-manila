@@ -5,6 +5,9 @@ import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/users.js";
 import reportRoutes from "./routes/reports.js";
 import datasetRoutes from "./routes/datasets.js";
+import analyticsRouter from "./routes/analytics.js";
+import casesRouter from "./routes/cases.js";
+import heatmapRouter from "./routes/heatmap.js";
 
 import { connectDB } from "./config/db.js";
 import cors from "cors";
@@ -36,7 +39,10 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/datasets", datasetRoutes);
+app.use("/api/analytics", analyticsRouter);
 
+app.use("/api/cases", casesRouter);
+app.use("/api/heatmap", heatmapRouter);
 
 connectDB();
 

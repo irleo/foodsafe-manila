@@ -12,7 +12,7 @@ export default function HeatmapControls({
 
       <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
         <div className="flex gap-2 border border-gray-300 rounded-lg p-1">
-          {["District", "Illness"].map((type) => (
+          {["District", "Disease"].map((type) => (
             <button
               key={type}
               onClick={() => setMapType(type)}

@@ -1,7 +1,7 @@
-export default function TopIllnessCard({ items }) {
+export default function TopDiseaseCard({ items }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <h3 className="mb-4 font-semibold">Top Illnesses</h3>
+      <h3 className="mb-4 font-semibold">Top Diseases</h3>
 
       <div className="space-y-3">
         {items?.length ? (
@@ -11,7 +11,7 @@ export default function TopIllnessCard({ items }) {
                 <span className="text-sm text-gray-600">#{idx + 1}</span>
                 <span className="text-sm">{x.name}</span>
               </div>
-              <span className="text-sm text-gray-600">{x.count}</span>
+              <span className="text-sm px-2 py-1 text-gray-600">{x.cases}</span>
             </div>
           ))
         ) : (

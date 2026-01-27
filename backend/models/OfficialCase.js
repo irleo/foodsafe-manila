@@ -6,13 +6,14 @@ const officialCaseSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Dataset",
       default: null,
+      index: true,
     },
 
-    city: { type: String, default: "Davao City" },
+    city: { type: String, default: "Manila" },
 
-    district: { type: String, required: true },
+    district: { type: String, required: true, trim: true },
 
-    disease: { type: String, required: true }, // e.g., "Typhoid", "Cholera", etc.
+    disease: { type: String, required: true, trim: true },
 
     year: { type: Number, required: true, min: 2015, max: 2100 },
 
@@ -27,7 +28,10 @@ const officialCaseSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// prevents duplicates like same district+disease+year for same dataset
-surveillanceCaseSchema.index({ datasetId: 1, district: 1, disease: 1, year: 1 }, { unique: true });
+// Prevents duplicates like same district+disease+year for same dataset
+officialCaseSchema.index(
+  { datasetId: 1, district: 1, disease: 1, year: 1 },
+  { unique: true }
+);
 
-export default mongoose.model("SurveillanceCase", officialCaseSchema);
+export default mongoose.model("OfficialCase", officialCaseSchema);

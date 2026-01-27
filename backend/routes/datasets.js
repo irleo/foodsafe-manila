@@ -15,7 +15,6 @@ router.get("/", verifyToken, listDatasets);
 router.post(
   "/upload",
   verifyToken,
-  verifyRole("admin"),
   datasetUpload.single("file"),
   uploadDataset
 );

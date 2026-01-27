@@ -59,20 +59,5 @@ export const mockOfficialCases = [
   { _id: "oc035", city: "Manila", district: "Binondo", disease: "Salmonellosis", year: 2024, cases: 15 },
   { _id: "oc036", city: "Manila", district: "Ermita", disease: "Food Poisoning", year: 2024, cases: 21 },
 
-  // ===== 2025 =====
-  { _id: "oc037", city: "Manila", district: "Tondo", disease: "Food Poisoning", year: 2025, cases: 55 },
-  { _id: "oc038", city: "Manila", district: "Tondo", disease: "Salmonella", year: 2025, cases: 28 },
-  { _id: "oc039", city: "Manila", district: "Tondo", disease: "E. Coli", year: 2025, cases: 19 },
 
-  { _id: "oc040", city: "Manila", district: "Quiapo", disease: "Food Poisoning", year: 2025, cases: 29 },
-  { _id: "oc041", city: "Manila", district: "Quiapo", disease: "Salmonella", year: 2025, cases: 16 },
-
-  { _id: "oc042", city: "Manila", district: "Binondo", disease: "Salmonellosis", year: 2025, cases: 19 },
-  { _id: "oc043", city: "Manila", district: "Ermita", disease: "Food Poisoning", year: 2025, cases: 33 },
-  
-
-  // ===== 2026 (partial / early data) =====
-  { _id: "oc044", city: "Manila", district: "Tondo", disease: "Food Poisoning", year: 2026, cases: 22 },
-  { _id: "oc045", city: "Manila", district: "Quiapo", disease: "Food Poisoning", year: 2026, cases: 18 },
-  { _id: "oc046", city: "Manila", district: "Ermita", disease: "E. Coli", year: 2026, cases: 9 },
 ];

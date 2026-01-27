@@ -1,31 +1,25 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import "leaflet/dist/leaflet.css";
 
-import { useAuth } from "../context/AuthContext";
-import { useReports } from "../hooks/useReports";
-import { mockReports } from "../data/mockReports";
+import { mockOfficialCases } from "../data/mockOfficialCases";
 
 import {
-  buildDistrictHeatmapPoints,
+  filterOfficialCases,
+  buildDistrictHeatmapPointsFromCases,
   buildRiskStatsFromDistrictPoints,
   getRiskColor,
   getRadius,
-  getUniqueDistricts,
-  getUniqueIllnesses,
-  filterReports,
-} from "../utils/heatmapBuilders";
-
-import {
+  getUniqueDiseasesFromCases,
+  getUniqueYearsFromCases,
   buildTopDistrictsFromPoints,
-  buildTopIllnessesFromReports,
-} from "../utils/heatmapInsights";
+  buildTopDiseasesFromCases,
+} from "../utils/heatmapCaseBuilders";
 
 import HeatmapStatsRow from "../components/heatmap/HeatmapStatsRow";
-import HeatmapControls from "../components/heatmap/HeatmapControls";
 import HeatmapMapCard from "../components/heatmap/HeatmapMapCard";
 import LegendCard from "../components/heatmap/LegendCard";
 import TopDistrictsCard from "../components/heatmap/TopDistrictsCard";
-import TopIllnessCard from "../components/heatmap/TopIllnessCard";
+import TopDiseaseCard from "../components/heatmap/TopDiseaseCard";
 
 const MANILA_CITY_BOUNDS = [
   [14.53, 120.93],
@@ -35,47 +29,40 @@ const MANILA_CITY_BOUNDS = [
 const MANILA_CENTER = [14.5995, 120.9842];
 
 export default function Heatmap() {
-  const { auth } = useAuth();
-  const token = auth?.accessToken;
+  const caseRows = mockOfficialCases;
 
-  const { reports, loading, errorMsg } = useReports(token);
-
-  const finalReports = reports.length ? reports : mockReports;
-
-  const [mapType, setMapType] = useState("District"); // District | Illness
-  const [selectedIllness, setSelectedIllness] = useState("All");
-  const [selectedDistrict, setSelectedDistrict] = useState("All");
-
-  useEffect(() => {
-    if (mapType === "District") setSelectedIllness("All");
-    if (mapType === "Illness") setSelectedDistrict("All");
-  }, [mapType]);
-
-  const illnessOptions = useMemo(
-    () => ["All", ...getUniqueIllnesses(finalReports)],
-    [finalReports]
-  );
-  const districtOptions = useMemo(
-    () => ["All", ...getUniqueDistricts(finalReports)],
-    [finalReports]
+  // Options
+  const yearOptions = useMemo(
+    () => ["All", ...getUniqueYearsFromCases(caseRows)],
+    [caseRows]
   );
 
-  const filteredReports = useMemo(() => {
-    if (mapType === "District") {
-      return filterReports(finalReports, {
-        district: selectedDistrict,
-        illness: "All",
-      });
-    }
-    return filterReports(finalReports, {
-      illness: selectedIllness,
-      district: "All",
+  const diseaseOptions = useMemo(
+    () => ["All", ...getUniqueDiseasesFromCases(caseRows)],
+    [caseRows]
+  );
+
+  // Defaults: latest year (more meaningful than "All")
+  const defaultYear = useMemo(() => {
+    const years = getUniqueYearsFromCases(caseRows);
+    return years.length ? years[years.length - 1] : "All";
+  }, [caseRows]);
+
+  const [selectedYear, setSelectedYear] = useState(defaultYear);
+  const [selectedDisease, setSelectedDisease] = useState("All");
+
+  // Filter official cases
+  const filteredCases = useMemo(() => {
+    return filterOfficialCases(caseRows, {
+      year: selectedYear,
+      disease: selectedDisease,
     });
-  }, [finalReports, mapType, selectedDistrict, selectedIllness]);
+  }, [caseRows, selectedYear, selectedDisease]);
 
+  // Build district points for map
   const districtPoints = useMemo(
-    () => buildDistrictHeatmapPoints(filteredReports),
-    [filteredReports]
+    () => buildDistrictHeatmapPointsFromCases(filteredCases),
+    [filteredCases]
   );
 
   const stats = useMemo(
@@ -84,84 +71,78 @@ export default function Heatmap() {
   );
 
   const title = useMemo(() => {
-    if (mapType === "District") {
-      return `Risk Map (${
-        selectedDistrict === "All" ? "All Districts" : selectedDistrict
-      })`;
-    }
-    return `Risk Map (${
-      selectedIllness === "All" ? "All Illnesses" : selectedIllness
-    })`;
-  }, [mapType, selectedDistrict, selectedIllness]);
+    const y = selectedYear === "All" ? "All Years" : selectedYear;
+    const d = selectedDisease === "All" ? "All Diseases" : selectedDisease;
+    return `Risk Map (${y} • ${d})`;
+  }, [selectedYear, selectedDisease]);
 
   const showNoData =
-    (mapType === "District" &&
-      selectedDistrict !== "All" &&
-      districtPoints.length === 0) ||
-    (mapType === "Illness" &&
-      selectedIllness !== "All" &&
-      districtPoints.length === 0);
-
-  const dropdownValue =
-    mapType === "District" ? selectedDistrict : selectedIllness;
-  const dropdownOptions =
-    mapType === "District" ? districtOptions : illnessOptions;
-
-  const handleDropdownChange = (e) => {
-    const value = e.target.value;
-    if (mapType === "District") setSelectedDistrict(value);
-    else setSelectedIllness(value);
-  };
+    (selectedYear !== "All" || selectedDisease !== "All") &&
+    districtPoints.length === 0;
 
   const topDistricts = useMemo(
     () => buildTopDistrictsFromPoints(districtPoints, 5),
     [districtPoints]
   );
 
-  const topIllnesses = useMemo(
-    () => buildTopIllnessesFromReports(filteredReports, 5),
-    [filteredReports]
+  const topDiseases = useMemo(
+    () => buildTopDiseasesFromCases(filteredCases, 5),
+    [filteredCases]
   );
 
-  const controls = (
-    <HeatmapControls
-      title={title}
-      mapType={mapType}
-      setMapType={setMapType}
-      dropdownValue={dropdownValue}
-      dropdownOptions={dropdownOptions}
-      onDropdownChange={handleDropdownChange}
-    />
-  );
-
-  const loadingOverlay =
-    loading && !reports.length ? (
-      <div className="absolute inset-0 z-[999] grid place-items-center bg-white/70">
-        <p className="text-sm text-gray-700">Loading map…</p>
-      </div>
-    ) : null;
+  // Mock mode
+  const loadingOverlay = null;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Heatmap</h1>
-        <p className="text-gray-600 mt-1">Interactive map of district-level disease burden</p>
+        <p className="text-gray-600 mt-1">
+          District-level disease burden by year (centroid-weighted)
+        </p>
       </div>
-
-      {errorMsg && (
-        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
-          {errorMsg} (Showing sample data.)
-        </div>
-      )}
 
       <HeatmapStatsRow stats={stats} />
 
       <div className="grid grid-cols-12 gap-6">
         <HeatmapMapCard
           title={title}
-          controls={controls}
+          // New: pass controls as simple JSX
+          controls={
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
+              <h2 className="font-semibold text-lg">{title}</h2>
+
+              <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                <select
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                  value={selectedYear}
+                  onChange={(e) =>
+                    setSelectedYear(e.target.value === "All" ? "All" : Number(e.target.value))
+                  }
+                >
+                  {yearOptions.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt === "All" ? "All Years" : opt}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                  value={selectedDisease}
+                  onChange={(e) => setSelectedDisease(e.target.value)}
+                >
+                  {diseaseOptions.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt === "All" ? "All Diseases" : opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          }
           districtPoints={districtPoints}
-          mapType={mapType}
+          mapType="District"
           showNoData={showNoData}
           loadingOverlay={loadingOverlay}
           MANILA_CENTER={MANILA_CENTER}
@@ -173,7 +154,7 @@ export default function Heatmap() {
         <div className="col-span-12 lg:col-span-3 space-y-4">
           <LegendCard />
           <TopDistrictsCard items={topDistricts} />
-          <TopIllnessCard items={topIllnesses} />
+          <TopDiseaseCard items={topDiseases} />
         </div>
       </div>
     </div>

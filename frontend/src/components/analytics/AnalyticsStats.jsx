@@ -50,7 +50,7 @@ export default function AnalyticsStats({
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <p className="text-sm text-gray-600 mb-2">Top Illness</p>
+        <p className="text-sm text-gray-600 mb-2">Top Diseases</p>
         <p className="text-2xl font-semibold">{topDisease}</p>
         <p className="text-sm text-gray-600 mt-2">Most frequent diagnosis</p>
       </div>
@@ -59,7 +59,7 @@ export default function AnalyticsStats({
         <p className="text-sm text-gray-600 mb-2">Districts Covered</p>
         <p className="text-3xl">{districtsCovered}</p>
         <p className="text-sm text-gray-600 mt-2">
-          Unique districts with reports
+          Unique districts with cases
         </p>
       </div>
     </div>

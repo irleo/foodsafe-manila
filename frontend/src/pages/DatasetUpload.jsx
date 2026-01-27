@@ -6,6 +6,8 @@ import { useDatasets } from "../hooks/useDatasets.js";
 import UploadDropzone from "../components/datasets/UploadDropzone";
 import RecentDatasetsList from "../components/datasets/RecentDatasetsList";
 import Spinner from "../components/Spinner.jsx";
+import { delay } from "../utils/delay.js";
+import { notify } from "../utils/toast.js";
 
 export default function DatasetUpload() {
   const fileInputRef = useRef(null);
@@ -26,8 +28,13 @@ export default function DatasetUpload() {
   const [statusMsg, setStatusMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
-  const { recent, loadingRecent, fetchRecent, upload, download } =
-    useDatasets(token);
+  const [showFailed, setShowFailed] = useState(false);
+  const statusFilter = showFailed ? "validated,failed" : "validated";
+
+  const { recent, loadingRecent, fetchRecent, upload, download } = useDatasets(
+    token,
+    statusFilter,
+  );
 
   const canValidate = useMemo(() => {
     if (!file) return false;
@@ -83,19 +90,22 @@ export default function DatasetUpload() {
 
   const validateAndUpload = async () => {
     resetMessages();
-    setValidating(true);
     setUploading(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
     try {
-      const result = await upload({
-        file,
-        name: datasetName.trim(),
-        coverageStart,
-        coverageEnd,
-        dataSource,
-      });
+      const result = await notify.promise(
+        upload({
+          file,
+          name: datasetName.trim(),
+          coverageStart,
+          coverageEnd,
+          dataSource,
+        }),
+        {
+          success: (res) => `Uploaded: ${res?.dataset?.name || datasetName}`,
+          error: (e) => e?.message || "Upload failed.",
+        },
+      );
 
       setStatusMsg(
         `Uploaded and validated: ${result?.dataset?.name || datasetName}`,
@@ -105,9 +115,9 @@ export default function DatasetUpload() {
     } catch (err) {
       setErrorMsg(err.message || "Upload failed.");
     } finally {
-      setValidating(false);
       setUploading(false);
     }
+    await delay(400);
   };
 
   const downloadDataset = async (datasetId) => {
@@ -132,7 +142,9 @@ export default function DatasetUpload() {
       {/* header + alert ... */}
       <div>
         <h1 className="text-2xl font-bold">Dataset Upload</h1>
-        <p className="text-gray-600 mt-1">Upload and validate official disease datasets</p>
+        <p className="text-gray-600 mt-1">
+          Upload and validate official disease datasets
+        </p>
       </div>
 
       {(errorMsg || statusMsg) && (
@@ -243,7 +255,11 @@ export default function DatasetUpload() {
              disabled:opacity-50 disabled:cursor-not-allowed
              flex items-center justify-center gap-2"
               >
-                {(uploading || validating) && <Spinner />}
+                {(uploading || validating) && (
+                  <span className="inline-flex h-4 w-4">
+                    <Spinner />
+                  </span>
+                )}
                 {uploading
                   ? "Uploading..."
                   : validating
@@ -260,6 +276,8 @@ export default function DatasetUpload() {
             loading={loadingRecent}
             onRefresh={fetchRecent}
             onDownload={downloadDataset}
+            showFailed={showFailed}
+            onShowFailedChange={setShowFailed}
           />
         </div>
       </div>

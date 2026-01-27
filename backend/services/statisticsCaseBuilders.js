@@ -1,11 +1,9 @@
-// Percentage computations
 const percentChange = (current, previous) => {
   if (!previous) return null;
   return ((current - previous) / previous) * 100;
 };
 
 function percentile(sortedValues, p) {
-  // p in [0,1], sortedValues ascending
   if (!sortedValues.length) return 0;
   const idx = (sortedValues.length - 1) * p;
   const lo = Math.floor(idx);
@@ -13,6 +11,42 @@ function percentile(sortedValues, p) {
   if (lo === hi) return sortedValues[lo];
   const w = idx - lo;
   return sortedValues[lo] * (1 - w) + sortedValues[hi] * w;
+}
+
+export function getYearRange(caseRows = []) {
+  const safe = Array.isArray(caseRows) ? caseRows : [];
+  let min = null;
+  let max = null;
+
+  for (const r of safe) {
+    const year = Number(r?.year);
+    const cases = Number(r?.cases ?? 0);
+
+    if (!Number.isFinite(year)) continue;
+    if (!Number.isFinite(cases) || cases < 0) continue;
+
+    if (min === null || year < min) min = year;
+    if (max === null || year > max) max = year;
+  }
+
+  return { min, max };
+}
+
+export function getMaxYearInData(caseRows = []) {
+  const safe = Array.isArray(caseRows) ? caseRows : [];
+  let maxYear = null;
+
+  for (const r of safe) {
+    const year = Number(r?.year);
+    const cases = Number(r?.cases ?? 0);
+
+    if (!Number.isFinite(year)) continue;
+    if (!Number.isFinite(cases) || cases <= 0) continue;
+
+    if (maxYear === null || year > maxYear) maxYear = year;
+  }
+
+  return maxYear;
 }
 
 export function buildDistrictStatisticsFromCases(caseRows = []) {
@@ -42,7 +76,6 @@ export function buildDistrictStatisticsFromCases(caseRows = []) {
     if (disease) districtMap[district].diseases.add(disease);
   }
 
-  // Build per-district stats first (without riskLevel)
   const districts = Object.values(districtMap).map((d) => {
     const yearsCovered = d.years.size || 1;
     const avgCasesPerYear = d.totalCases / yearsCovered;
@@ -50,15 +83,15 @@ export function buildDistrictStatisticsFromCases(caseRows = []) {
     return {
       district: d.district,
       totalCases: d.totalCases,
+      incidents: d.years.size,
+      avgCasesPerEntry: Number(avgCasesPerYear.toFixed(1)),
+      diseasesCovered: d.diseases.size,
+      yearsCovered: d.years.size,
 
-      incidents: d.years.size, // number of year buckets
-      avgCasesPerEntry: Number(avgCasesPerYear.toFixed(1)), // meaning: avg cases/year
-      _riskMetric: avgCasesPerYear,
-
+      _riskMetric: avgCasesPerYear, 
     };
   });
 
-  // Percentile cutoffs (25th and 75th by default)
   const metrics = districts
     .map((d) => d._riskMetric)
     .filter((v) => Number.isFinite(v))
@@ -67,9 +100,8 @@ export function buildDistrictStatisticsFromCases(caseRows = []) {
   const p25 = percentile(metrics, 0.25);
   const p75 = percentile(metrics, 0.75);
 
-  // Assign riskLevel based on distribution
   const withRisk = districts.map((d) => {
-    let riskLevel = "Moderate"; // middle band
+    let riskLevel = "Moderate";
     if (d._riskMetric <= p25) riskLevel = "Low";
     else if (d._riskMetric >= p75) riskLevel = "High";
 
@@ -80,10 +112,8 @@ export function buildDistrictStatisticsFromCases(caseRows = []) {
   return withRisk.sort((a, b) => b.totalCases - a.totalCases);
 }
 
-// Risk Level Donut Chart
 export function buildRiskLevelDonutDataFromDistrictStats(districtStats = []) {
   const safe = Array.isArray(districtStats) ? districtStats : [];
-
   const totals = { High: 0, Moderate: 0, Low: 0 };
 
   for (const d of safe) {
@@ -101,28 +131,6 @@ export function buildRiskLevelDonutDataFromDistrictStats(districtStats = []) {
     risk,
     percentage: Number(((totals[risk] / sum) * 100).toFixed(1)),
   }));
-}
-
-// YoY
-
-function getMaxYearInData(caseRows = []) {
-  const safe = Array.isArray(caseRows) ? caseRows : [];
-
-  let maxYear = null;
-
-  for (const r of safe) {
-    const year = Number(r?.year);
-    const cases = Number(r?.cases ?? 0);
-
-    if (!Number.isFinite(year)) continue;
-    if (!Number.isFinite(cases) || cases <= 0) continue;
-
-    if (maxYear === null || year > maxYear) {
-      maxYear = year;
-    }
-  }
-
-  return maxYear;
 }
 
 export function buildYoYCaseStatsFromCases(caseRows = []) {
@@ -154,10 +162,7 @@ export function buildYoYCaseStatsFromCases(caseRows = []) {
     else if (year === lastYear) lastYearCases += cases;
   }
 
-  const yoyPct =
-    lastYearCases > 0
-      ? ((thisYearCases - lastYearCases) / lastYearCases) * 100
-      : null;
+  const yoyPct = percentChange(thisYearCases, lastYearCases);
 
   return {
     thisYear,
@@ -167,4 +172,3 @@ export function buildYoYCaseStatsFromCases(caseRows = []) {
     yoyPct: yoyPct === null ? null : Number(yoyPct.toFixed(1)),
   };
 }
-

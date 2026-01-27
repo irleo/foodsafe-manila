@@ -1,0 +1,11 @@
+city,district,disease,year,cases
+Manila City,Tondo,Typhoid Fever,2021,38
+Manila City,Tondo,Cholera,2022,12
+Manila City,Binondo,Typhoid Fever,2021,9
+Manila City,Binondo,Cholera,2022,3
+Manila City,Sampaloc,Typhoid Fever,2021,22
+Manila City,Sampaloc,Cholera,2022,6
+Manila City,Ermita,Typhoid Fever,2021,5
+Manila City,Ermita,Cholera,2022,2
+Manila City,Malate,Typhoid Fever,2021,14
+Manila City,Malate,Cholera,2022,4

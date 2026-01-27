@@ -11,6 +11,8 @@ export default function RecentDatasetsList({
   loading,
   onRefresh,
   onDownload,
+  showFailed,
+  onShowFailedChange,
 }) {
   const PAGE_SIZE = 5;
   const [page, setPage] = useState(0);
@@ -51,6 +53,17 @@ export default function RecentDatasetsList({
         <p className="text-sm text-gray-500">No datasets uploaded yet.</p>
       ) : (
         <>
+          <div className="flex mb-1">
+            <label className="flex items-center gap-2 text-sm text-gray-600 ml-auto">
+              <input
+                type="checkbox"
+                checked={showFailed}
+                onChange={(e) => onShowFailedChange(e.target.checked)}
+              />
+              Show failed uploads
+            </label>
+          </div>
+          
           <div className="space-y-3">
             {pageItems.map((d) => (
               <div
@@ -69,6 +82,12 @@ export default function RecentDatasetsList({
                         records
                       </p>
 
+                      {d.status === "failed" && d.errorMessage && (
+                        <p className="text-xs text-red-600 mt-1">
+                          {d.errorMessage}
+                        </p>
+                      )}
+
                       <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-500">
                         <span className="flex items-center gap-1">
                           <CalendarIcon className="w-4 h-4" />
@@ -81,8 +100,8 @@ export default function RecentDatasetsList({
                             d.status === "validated"
                               ? "bg-green-100 text-green-700"
                               : d.status === "failed"
-                              ? "bg-red-100 text-red-700"
-                              : "bg-yellow-100 text-yellow-700",
+                                ? "bg-red-100 text-red-700"
+                                : "bg-yellow-100 text-yellow-700",
                           ].join(" ")}
                         >
                           {d.status || "pending"}
@@ -92,9 +111,12 @@ export default function RecentDatasetsList({
                   </div>
 
                   <button
-                    className="p-2 hover:bg-gray-100 rounded-lg"
+                    className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-50"
                     onClick={() => onDownload(d._id)}
-                    title="Download"
+                    disabled={d.status !== "validated"}
+                    title={
+                      d.status !== "validated" ? "Unavailable" : "Download"
+                    }
                   >
                     <ArrowDownTrayIcon className="w-5 h-5 text-gray-700" />
                   </button>
@@ -107,7 +129,8 @@ export default function RecentDatasetsList({
           <div className="mt-4 flex items-center justify-between">
             <p className="text-xs text-gray-500">
               Showing {page * PAGE_SIZE + 1}–
-              {Math.min((page + 1) * PAGE_SIZE, recent.length)} of {recent.length}
+              {Math.min((page + 1) * PAGE_SIZE, recent.length)} of{" "}
+              {recent.length}
             </p>
 
             {/* Dots */}

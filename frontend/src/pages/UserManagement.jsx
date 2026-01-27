@@ -7,8 +7,9 @@ import {
   XMarkIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
+import { FilterIcon } from "lucide-react";
 
-const LIMIT = 5;
+const LIMIT = 3;
 
 export default function UserManagement() {
   const { auth } = useAuth();
@@ -264,20 +265,22 @@ export default function UserManagement() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-
-          <select
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            value={statusFilter}
-            onChange={(e) => {
-              setPage(1);
-              setStatusFilter(e.target.value);
-            }}
-          >
-            <option value="all">All</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-          </select>
+          <div className="flex gap-1 items-center">
+            <FilterIcon className="block"/>
+            <select
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              value={statusFilter}
+              onChange={(e) => {
+                setPage(1);
+                setStatusFilter(e.target.value);
+              }}
+            >
+              <option value="all">All</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
         </div>
       </div>
 
