@@ -131,7 +131,7 @@ export default function LandingPage() {
         </h1>
 
         <p className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto mb-12">
-          Advanced disease surveillance system for health officials and early
+          Disease surveillance system for health officials and
           warning alerts for citizens
         </p>
 
@@ -179,8 +179,7 @@ export default function LandingPage() {
             Comprehensive Disease Surveillance
           </h2>
           <p className="text-center text-gray-600 mb-12 max-w-2xl mx-auto">
-            Our system combines advanced analytics for health officials with
-            real-time alerts for citizens
+            Our system combines advanced analytics for health officials with alerts for citizens
           </p>
 
           <div className="grid md:grid-cols-3 gap-8">

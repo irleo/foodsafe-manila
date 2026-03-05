@@ -21,7 +21,7 @@ const officialCaseSchema = new mongoose.Schema(
 
     source: {
       type: String,
-      enum: ["official", "csv", "system"],
+      enum: ["official", "csv", "excel", "system", "file"],
       default: "official",
     },
   },

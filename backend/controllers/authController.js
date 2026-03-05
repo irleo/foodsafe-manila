@@ -18,42 +18,38 @@ export const requestAccess = async (req, res) => {
     return res.status(400).json({ message: "All fields are required" });
   }
 
-  if (reason.length > 500) {
-    return res
-      .status(400)
-      .json({ message: "Reason must be 500 characters or less" });
-  }
-
+  if (typeof password !== "string" || password.length < 8) 
+    return res.status(400).json({ message: "Password must be at least 8 characters", });
+  
+  if (typeof reason !== "string" || reason.trim().length > 300) 
+    return res.status(400).json({ message: "Reason must be 300 characters or less" });
+  
   try {
     const normalizedEmail = email.toLowerCase().trim();
+    const normalizedUsername = username.trim();
 
     const existingUser = await User.findOne({ email: normalizedEmail });
 
     if (existingUser) {
-      // More accurate + user-friendly conflict handling
+      // conflict handling
       if (existingUser.status === "pending") {
-        return res
-          .status(409)
-          .json({
-            message:
-              "An access request for this email is already pending approval.",
-          });
+        return res.status(409).json({
+          message:
+            "An access request for this email is already pending approval.",
+        });
       }
 
       if (existingUser.status === "approved") {
-        return res
-          .status(409)
-          .json({
-            message:
-              "An account with this email already exists. Please sign in.",
-          });
+        return res.status(409).json({
+          message: "An account with this email already exists. Please sign in.",
+        });
       }
 
       if (existingUser.status === "rejected") {
-        // Option A: allow re-apply by updating the existing record (recommended)
+        // Allow re-apply by updating the existing record
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        existingUser.username = username.trim();
+        existingUser.username = normalizedUsername;
         existingUser.password = hashedPassword;
         existingUser.organization = organization.trim();
         existingUser.position = position.trim();
@@ -81,7 +77,7 @@ export const requestAccess = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = new User({
-      username: username.trim(),
+      username: normalizedUsername,
       email: normalizedEmail,
       password: hashedPassword,
       organization: organization.trim(),
@@ -105,12 +101,9 @@ export const requestAccess = async (req, res) => {
   } catch (error) {
     // If two requests race at the same time, Mongo unique index on email can throw 11000
     if (error?.code === 11000) {
-      return res
-        .status(409)
-        .json({
-          message:
-            "An account or access request with this email already exists.",
-        });
+      return res.status(409).json({
+        message: "An account or access request with this email already exists.",
+      });
     }
     console.error("Error requesting access:", error);
     return res.status(500).json({ message: "Server error" });
@@ -120,6 +113,7 @@ export const requestAccess = async (req, res) => {
 // POST /api/auth/login
 export const login = async (req, res) => {
   const { email, password } = req.body;
+  const isProd = process.env.NODE_ENV === "production";
 
   if (!email || !password) {
     return res.status(400).json({ message: "Email and password are required" });
@@ -130,7 +124,7 @@ export const login = async (req, res) => {
     const user = await User.findOne({ email: normalizedEmail });
 
     if (!user) {
-      return res.status(400).json({ message: "User not found" });
+      return res.status(400).json({ message: "Invalid credentials" });
     }
 
     // Approval gate
@@ -162,8 +156,8 @@ export const login = async (req, res) => {
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      secure: isProd, // only HTTPS in production
+      sameSite: isProd ? "none" : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 

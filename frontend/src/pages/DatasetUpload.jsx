@@ -117,7 +117,7 @@ export default function DatasetUpload() {
     } finally {
       setUploading(false);
     }
-    await delay(400);
+    await delay(600);
   };
 
   const downloadDataset = async (datasetId) => {
@@ -147,7 +147,7 @@ export default function DatasetUpload() {
         </p>
       </div>
 
-      {(errorMsg || statusMsg) && (
+      {/* {(errorMsg || statusMsg) && (
         <div
           className={`rounded-lg border p-4 text-sm ${
             errorMsg
@@ -169,7 +169,7 @@ export default function DatasetUpload() {
             </button>
           </div>
         </div>
-      )}
+      )} */}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-6">

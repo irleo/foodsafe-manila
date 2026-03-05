@@ -159,7 +159,7 @@ function rowToOfficialCase(row, datasetId, sourceLabel = "file") {
   const year = safeNumber(yearRaw);
   const cases = safeNumber(casesRaw);
 
-  // Rule checks (edit ranges to your needs)
+  // Rule checks
   if (!district) return { ok: false, reason: "District is required." };
   if (!disease) return { ok: false, reason: "Disease is required." };
   if (!Number.isFinite(year) || !Number.isInteger(year))

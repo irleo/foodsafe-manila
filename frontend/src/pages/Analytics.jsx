@@ -41,7 +41,8 @@ export default function Analytics() {
             Analysis of historical foodborne disease trends and patterns
           </p>
         </div>
-        <div className="flex gap-2">
+        {/* EXPORT BUTTONS */}
+        {/* <div className="flex gap-2">
           <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -80,7 +81,7 @@ export default function Analytics() {
             </svg>
             Export PNG
           </button>
-        </div>
+        </div> */}
       </div>
 
       {errorMsg && (
