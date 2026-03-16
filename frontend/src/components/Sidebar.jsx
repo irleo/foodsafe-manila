@@ -38,7 +38,7 @@ export default function Sidebar({ isOpen }) {
       ? [
           { name: "Dashboard", path: "/", icon: Squares2X2Icon, end: true },
           {
-            name: "Dataset Upload",
+            name: "Data",
             path: "/datasets",
             icon: ArrowDownOnSquareIcon,
           },
@@ -58,7 +58,7 @@ export default function Sidebar({ isOpen }) {
       : [
           { name: "Dashboard", path: "/", icon: Squares2X2Icon, end: true },
           {
-            name: "Dataset Upload",
+            name: "Data",
             path: "/datasets",
             icon: ArrowDownOnSquareIcon,
           },

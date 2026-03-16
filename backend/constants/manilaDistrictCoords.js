@@ -15,10 +15,10 @@ export const manilaDistrictCoords = {
   santa_ana:    { lat: 14.5760, lng: 121.0050 },
 };
 
-export function toManilaDistrictKey(district) {
-  return String(district || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[.\-]/g, " ")
-    .replace(/\s+/g, "_");
-}
+// export function toManilaDistrictKey(district) {
+//   return String(district || "")
+//     .trim()
+//     .toLowerCase()
+//     .replace(/[.\-]/g, " ")
+//     .replace(/\s+/g, "_");
+// }

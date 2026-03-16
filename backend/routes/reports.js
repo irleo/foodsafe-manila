@@ -5,6 +5,6 @@ import { getReports, createReport } from "../controllers/reportController.js";
 const router = express.Router();
 
 router.get("/", verifyToken, getReports);
-router.post("/", verifyToken, verifyRole("admin"), createReport);
+router.post("/", verifyToken, createReport);
 
 export default router;

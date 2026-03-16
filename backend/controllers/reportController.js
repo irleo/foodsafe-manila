@@ -1,42 +1,73 @@
 import Report from "../models/Report.js";
+import { manilaDistrictCoords } from "../constants/manilaDistrictCoords.js";
 
-/**
- * Create report (Manual or CSV)
- *
- * Applies basic input validation and avoids logging full request bodies
- * to reduce the chance of leaking sensitive information in logs.
- */
+const ALLOWED_SYMPTOMS = new Set([
+  "nausea",
+  "vomiting",
+  "diarrhea",
+  "abdominal_cramps",
+  "fever",
+  "headache",
+  "dehydration",
+]);
+
+
+const MAX_REPORTS_PER_24H = 3;
+const DUPLICATE_WINDOW_HOURS = 6;
+
+function normalizeSymptom(s) {
+  return String(s).trim().toLowerCase().replace(/\s+/g, "_");
+}
+
+function normalizeDistrictKey(d) {
+  return String(d).trim().toLowerCase().replace(/\s+/g, "_");
+}
+
+function sameSet(a = [], b = []) {
+  if (a.length !== b.length) return false;
+  const sa = new Set(a);
+  for (const x of b) if (!sa.has(x)) return false;
+  return true;
+}
+
 export const createReport = async (req, res) => {
-  // Minimal debug logging without sensitive body/header dumps
   if (process.env.NODE_ENV !== "production") {
     console.log("HIT createReport", req.method, req.originalUrl);
   }
 
   try {
+    if (!req.user?.id) {
+      return res.status(401).json({ message: "Authentication required." });
+    }
+
     const {
       datasetId,
       location,
-      illness,
+      exposureDistrict, // reported at district A but suspect exposure at district B
+      symptoms,
       caseCount,
       foodSource,
-      severity,
       reportedAt,
-      source,
     } = req.body || {};
 
-    // Basic structural validation
     if (!location || typeof location !== "object") {
-      return res
-        .status(400)
-        .json({ message: "Location with name, district and coordinates is required." });
+      return res.status(400).json({
+        message: "Location with name, district and coordinates is required.",
+      });
     }
 
     const { name, district, coordinates } = location;
 
     if (!name || !district) {
-      return res
-        .status(400)
-        .json({ message: "Location name and district are required." });
+      return res.status(400).json({
+        message: "Location name and district are required.",
+      });
+    }
+
+    const reporterDistrictKey = normalizeDistrictKey(district);
+
+    if (!manilaDistrictCoords[reporterDistrictKey]) {
+      return res.status(400).json({ message: "Invalid Manila district." });
     }
 
     if (
@@ -58,25 +89,42 @@ export const createReport = async (req, res) => {
         .json({ message: "Location coordinates must be valid numbers." });
     }
 
-    if (!illness || typeof illness !== "string") {
-      return res.status(400).json({ message: "Illness is required." });
+    // Validate optional exposureDistrict (food source district)
+    let exposureDistrictKey = null;
+    if (typeof exposureDistrict !== "undefined" && exposureDistrict !== null && exposureDistrict !== "") {
+      exposureDistrictKey = normalizeDistrictKey(exposureDistrict);
+
+      if (!manilaDistrictCoords[exposureDistrictKey]) {
+        return res.status(400).json({ message: "Invalid exposure district." });
+      }
     }
 
-    const allowedSeverities = ["High", "Moderate", "Low"];
-    if (!severity || !allowedSeverities.includes(severity)) {
-      return res
-        .status(400)
-        .json({ message: "Severity must be one of High, Moderate, or Low." });
+    if (!Array.isArray(symptoms) || symptoms.length === 0) {
+      return res.status(400).json({ message: "At least one symptom is required." });
+    }
+
+    const normalizedSymptoms = Array.from(
+      new Set(symptoms.map(normalizeSymptom).filter(Boolean))
+    );
+
+    if (normalizedSymptoms.length === 0) {
+      return res.status(400).json({ message: "At least one symptom is required." });
+    }
+
+    for (const s of normalizedSymptoms) {
+      if (!ALLOWED_SYMPTOMS.has(s)) {
+        return res.status(400).json({ message: `Invalid symptom: ${s}` });
+      }
     }
 
     const normalizedCaseCount =
       typeof caseCount === "undefined" ? 1 : Number(caseCount);
 
-    if (!Number.isFinite(normalizedCaseCount) || normalizedCaseCount < 0) {
-      return res
-        .status(400)
-        .json({ message: "caseCount must be a non‑negative number." });
+    if (!Number.isFinite(normalizedCaseCount) || normalizedCaseCount < 1) {
+      return res.status(400).json({ message: "caseCount must be a positive number." });
     }
+
+    const clampedCaseCount = Math.min(normalizedCaseCount, 10);
 
     const parsedReportedAt = reportedAt ? new Date(reportedAt) : new Date();
     if (Number.isNaN(parsedReportedAt.getTime())) {
@@ -85,28 +133,67 @@ export const createReport = async (req, res) => {
         .json({ message: "reportedAt must be a valid date if provided." });
     }
 
-    const safeSource =
-      source && ["manual", "csv", "system"].includes(source) ? source : "manual";
+    const now = new Date();
+    if (parsedReportedAt.getTime() > now.getTime() + 5 * 60 * 1000) {
+      return res.status(400).json({ message: "reportedAt cannot be in the future." });
+    }
 
-    // Build a whitelisted payload instead of passing req.body directly
+    // Rate limit per user (DB-based)
+    const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const reportsLast24h = await Report.countDocuments({
+      reportedBy: req.user.id,
+      createdAt: { $gte: since24h },
+      source: "citizen_app",
+    });
+
+    if (reportsLast24h >= MAX_REPORTS_PER_24H) {
+      return res.status(429).json({
+        message: "Report limit reached. Please try again later.",
+      });
+    }
+
+    // Duplicate suppression:
+    // Use the *counting district* for dedupe (exposureDistrict if provided; else reporterDistrict)
+    const countingDistrictKey = exposureDistrictKey || reporterDistrictKey;
+
+    const dupSince = new Date(now.getTime() - DUPLICATE_WINDOW_HOURS * 60 * 60 * 1000);
+
+    const recentSimilar = await Report.findOne({
+      reportedBy: req.user.id,
+      $or: [
+        { exposureDistrict: countingDistrictKey }, // if they used exposureDistrict before
+        { exposureDistrict: null, "location.district": countingDistrictKey }, // fallback
+      ],
+      reportedAt: { $gte: dupSince },
+      source: "citizen_app",
+    })
+      .sort({ reportedAt: -1 })
+      .select("symptoms exposureDistrict location.district");
+
+    let isCounted = true;
+    let excludeReason = null;
+
+    if (recentSimilar && sameSet(recentSimilar.symptoms, normalizedSymptoms)) {
+      isCounted = false;
+      excludeReason = "duplicate_window";
+    }
+
     const payload = {
       datasetId: datasetId || null,
       location: {
         name: String(name).trim(),
-        district: String(district).trim(),
-        coordinates: {
-          lat,
-          lng,
-        },
+        district: reporterDistrictKey,
+        coordinates: { lat, lng },
       },
-      illness: illness.trim(),
-      caseCount: normalizedCaseCount,
+      exposureDistrict: exposureDistrictKey, // store separately
+      symptoms: normalizedSymptoms,
+      caseCount: clampedCaseCount,
       foodSource: foodSource ? String(foodSource).trim() : null,
-      severity,
       reportedAt: parsedReportedAt,
-      // Tie report to the authenticated user when available
-      reportedBy: req.user?.id || null,
-      source: safeSource,
+      reportedBy: req.user.id,
+      source: "citizen_app",
+      isCounted,
+      excludeReason,
     };
 
     const report = await Report.create(payload);
@@ -117,28 +204,39 @@ export const createReport = async (req, res) => {
   }
 };
 
-/**
- * Get reports (for heatmap & charts)
- * Supports optional query params:
- * - datasetId
- * - limit (default 2000)
- */
 export const getReports = async (req, res) => {
-  console.log("HIT getReports", req.method, req.originalUrl);
+  if (process.env.NODE_ENV !== "production") {
+    console.log("HIT getReports", req.method, req.originalUrl);
+  }
 
   try {
-    const { datasetId } = req.query;
+    const { datasetId, district, onlyCounted } = req.query;
     const limit = Math.min(Number(req.query.limit) || 2000, 5000);
 
     const query = {};
-    if (datasetId) query.datasetId = datasetId; // only if you add datasetId to Report schema
+    if (datasetId) query.datasetId = datasetId;
+
+    if (district) {
+      const districtKey = normalizeDistrictKey(district);
+      if (!manilaDistrictCoords[districtKey]) {
+        return res.status(400).json({ message: "Invalid Manila district." });
+      }
+
+      // Allow filtering by either reporterDistrict or exposureDistrict
+      query.$or = [
+        { exposureDistrict: districtKey },
+        { exposureDistrict: null, "location.district": districtKey },
+      ];
+    }
+
+    if (onlyCounted === "true") query.isCounted = true;
 
     const reports = await Report.find(query)
       .sort({ reportedAt: -1 })
       .limit(limit);
 
-    res.json(reports);
+    return res.json(reports);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: "Failed to fetch reports." });
   }
 };

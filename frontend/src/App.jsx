@@ -11,7 +11,7 @@ import DashboardLayout from "./layouts/DashboardLayout";
 
 import UserManagement from "./pages/UserManagement";
 import Analytics from "./pages/Analytics";
-import DatasetUpload from "./pages/DatasetUpload";
+import Data from "./pages/Data";
 import Predictions from "./pages/Predictions";
 import Heatmap from "./pages/Heatmap";
 import Dashboard from "./pages/Dashboard";
@@ -38,7 +38,7 @@ function App() {
             <Route path="analytics" element={<Analytics />} />
             <Route path="heatmap" element={<Heatmap />} />
             <Route path="predictions" element={<Predictions />} />
-            <Route path="datasets" element={<DatasetUpload />} />
+            <Route path="datasets" element={<Data />} />
 
             <Route
               path="user-management"

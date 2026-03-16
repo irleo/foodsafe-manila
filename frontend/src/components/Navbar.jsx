@@ -72,7 +72,7 @@ export default function Navbar({ toggleSidebar }) {
               </div>
               <div>
                 <h1 className="text-sm sm:text-base font-semibold">
-                  Foodborne Illness Monitoring System
+                  Foodborne Disease Monitoring System
                 </h1>
                 <p className="text-xs text-gray-600 hidden sm:block">
                   Foodsafe - Manila

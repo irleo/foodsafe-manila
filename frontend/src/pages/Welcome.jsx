@@ -126,7 +126,7 @@ export default function LandingPage() {
         </div>
 
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-6">
-          Foodborne Illness <br className="hidden sm:block" />
+          Foodborne Disease <br className="hidden sm:block" />
           Monitoring &amp; Alerts
         </h1>
 
