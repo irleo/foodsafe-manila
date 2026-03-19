@@ -18,11 +18,15 @@ export default function Sidebar({ isOpen }) {
 
   const handleLogout = async () => {
     try {
-      await axios.post("/api/auth/logout", {}, { withCredentials: true });
+      const logoutPromise = axios.post(
+        "/api/auth/logout",
+        {},
+        { withCredentials: true },
+      );
 
-      await notify.promise(Promise.resolve(), {
+      await notify.promise(logoutPromise, {
         loading: "Logging you out…",
-        success: "Logged out succesfully!",
+        success: "Logged out successfully!",
         error: (e) => e?.response?.data?.message || "Logout failed.",
       });
 

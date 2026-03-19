@@ -4,6 +4,7 @@ import {
   CalendarIcon,
   DocumentIcon,
 } from "@heroicons/react/24/outline";
+import { RefreshCw } from "lucide-react";
 import { formatDate } from "../../utils/formatDate";
 
 export default function RecentDatasetsList({
@@ -36,13 +37,14 @@ export default function RecentDatasetsList({
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold">Recent Datasets</h2>
         <button
-          className="text-sm px-3 py-1 rounded-lg border border-gray-300 hover:bg-gray-50"
+          className="flex items-center gap-1 text-sm px-3 py-1 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
           onClick={() => {
             setPage(0); // reset to first page on refresh (optional)
             onRefresh?.();
           }}
           disabled={loading}
         >
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           {loading ? "Refreshing..." : "Refresh"}
         </button>
       </div>

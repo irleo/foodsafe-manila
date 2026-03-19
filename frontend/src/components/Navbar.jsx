@@ -57,7 +57,7 @@ export default function Navbar({ toggleSidebar }) {
               </button>
             </div>
             <div className="flex items-center gap-3">
-              <div class="bg-blue-600 p-2 rounded-lg">
+              <div className="bg-blue-600 p-2 rounded-lg">
                 <svg
                   width="24"
                   viewBox="0 0 24 24"
