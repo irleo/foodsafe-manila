@@ -27,7 +27,7 @@ export default function ReportLogsTab() {
   const token = auth?.accessToken;
 
   const [reportDistrict, setReportDistrict] = useState("");
-  const { reports, loading, fetchReports } = useReports(token);
+  const { reports, loading, errorMsg, fetchReports } = useReports(token);
 
   const [onlyCounted, setOnlyCounted] = useState(false);
 
@@ -46,12 +46,6 @@ export default function ReportLogsTab() {
     loadReports();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, reportDistrict, onlyCounted]);
-
-  useEffect(() => {
-    if (!token) return;
-    loadReports(reportDistrict);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportDistrict]);
 
   return (
     <div className="space-y-5">
@@ -126,7 +120,13 @@ export default function ReportLogsTab() {
         </div>
       </div>
 
-      <ReportsLogList reports={reports} loading={loading} />
+      {errorMsg ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {errorMsg}
+        </div>
+      ) : null}
+
+      <ReportsLogList reports={reports} loading={loading} onRefresh={loadReports} />
     </div>
   );
 }

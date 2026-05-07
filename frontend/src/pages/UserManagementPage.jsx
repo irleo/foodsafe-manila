@@ -24,6 +24,7 @@ export default function UserManagement() {
   const [approvedLoading, setApprovedLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [error, setError] = useState(null);
+  const [infoMsg, setInfoMsg] = useState("");
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -213,6 +214,11 @@ export default function UserManagement() {
 
       await Promise.all([fetchUsers(), fetchStats()]);
       setError(null);
+      setInfoMsg(
+        nextStatus === "approved"
+          ? "User has been approved successfully."
+          : "User has been rejected successfully.",
+      );
     } catch (e) {
       setError(e?.response?.data?.message || "Failed to update user status");
     } finally {
@@ -270,6 +276,7 @@ export default function UserManagement() {
       }
 
       setError(null);
+      setInfoMsg("User deleted successfully.");
     } catch (e) {
       setError(e?.response?.data?.message || "Failed to delete user");
     } finally {
@@ -302,6 +309,12 @@ export default function UserManagement() {
           >
             Retry
           </button>
+        </div>
+      )}
+
+      {infoMsg && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+          <p className="text-emerald-700 text-sm">{infoMsg}</p>
         </div>
       )}
 
@@ -376,6 +389,7 @@ export default function UserManagement() {
               </button>
             </div>
           </div>
+
         </div>
       </div>
 
@@ -499,10 +513,10 @@ export default function UserManagement() {
                           <button
                             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                             disabled={actionLoadingId === u._id}
-                            onClick={() => updateStatus(u._id, "pending")}
+                            onClick={() => updateStatus(u._id, "approved")}
                           >
                             <ArrowPathIcon className="w-4 h-4" />
-                            {actionLoadingId === u._id ? "..." : "Restore"}
+                            {actionLoadingId === u._id ? "..." : "Re-approve"}
                           </button>
 
                           <button
@@ -527,7 +541,9 @@ export default function UserManagement() {
                 <div className="p-6 text-sm text-gray-600">
                   {search.trim()
                     ? "No visible users match your search."
-                    : "No users found for this filter."}
+                    : statusFilter === "pending"
+                      ? "No pending users at the moment."
+                      : "No rejected users at the moment."}
                 </div>
               )}
             </>

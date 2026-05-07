@@ -6,13 +6,10 @@ import {
   TriangleAlert,
   ChevronDown,
   ChevronUp,
-  UtensilsCrossed,
-  User,
   Clock3,
-  Activity,
 } from "lucide-react";
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 10;
 
 function formatDistrictKey(value) {
   if (!value) return "—";
@@ -46,11 +43,28 @@ function formatReportedAt(value) {
   };
 }
 
+function reportStatusBadge(isCounted) {
+  if (isCounted === false) {
+    return (
+      <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700">
+        Excluded
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+      Counted
+    </span>
+  );
+}
+
 export default function ReportsLogList({ reports, loading, onRefresh }) {
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
     setExpandedId(null);
   }, [reports]);
@@ -139,7 +153,7 @@ export default function ReportsLogList({ reports, loading, onRefresh }) {
         </div>
 
         <button
-          onClick={onRefresh}
+          onClick={() => onRefresh?.()}
           disabled={loading}
           className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -149,13 +163,13 @@ export default function ReportsLogList({ reports, loading, onRefresh }) {
       </div>
 
       {loading ? (
-        <div className="flex min-h-[240px] items-center justify-center px-6 py-10">
+        <div className="flex min-h-60 items-center justify-center px-6 py-10">
           <div className="h-7 w-7">
             <Spinner />
           </div>
         </div>
       ) : reports.length === 0 ? (
-        <div className="flex min-h-[220px] flex-col items-center justify-center px-6 py-10 text-center">
+        <div className="flex min-h-55 flex-col items-center justify-center px-6 py-10 text-center">
           <div className="mb-3 rounded-full bg-gray-100 p-3">
             <TriangleAlert className="h-5 w-5 text-gray-500" />
           </div>
@@ -200,6 +214,7 @@ export default function ReportsLogList({ reports, loading, onRefresh }) {
                           <div className="text-sm text-gray-500">
                             {reportedAt.time}
                           </div>
+                          <div className="mt-2">{reportStatusBadge(report.isCounted)}</div>
                         </td>
 
                         <td className="px-6 py-4">
@@ -306,6 +321,7 @@ export default function ReportsLogList({ reports, loading, onRefresh }) {
                         {reportedAt.date}
                       </div>
                       <p className="mt-1 text-sm text-gray-500">{reportedAt.time}</p>
+                      <div className="mt-2">{reportStatusBadge(report.isCounted)}</div>
                     </div>
 
                     <div className="inline-flex min-w-10 justify-center rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-semibold text-gray-800">

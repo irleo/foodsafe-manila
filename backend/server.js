@@ -8,8 +8,13 @@ import datasetRoutes from "./routes/datasets.js";
 import analyticsRouter from "./routes/analytics.js";
 import casesRouter from "./routes/cases.js";
 import heatmapRouter from "./routes/heatmap.js";
+import activityRoutes from "./routes/activity.js";
+import notificationRouter from "./routes/notifications.js";
+import healthRouter from "./routes/health.js";
+import predictionsRouter from "./routes/predictions.js";
 
 import { connectDB } from "./config/db.js";
+import { registerPredictionCron } from "./jobs/predictionCron.js";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
@@ -81,8 +86,13 @@ app.use("/api/analytics", analyticsRouter);
 
 app.use("/api/cases", casesRouter);
 app.use("/api/heatmap", heatmapRouter);
+app.use("/api/activity", activityRoutes);
+app.use("/api/notifications", notificationRouter);
+app.use("/api/health", healthRouter);
+app.use("/api/predictions", predictionsRouter);
 
 connectDB();
+registerPredictionCron();
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

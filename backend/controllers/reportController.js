@@ -210,7 +210,7 @@ export const getReports = async (req, res) => {
   }
 
   try {
-    const { datasetId, district, onlyCounted } = req.query;
+    const { datasetId, district, onlyCounted, from, to } = req.query;
     const limit = Math.min(Number(req.query.limit) || 2000, 5000);
 
     const query = {};
@@ -230,6 +230,26 @@ export const getReports = async (req, res) => {
     }
 
     if (onlyCounted === "true") query.isCounted = true;
+
+    if (from || to) {
+      query.reportedAt = {};
+
+      if (from) {
+        const fromDate = new Date(from);
+        if (Number.isNaN(fromDate.getTime())) {
+          return res.status(400).json({ message: "Invalid from date." });
+        }
+        query.reportedAt.$gte = fromDate;
+      }
+
+      if (to) {
+        const toDate = new Date(to);
+        if (Number.isNaN(toDate.getTime())) {
+          return res.status(400).json({ message: "Invalid to date." });
+        }
+        query.reportedAt.$lte = toDate;
+      }
+    }
 
     const reports = await Report.find(query)
       .sort({ reportedAt: -1 })

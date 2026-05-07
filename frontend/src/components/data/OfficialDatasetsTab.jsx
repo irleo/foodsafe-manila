@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { Download } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useDatasets } from "../../hooks/useDatasets.js";
 import UploadDropzone from "../datasets/UploadDropzone";
@@ -138,11 +139,31 @@ export default function OfficialDatasetsTab() {
     }
   };
 
+  const downloadTemplate = () => {
+    const a = document.createElement("a");
+    a.href = "/templates/official_cases_template.xlsx";
+    a.download = "official_cases_template.xlsx";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div className="space-y-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="mb-4 font-semibold text-xl">Upload official dataset</h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="font-semibold text-xl">Upload official dataset</h2>
+
+            <button
+              type="button"
+              onClick={downloadTemplate}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <Download size={16} />
+              Download template
+            </button>
+          </div>
 
           <UploadDropzone
             dragActive={dragActive}

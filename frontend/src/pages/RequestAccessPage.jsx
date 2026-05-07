@@ -13,7 +13,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { notify } from "../utils/toast";
 
-const MAX_REASON = 500;
+const MAX_REASON = 300;
 
 const RequestAccess = () => {
   const navigate = useNavigate();
@@ -116,6 +116,7 @@ const RequestAccess = () => {
       setSubmitted(true);
     } catch (err) {
       console.error(err);
+      setError(err?.response?.data?.message || "Request failed.");
     } finally {
       setLoading(false);
     }
@@ -257,7 +258,7 @@ const RequestAccess = () => {
                       onChange={setField("password")}
                       disabled={loading}
                       required
-                      minLength={6}
+                      minLength={8}
                     />
                     <button
                       type="button"

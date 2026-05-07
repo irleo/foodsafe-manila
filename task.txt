@@ -1,0 +1,1 @@
+1. Remove the counted/not counted filter and pill in the reports table

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
@@ -7,21 +7,39 @@ export function useReports(token) {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
 
-  useEffect(() => {
-    if (!token) {
-      setLoading(false);
-      return
-    }
+  const fetchReports = useCallback(
+    async ({
+      datasetId,
+      district,
+      onlyCounted,
+      from,
+      to,
+      limit,
+    } = {}) => {
+      if (!token) {
+        setReports([]);
+        setLoading(false);
+        return;
+      }
 
-    let isMounted = true;
-
-    (async () => {
       try {
-        if (!isMounted) return;
         setLoading(true);
         setErrorMsg("");
 
-        const res = await fetch(`${API_BASE}/api/reports`, {
+        const params = new URLSearchParams();
+        if (datasetId) params.set("datasetId", datasetId);
+        if (district) params.set("district", district);
+        if (typeof onlyCounted === "boolean") {
+          params.set("onlyCounted", String(onlyCounted));
+        }
+        if (from) params.set("from", from);
+        if (to) params.set("to", to);
+        if (limit) params.set("limit", String(limit));
+
+        const qs = params.toString();
+        const url = `${API_BASE}/api/reports${qs ? `?${qs}` : ""}`;
+
+        const res = await fetch(url, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -33,22 +51,34 @@ export function useReports(token) {
         }
 
         const data = await res.json();
-        if (!isMounted) return;
         setReports(Array.isArray(data) ? data : []);
       } catch (err) {
-        if (!isMounted) return;
         setErrorMsg(err?.message || "Failed to load reports.");
         setReports([]);
       } finally {
-        if (!isMounted) return;
         setLoading(false);
       }
+    },
+    [token],
+  );
+
+  useEffect(() => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    (async () => {
+      if (!isMounted) return;
+      await fetchReports();
     })();
 
     return () => {
       isMounted = false;
     };
-  }, [token]);
+  }, [token, fetchReports]);
 
-  return { reports, loading, errorMsg };
+  return { reports, loading, errorMsg, fetchReports };
 }

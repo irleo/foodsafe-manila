@@ -17,7 +17,7 @@ import {
 import YearlyLineChart from "../components/charts/YearlyLineChart";
 import DistrictBarChartVertical from "../components/charts/DistrictBarChartVertical";
 import DiseasePieChart from "../components/charts/DiseasePieChart";
-import RecentActivityCard from "../components/RecentActivityCard";
+import RecentActivityCard from "../components/dashboard/RecentActivityCard";
 import { CHART_COLORS } from "../constants/chartColors";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -62,7 +62,7 @@ export default function Dashboard() {
 
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/notifications?limit=6`, {
+        const res = await fetch(`${API_BASE}/api/activity?limit=5`, {
           headers: { Authorization: token ? `Bearer ${token}` : "" },
           credentials: "include",
         });

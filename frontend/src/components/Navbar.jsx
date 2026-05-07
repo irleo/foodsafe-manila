@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   BellIcon,
@@ -6,42 +5,49 @@ import {
   Bars3Icon,
 } from "@heroicons/react/24/outline";
 import NotificationsDropdown from "./NotificationsDropdown";
-import logo from "../assets/react.svg";
 import Spinner from "./Spinner";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 export default function Navbar({ toggleSidebar }) {
   const { auth, loading } = useAuth();
   const [open, setOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const token = auth?.accessToken;
+  const hasUnread = notifications.some((n) => n?.unread);
+
+  useEffect(() => {
+    if (!open || !token) return;
+
+    let isMounted = true;
+
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/notifications?limit=5`, {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: "include",
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to fetch notifications");
+        }
+
+        const data = await res.json();
+        if (!isMounted) return;
+        setNotifications(Array.isArray(data) ? data : []);
+      } catch {
+        if (!isMounted) return;
+        setNotifications([]);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [open, token]);
 
   if (loading) return <Spinner />;
-
-  const notifications = [
-    {
-      id: "1",
-      title: "High Risk Alert",
-      message: "District 1 - Tondo shows elevated risk levels",
-      time: "1/20/2026, 7:10 PM",
-      dotColor: "yellow",
-      unread: false,
-    },
-    {
-      id: "2",
-      title: "Dataset Validated",
-      message: "Q4 2024 Disease Data validated",
-      time: "1/20/2026, 6:10 PM",
-      dotColor: "green",
-      unread: true,
-    },
-    {
-      id: "3",
-      title: "New User Request",
-      message: "Maria Santos requested access",
-      time: "1/20/2026, 5:10:30 PM",
-      dotColor: "blue",
-      unread: true,
-    },
-  ];
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
@@ -88,6 +94,9 @@ export default function Navbar({ toggleSidebar }) {
                 className="p-2 rounded-lg hover:bg-gray-100 relative"
               >
                 <BellIcon className="h-6 w-6" />
+                {hasUnread ? (
+                  <span className="absolute right-1 top-1 inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+                ) : null}
               </button>
               {open && <NotificationsDropdown items={notifications} />}
             </div>

@@ -1,4 +1,5 @@
 import User from "../models/User.js";
+import { logActivity } from "../utils/logActivity.js";
 
 /**
  * GET /api/users?page=1&limit=6&status=pending&search=juan
@@ -89,6 +90,14 @@ export const updateUserStatus = async (req, res) => {
 
     user.status = status;
     await user.save();
+
+    await logActivity({
+      actor: req.user?.id,
+      actionType: status === "approved" ? "user_approved" : "user_rejected",
+      title: status === "approved" ? "User approved" : "User rejected",
+      subtitle: `${user.username} (${user.email}) was ${status}.`,
+      metadata: { userId: user._id, status },
+    });
 
     res.status(200).json({
       message: `User ${status} successfully`,

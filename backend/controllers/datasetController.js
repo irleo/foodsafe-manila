@@ -4,6 +4,8 @@ import csv from "csv-parser";
 import xlsx from "xlsx";
 import Dataset from "../models/Dataset.js";
 import OfficialCase from "../models/OfficialCase.js";
+import { logActivity } from "../utils/logActivity.js";
+import { refreshProphetPredictions } from "../services/predictions/refreshProphetPredictions.js";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -327,6 +329,14 @@ export const uploadDataset = async (req, res) => {
       uploadedBy: req.user?._id || req.user?.id,
     });
 
+    await logActivity({
+      actor: req.user?.id,
+      actionType: "dataset_uploaded",
+      title: "Dataset uploaded",
+      subtitle: `${name} uploaded and pending validation.`,
+      metadata: { datasetId: dataset._id, name },
+    });
+
     // Parse
     let rawRows = [];
     let sourceLabel = "file";
@@ -386,6 +396,26 @@ export const uploadDataset = async (req, res) => {
       warningsCount: report.warnings.length,
     };
     await dataset.save();
+
+    // Non-blocking forecast refresh. Upload succeeds even if refresh fails.
+    refreshProphetPredictions({
+      trigger: "official_upload",
+      datasetId: String(dataset._id),
+      force: true,
+    }).catch((e) => {
+      console.error(
+        "Forecast refresh failed after dataset upload:",
+        e?.message || e
+      );
+    });
+
+    await logActivity({
+      actor: req.user?.id,
+      actionType: "dataset_validated",
+      title: "Dataset validated",
+      subtitle: `${dataset.name} validated with ${cases.length} records.`,
+      metadata: { datasetId: dataset._id, recordsCount: cases.length },
+    });
 
     return res.status(201).json({
       message: "Dataset uploaded and validated.",
