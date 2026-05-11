@@ -1,0 +1,44 @@
+import { useEffect, useMemo, useState } from "react";
+import { fetchDatasets } from "../api/datasets";
+
+/**
+ * Picks the newest validated dataset as the default scope for analytics/heatmap/predictions.
+ */
+export function useLatestDatasetId(token) {
+  const [datasetId, setDatasetId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  useEffect(() => {
+    if (!token) {
+      setDatasetId(null);
+      setLoading(false);
+      return;
+    }
+    let isMounted = true;
+    (async () => {
+      try {
+        setLoading(true);
+        setErrorMsg("");
+        const rows = await fetchDatasets({ token, status: "validated" });
+        if (!isMounted) return;
+        setDatasetId(rows?.[0]?._id || null);
+      } catch (e) {
+        if (!isMounted) return;
+        setDatasetId(null);
+        setErrorMsg(e?.message || "Failed to load datasets");
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, [token]);
+
+  return useMemo(
+    () => ({ datasetId, loading, errorMsg }),
+    [datasetId, loading, errorMsg],
+  );
+}
+

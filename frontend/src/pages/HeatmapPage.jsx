@@ -1,19 +1,15 @@
 import { useMemo, useState } from "react";
 import "leaflet/dist/leaflet.css";
 
-import { mockOfficialCases } from "../data/mockOfficialCases";
-
 import {
-  filterOfficialCases,
-  buildDistrictHeatmapPointsFromCases,
   buildRiskStatsFromDistrictPoints,
   getRiskColor,
-  getRadius,
-  getUniqueDiseasesFromCases,
-  getUniqueYearsFromCases,
   buildTopDistrictsFromPoints,
-  buildTopDiseasesFromCases,
 } from "../utils/heatmapCaseBuilders";
+
+import { useAuth } from "../context/AuthContext";
+import { useLatestDatasetId } from "../hooks/useLatestDatasetId";
+import { useHeatmapPoints } from "../hooks/useHeatmapPoints";
 
 import HeatmapStatsRow from "../components/heatmap/HeatmapStatsRow";
 import HeatmapMapCard from "../components/heatmap/HeatmapMapCard";
@@ -28,86 +24,136 @@ const MANILA_CITY_BOUNDS = [
 
 const MANILA_CENTER = [14.5995, 120.9842];
 
+const MONTH_OPTIONS = [
+  { value: 1, label: "Jan" },
+  { value: 2, label: "Feb" },
+  { value: 3, label: "Mar" },
+  { value: 4, label: "Apr" },
+  { value: 5, label: "May" },
+  { value: 6, label: "Jun" },
+  { value: 7, label: "Jul" },
+  { value: 8, label: "Aug" },
+  { value: 9, label: "Sep" },
+  { value: 10, label: "Oct" },
+  { value: 11, label: "Nov" },
+  { value: 12, label: "Dec" },
+];
+
 export default function Heatmap() {
-  const caseRows = mockOfficialCases;
+  const { auth } = useAuth();
+  const token = auth?.accessToken;
+  const { datasetId } = useLatestDatasetId(token);
 
-  // Options
-  const yearOptions = useMemo(
-    () => ["All", ...getUniqueYearsFromCases(caseRows)],
-    [caseRows]
-  );
-
-  const diseaseOptions = useMemo(
-    () => ["All", ...getUniqueDiseasesFromCases(caseRows)],
-    [caseRows]
-  );
-
-  // Defaults: latest year (more meaningful than "All")
-  const defaultYear = useMemo(() => {
-    const years = getUniqueYearsFromCases(caseRows);
-    return years.length ? years[years.length - 1] : "All";
-  }, [caseRows]);
-
-  const [selectedYear, setSelectedYear] = useState(defaultYear);
+  const [selectedYear, setSelectedYear] = useState("All");
+  const [selectedMonth, setSelectedMonth] = useState("All");
   const [selectedDisease, setSelectedDisease] = useState("All");
+  const [selectedCaseClassification, setSelectedCaseClassification] =
+    useState("All");
 
-  // Filter official cases
-  const filteredCases = useMemo(() => {
-    return filterOfficialCases(caseRows, {
-      year: selectedYear,
-      disease: selectedDisease,
-    });
-  }, [caseRows, selectedYear, selectedDisease]);
+  const { points, districtStats, filterOptions, loading, errorMsg } = useHeatmapPoints({
+    token,
+    datasetId,
+    selectedYear,
+    selectedMonth,
+    selectedDisease,
+    selectedCaseClassification,
+  });
 
-  // Build district points for map
-  const districtPoints = useMemo(
-    () => buildDistrictHeatmapPointsFromCases(filteredCases),
-    [filteredCases]
-  );
+  const yearOptions = useMemo(() => {
+    const years = Array.isArray(filterOptions?.years)
+      ? filterOptions.years.filter((y) => Number.isFinite(Number(y)))
+      : [];
+    return ["All", ...years.map(Number).sort((a, b) => a - b)];
+  }, [filterOptions]);
+
+  const districtPoints = useMemo(() => {
+    const safe = Array.isArray(points) ? points : [];
+    return safe.map((p) => ({
+      ...p,
+      risk: p.risk,
+    }));
+  }, [points]);
 
   const stats = useMemo(
-    () => buildRiskStatsFromDistrictPoints(districtPoints),
-    [districtPoints]
+    () => buildRiskStatsFromDistrictPoints(districtStats),
+    [districtStats],
   );
+
+  const diseaseOptions = useMemo(() => {
+    const diseases = Array.isArray(filterOptions?.diseases)
+      ? filterOptions.diseases.filter(Boolean)
+      : [];
+    return ["All", ...diseases.sort((a, b) => a.localeCompare(b))];
+  }, [filterOptions]);
+
+  const classificationOptions = useMemo(() => {
+    const classes = Array.isArray(filterOptions?.caseClassifications)
+      ? filterOptions.caseClassifications.filter(Boolean)
+      : [];
+    return ["All", ...classes.sort((a, b) => a.localeCompare(b))];
+  }, [filterOptions]);
 
   const title = useMemo(() => {
     const y = selectedYear === "All" ? "All Years" : selectedYear;
+    const m =
+      selectedMonth === "All"
+        ? "All Months"
+        : MONTH_OPTIONS.find((month) => month.value === Number(selectedMonth))
+            ?.label || selectedMonth;
     const d = selectedDisease === "All" ? "All Diseases" : selectedDisease;
-    return `Risk Map (${y} • ${d})`;
-  }, [selectedYear, selectedDisease]);
+    const c =
+      selectedCaseClassification === "All"
+        ? "All Classifications"
+        : selectedCaseClassification;
+    return `Manila Risk Map`;
+  }, [
+    selectedYear,
+    selectedMonth,
+    selectedDisease,
+    selectedCaseClassification,
+  ]);
 
   const showNoData =
-    (selectedYear !== "All" || selectedDisease !== "All") &&
+    (selectedYear !== "All" ||
+      selectedMonth !== "All" ||
+      selectedDisease !== "All" ||
+      selectedCaseClassification !== "All") &&
     districtPoints.length === 0;
 
   const topDistricts = useMemo(
-    () => buildTopDistrictsFromPoints(districtPoints, 5),
-    [districtPoints]
+    () => buildTopDistrictsFromPoints(districtStats, 5),
+    [districtStats],
   );
 
-  const topDiseases = useMemo(
-    () => buildTopDiseasesFromCases(filteredCases, 5),
-    [filteredCases]
-  );
+  // We don't have disease breakdown from the heatmap endpoint; keep this card empty for now.
+  const topDiseases = useMemo(() => [], []);
 
-  // Mock mode
-  const loadingOverlay = null;
+  const loadingOverlay = loading ? (
+    <div className="absolute inset-0 z-[950] bg-white/60 flex items-center justify-center text-sm text-gray-700">
+      Loading heatmap…
+    </div>
+  ) : null;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Heatmap</h1>
         <p className="text-gray-600 mt-1">
-          District-level disease burden by year (centroid-weighted)
+          Barangay-level disease burden by month, colored by district average incident risk
         </p>
       </div>
+
+      {errorMsg && (
+        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+          {errorMsg}
+        </div>
+      )}
 
       <HeatmapStatsRow stats={stats} />
 
       <div className="grid grid-cols-12 gap-6">
         <HeatmapMapCard
           title={title}
-          // New: pass controls as simple JSX
           controls={
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
               <h2 className="font-semibold text-lg">{title}</h2>
@@ -117,12 +163,32 @@ export default function Heatmap() {
                   className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
                   value={selectedYear}
                   onChange={(e) =>
-                    setSelectedYear(e.target.value === "All" ? "All" : Number(e.target.value))
+                    setSelectedYear(
+                      e.target.value === "All" ? "All" : Number(e.target.value),
+                    )
                   }
                 >
                   {yearOptions.map((opt) => (
                     <option key={opt} value={opt}>
                       {opt === "All" ? "All Years" : opt}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                  value={selectedMonth}
+                  onChange={(e) =>
+                    setSelectedMonth(
+                      e.target.value === "All" ? "All" : Number(e.target.value),
+                    )
+                  }
+                >
+                  <option value="All">All Months</option>
+
+                  {MONTH_OPTIONS.map((month) => (
+                    <option key={month.value} value={month.value}>
+                      {month.label}
                     </option>
                   ))}
                 </select>
@@ -138,6 +204,20 @@ export default function Heatmap() {
                     </option>
                   ))}
                 </select>
+
+                <select
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                  value={selectedCaseClassification}
+                  onChange={(e) =>
+                    setSelectedCaseClassification(e.target.value)
+                  }
+                >
+                  {classificationOptions.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt === "All" ? "All Classifications" : opt}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           }
@@ -148,7 +228,6 @@ export default function Heatmap() {
           MANILA_CENTER={MANILA_CENTER}
           MANILA_CITY_BOUNDS={MANILA_CITY_BOUNDS}
           getRiskColor={getRiskColor}
-          getRadius={getRadius}
         />
 
         <div className="col-span-12 lg:col-span-3 space-y-4">

@@ -43,18 +43,24 @@ function formatReportedAt(value) {
   };
 }
 
-function reportStatusBadge(isCounted) {
-  if (isCounted === false) {
+function classificationBadge(caseClassification) {
+  const v = String(caseClassification || "suspected").toLowerCase();
+  const label = v.charAt(0).toUpperCase() + v.slice(1);
+  if (v === "confirmed")
     return (
-      <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700">
-        Excluded
+      <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+        {label}
       </span>
     );
-  }
-
+  if (v === "probable")
+    return (
+      <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+        {label}
+      </span>
+    );
   return (
-    <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-      Counted
+    <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+      {label}
     </span>
   );
 }
@@ -116,6 +122,13 @@ export default function ReportsLogList({ reports, loading, onRefresh }) {
             Case count
           </p>
           <p className="text-sm text-gray-800">{report.caseCount ?? 1}</p>
+        </div>
+
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Case classification
+          </p>
+          <div>{classificationBadge(report.caseClassification)}</div>
         </div>
 
         <div>
@@ -188,6 +201,7 @@ export default function ReportsLogList({ reports, loading, onRefresh }) {
               <thead className="bg-gray-50">
                 <tr className="border-y border-gray-200 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                   <th className="px-6 py-3">Reported at</th>
+                  <th className="px-6 py-3">Classification</th>
                   <th className="px-6 py-3">Location</th>
                   <th className="px-6 py-3">Symptoms</th>
                   <th className="px-6 py-3">Case count</th>
@@ -214,7 +228,13 @@ export default function ReportsLogList({ reports, loading, onRefresh }) {
                           <div className="text-sm text-gray-500">
                             {reportedAt.time}
                           </div>
-                          <div className="mt-2">{reportStatusBadge(report.isCounted)}</div>
+                          <div className="mt-2 text-xs text-gray-500">
+                            Submitted
+                          </div>
+                        </td>
+
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {classificationBadge(report.caseClassification)}
                         </td>
 
                         <td className="px-6 py-4">
@@ -290,7 +310,7 @@ export default function ReportsLogList({ reports, loading, onRefresh }) {
 
                       {isExpanded && (
                         <tr className="bg-white">
-                          <td colSpan={5} className="px-6 pb-4">
+                          <td colSpan={6} className="px-6 pb-4">
                             {renderExpandedDetails(report)}
                           </td>
                         </tr>
@@ -321,7 +341,9 @@ export default function ReportsLogList({ reports, loading, onRefresh }) {
                         {reportedAt.date}
                       </div>
                       <p className="mt-1 text-sm text-gray-500">{reportedAt.time}</p>
-                      <div className="mt-2">{reportStatusBadge(report.isCounted)}</div>
+                      <div className="mt-2">
+                        {classificationBadge(report.caseClassification)}
+                      </div>
                     </div>
 
                     <div className="inline-flex min-w-10 justify-center rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-semibold text-gray-800">

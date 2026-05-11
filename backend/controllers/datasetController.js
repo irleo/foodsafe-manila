@@ -5,7 +5,8 @@ import xlsx from "xlsx";
 import Dataset from "../models/Dataset.js";
 import OfficialCase from "../models/OfficialCase.js";
 import { logActivity } from "../utils/logActivity.js";
-import { refreshProphetPredictions } from "../services/predictions/refreshProphetPredictions.js";
+import { importOfficialCasesXlsx } from "../services/officialCaseImportService.js";
+import { refreshMonthlyDistrictPredictions } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -293,32 +294,77 @@ export const uploadDataset = async (req, res) => {
 
     if (!req.file)
       return res.status(400).json({ message: "No file uploaded." });
-    if (!name || !coverageStart || !coverageEnd) {
-      return res
-        .status(400)
-        .json({ message: "Name and coverage dates are required." });
-    }
-
-    const start = new Date(coverageStart);
-    const end = new Date(coverageEnd);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      return res.status(400).json({ message: "Invalid coverage dates." });
-    }
-    if (start > end) {
-      return res
-        .status(400)
-        .json({ message: "Coverage start cannot be after coverage end." });
+    if (!name) {
+      return res.status(400).json({ message: "Name is required." });
     }
 
     const filePath = req.file.path;
     const ext = path.extname(filePath).toLowerCase();
 
+    // Official-case XLSX import (raw health office OR OfficialCaseTemplate)
+    if (ext === ".xlsx" || ext === ".xls") {
+      const result = await importOfficialCasesXlsx({
+        filePath,
+        name,
+        originalFileName: req.file.originalname,
+        storedFileName: req.file.filename,
+        mimeType: req.file.mimetype,
+        userId: req.user?._id || req.user?.id,
+      });
+
+      if (!result.success) {
+        cleanupUploadedFile(req);
+        return res.status(400).json(result);
+      }
+
+      await logActivity({
+        actor: req.user?.id,
+        actionType: "dataset_validated",
+        title: "Official cases imported",
+        subtitle: `${name} imported (${result.formatType}).`,
+        metadata: { datasetId: result.datasetId, name, formatType: result.formatType },
+      });
+
+      // Non-blocking prediction refresh. Upload succeeds even if prediction fails.
+      console.log(
+        "Starting monthly district prediction refresh for datasetId:",
+        result.datasetId,
+      );
+      refreshMonthlyDistrictPredictions({
+        trigger: "official_upload",
+        datasetId: result.datasetId,
+        horizonMonths: 1,
+        force: true,
+      })
+        .then((saved) => {
+          console.log(
+            "PredictionRun saved:",
+            saved?._id?.toString?.() || saved?._id || "(unknown)",
+          );
+        })
+        .catch((e) => {
+          console.error("Prediction refresh failed:", e?.message || e);
+        });
+
+      return res.status(201).json(result);
+    }
+
+    // CSV uploads are no longer supported for official cases (monthly + classification required)
+    if (ext === ".csv") {
+      cleanupUploadedFile(req);
+      return res.status(400).json({
+        success: false,
+        reason:
+          "CSV uploads are not supported for official cases. Upload a raw health office XLSX or an OfficialCaseTemplate XLSX instead.",
+      });
+    }
+
     // Create dataset record early (keeps audit trail even for failures)
     dataset = await Dataset.create({
       name,
       dataSource,
-      coverageStart: start,
-      coverageEnd: end,
+      coverageStart: new Date(),
+      coverageEnd: new Date(),
 
       originalFileName: req.file.originalname,
       storedFileName: req.file.filename,
@@ -337,7 +383,7 @@ export const uploadDataset = async (req, res) => {
       metadata: { datasetId: dataset._id, name },
     });
 
-    // Parse
+    // Parse (legacy path)
     let rawRows = [];
     let sourceLabel = "file";
 
@@ -358,7 +404,7 @@ export const uploadDataset = async (req, res) => {
       return res.status(400).json({ message: dataset.errorMessage });
     }
 
-    // Validate + map
+    // Validate + map (legacy)
     const { report, cases } = validateAndMapRows(rawRows, dataset._id, {
       coverageStart,
       coverageEnd,
@@ -397,17 +443,7 @@ export const uploadDataset = async (req, res) => {
     };
     await dataset.save();
 
-    // Non-blocking forecast refresh. Upload succeeds even if refresh fails.
-    refreshProphetPredictions({
-      trigger: "official_upload",
-      datasetId: String(dataset._id),
-      force: true,
-    }).catch((e) => {
-      console.error(
-        "Forecast refresh failed after dataset upload:",
-        e?.message || e
-      );
-    });
+    // Legacy forecast trigger removed (predictions now handled by monthly run service).
 
     await logActivity({
       actor: req.user?.id,
@@ -466,7 +502,7 @@ export const listDatasets = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(50)
       .select(
-        "name recordsCount status coverageStart coverageEnd createdAt uploadedAt errorMessage",
+        "name originalFileName storedFileName recordsCount status coverageStart coverageEnd createdAt uploadedAt errorMessage",
       );
 
     res.json(datasets);
@@ -489,5 +525,74 @@ export const downloadDataset = async (req, res) => {
     res.download(dataset.filePath, filename);
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+export const downloadOfficialCaseTemplate = async (req, res) => {
+  try {
+    const instructions = [
+      ["OfficialCaseTemplate (processed upload)"],
+      [""],
+      ["How to fill:"],
+      ["- city: Manila (or your city name)"],
+      ["- district: District 1..District 6 (or your district naming)"],
+      ["- disease: disease name (e.g. Cholera)"],
+      ["- year: 4-digit year"],
+      ["- month: 1–12"],
+      ["- case_classification: confirmed | suspected | probable"],
+      ["- cases: numeric (integer)"],
+      ["- source: optional, defaults to official"],
+      [""],
+      ["Notes:"],
+      ["- Keep one row per month per district per disease per classification."],
+      ["- Upload this XLSX as-is when ready."],
+    ];
+
+    const header = [
+      "city",
+      "district",
+      "disease",
+      "year",
+      "month",
+      "case_classification",
+      "cases",
+      "source",
+    ];
+
+    const sampleRows = [
+      {
+        city: "Manila",
+        district: "District 1",
+        disease: "Cholera",
+        year: 2026,
+        month: 1,
+        case_classification: "confirmed",
+        cases: 3,
+        source: "official",
+      },
+    ];
+
+    const wb = xlsx.utils.book_new();
+    const shInstructions = xlsx.utils.aoa_to_sheet(instructions);
+    xlsx.utils.book_append_sheet(wb, shInstructions, "instructions");
+
+    const shProcessed = xlsx.utils.json_to_sheet(sampleRows, {
+      header,
+      skipHeader: false,
+    });
+    xlsx.utils.book_append_sheet(wb, shProcessed, "processed data");
+
+    const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="official_cases_template.xlsx"`
+    );
+    return res.send(buf);
+  } catch (err) {
+    return res.status(500).json({ message: err?.message || "Server error" });
   }
 };

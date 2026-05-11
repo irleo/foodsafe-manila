@@ -2,6 +2,7 @@ export default function TopDistrictsCard({ items }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <h3 className="mb-4 font-semibold">Top Districts</h3>
+      <p className="text-xs text-gray-500 mb-4">Ranked by number of cases.</p>
 
       <div className="space-y-3">
         {items?.length ? (

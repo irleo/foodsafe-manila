@@ -5,8 +5,8 @@ import {
 } from "@heroicons/react/24/outline";
 import { useAuth } from "../context/AuthContext";
 
-import { mockOfficialCases } from "../data/mockOfficialCases";
-import { normalizeToCaseRows } from "../utils/normalizeCases";
+import { useLatestDatasetId } from "../hooks/useLatestDatasetId";
+import { useOfficialCases } from "../hooks/useOfficialCases";
 // import { casesByYear, casesByDistrict, casesByDisease } from "../utils/caseAggregations";
 import {
   buildYearlyTimelineData,
@@ -26,7 +26,19 @@ export default function Dashboard() {
   const { auth } = useAuth();
   const token = auth?.accessToken;
 
-  const caseRows = useMemo(() => normalizeToCaseRows(mockOfficialCases), []);
+  const { datasetId } = useLatestDatasetId(token);
+  const { items: officialItems } = useOfficialCases({ token, datasetId, limit: 5000 });
+
+  const caseRows = useMemo(() => {
+    const safe = Array.isArray(officialItems) ? officialItems : [];
+    return safe.map((r) => ({
+      city: r.city ?? "Manila",
+      district: r.district,
+      disease: r.disease,
+      year: Number(r.year),
+      cases: Number(r.cases),
+    }));
+  }, [officialItems]);
 
   const availableYears = useMemo(() => {
     const set = new Set(

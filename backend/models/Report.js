@@ -12,7 +12,23 @@ const reportSchema = new mongoose.Schema(
     // Where the citizen was when they submitted the report (GPS)
     location: {
       name: { type: String, required: true, trim: true },
-      district: { type: String, required: true, trim: true, index: true }, // canonical key
+      district: { type: String, required: true, trim: true, index: true },
+
+      barangay: {
+        type: String,
+        default: null,
+        trim: true,
+        index: true,
+      },
+
+      barangayNo: {
+        type: Number,
+        default: null,
+        min: 1,
+        max: 999,
+        index: true,
+      },
+
       coordinates: {
         lat: { type: Number, required: true },
         lng: { type: Number, required: true },
@@ -20,12 +36,26 @@ const reportSchema = new mongoose.Schema(
     },
 
     // OPTIONAL: where the suspected food/exposure happened
-    // If present, this is what you use for district risk scoring
     exposureDistrict: {
       type: String,
       default: null,
       trim: true,
-      index: true, // important for aggregation later
+      index: true,
+    },
+
+    exposureBarangay: {
+      type: String,
+      default: null,
+      trim: true,
+      index: true,
+    },
+
+    exposureBarangayNo: {
+      type: Number,
+      default: null,
+      min: 1,
+      max: 999,
+      index: true,
     },
 
     symptoms: {
@@ -58,15 +88,38 @@ const reportSchema = new mongoose.Schema(
       index: true,
     },
 
+    caseClassification: {
+      type: String,
+      enum: ["confirmed", "suspected", "probable"],
+      default: "suspected",
+      required: true,
+      index: true,
+    },
+
     isCounted: { type: Boolean, default: true, index: true },
     excludeReason: { type: String, default: null, trim: true },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // Useful indexes for queries by time + district
-reportSchema.index({ "location.district": 1, reportedAt: -1, isCounted: 1 });
-reportSchema.index({ exposureDistrict: 1, reportedAt: -1, isCounted: 1 });
-reportSchema.index({ reportedBy: 1, reportedAt: -1 });
+reportSchema.index({
+  "location.barangayNo": 1,
+  reportedAt: -1,
+  isCounted: 1,
+});
+
+reportSchema.index({
+  exposureBarangayNo: 1,
+  reportedAt: -1,
+  isCounted: 1,
+});
+
+reportSchema.index({
+  exposureDistrict: 1,
+  exposureBarangayNo: 1,
+  reportedAt: -1,
+  isCounted: 1,
+});
 
 export default mongoose.model("Report", reportSchema);

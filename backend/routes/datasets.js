@@ -4,6 +4,7 @@ import {
   uploadDataset,
   listDatasets,
   downloadDataset,
+  downloadOfficialCaseTemplate,
 } from "../controllers/datasetController.js";
 
 import { datasetUpload } from "../middleware/datasetUpload.js";
@@ -17,6 +18,13 @@ router.post(
   verifyToken,
   datasetUpload.single("file"),
   uploadDataset
+);
+
+router.get(
+  "/template/official-cases",
+  verifyToken,
+  verifyRole("admin"),
+  downloadOfficialCaseTemplate
 );
 
 router.get("/:id/download", verifyToken, verifyRole("admin"), downloadDataset);

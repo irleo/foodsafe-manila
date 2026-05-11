@@ -30,7 +30,7 @@ export default function OfficialDatasetsTab() {
   const [showFailed, setShowFailed] = useState(false);
   const statusFilter = showFailed ? "validated,failed" : "validated";
 
-  const { recent, loadingRecent, fetchRecent, upload, download } = useDatasets(
+  const { recent, loadingRecent, fetchRecent, upload, download, downloadTemplate } = useDatasets(
     token,
     statusFilter,
   );
@@ -38,8 +38,9 @@ export default function OfficialDatasetsTab() {
   const canValidate = useMemo(() => {
     if (!file) return false;
     if (!datasetName.trim()) return false;
-    if (!coverageStart || !coverageEnd) return false;
-    if (new Date(coverageStart) > new Date(coverageEnd)) return false;
+    // Coverage dates are optional for XLSX (backend derives coverage). Keep optional for better UX.
+    if (coverageStart && coverageEnd && new Date(coverageStart) > new Date(coverageEnd))
+      return false;
     return true;
   }, [file, datasetName, coverageStart, coverageEnd]);
 
@@ -102,13 +103,18 @@ export default function OfficialDatasetsTab() {
           dataSource,
         }),
         {
-          success: (res) => `Uploaded: ${res?.dataset?.name || datasetName}`,
+          success: (res) =>
+            res?.formatType
+              ? `Imported (${res.formatType}): ${datasetName}`
+              : `Uploaded: ${res?.dataset?.name || datasetName}`,
           error: (e) => e?.message || "Upload failed.",
         },
       );
 
       setStatusMsg(
-        `Uploaded and validated: ${result?.dataset?.name || datasetName}`,
+        result?.formatType
+          ? `Imported: ${result.formatType} (${result.insertedRows} rows)`
+          : `Uploaded and validated: ${result?.dataset?.name || datasetName}`,
       );
       setFile(null);
       await fetchRecent();
@@ -139,13 +145,21 @@ export default function OfficialDatasetsTab() {
     }
   };
 
-  const downloadTemplate = () => {
-    const a = document.createElement("a");
-    a.href = "/templates/official_cases_template.xlsx";
-    a.download = "official_cases_template.xlsx";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+  const handleDownloadTemplate = async () => {
+    resetMessages();
+    try {
+      const { blob, filename } = await downloadTemplate();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || "official_cases_template.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      setErrorMsg(e?.message || "Failed to download template.");
+    }
   };
 
   return (
@@ -157,12 +171,24 @@ export default function OfficialDatasetsTab() {
 
             <button
               type="button"
-              onClick={downloadTemplate}
+              onClick={handleDownloadTemplate}
               className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               <Download size={16} />
               Download template
             </button>
+          </div>
+
+          <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+            <div className="font-medium mb-1">Accepted uploads</div>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>
+                <span className="font-medium">Raw health office XLSX</span>: multi-sheet, each sheet = disease. Needs “Report date”, “District”, “Case Classification”.
+              </li>
+              <li>
+                <span className="font-medium">OfficialCaseTemplate XLSX</span>: one sheet (prefer “processed data”) with standardized columns.
+              </li>
+            </ul>
           </div>
 
           <UploadDropzone
@@ -221,6 +247,10 @@ export default function OfficialDatasetsTab() {
                   Coverage start date cannot be after the end date.
                 </p>
               )}
+
+            <p className="text-xs text-gray-500">
+              Coverage dates are optional for XLSX imports (the system derives coverage from the data).
+            </p>
 
             <div className="bg-gray-50 rounded-lg p-4 space-y-2">
               <p className="text-sm font-medium">Data source</p>

@@ -76,7 +76,7 @@ export default function RecentDatasetsList({
                   <div className="flex items-start gap-3">
                     <DocumentIcon className="w-8 h-6 text-gray-700" />
                     <div>
-                      <p className="font-medium">{d.name}</p>
+                      <p className="font-medium">{d.name || d.originalFileName || d.storedFileName || "Unnamed file"}</p>
                       <p className="text-sm text-gray-600 mt-1">
                         {d.recordsCount?.toLocaleString?.() ??
                           d.recordsCount ??

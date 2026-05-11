@@ -1,4 +1,5 @@
-import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, GeoJSON } from "react-leaflet";
+import legislativeDistricts from "../../data/manila-barangays-with-legislative-districts.json";
 
 export default function HeatmapMapCard({
   controls,
@@ -8,11 +9,14 @@ export default function HeatmapMapCard({
   MANILA_CENTER,
   MANILA_CITY_BOUNDS,
   getRiskColor,
-  getRadius,
 }) {
-  const sortedPoints = [...(districtPoints || [])].sort(
-    (a, b) => (b.cases ?? 0) - (a.cases ?? 0)
+  const casesByBarangay = Object.fromEntries(
+    (districtPoints || []).map((p) => [Number(p.barangayNo), p]),
   );
+
+  const heatmapLayerKey = districtPoints
+    .map((p) => `${p.barangayNo}:${p.cases}`)
+    .join("|");
 
   return (
     <div className="col-span-12 lg:col-span-9 self-start bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -28,8 +32,12 @@ export default function HeatmapMapCard({
         )}
 
         <div className="absolute z-[900] bottom-3 left-3 bg-white/95 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 shadow-sm">
-          <div><b>Size</b> = total cases</div>
-          <div><b>Color</b> = risk level</div>
+          <div>
+            <b>Area</b> = barangay
+          </div>
+          <div>
+            <b>Color</b> = district avg incident risk
+          </div>
         </div>
 
         <MapContainer
@@ -46,51 +54,64 @@ export default function HeatmapMapCard({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          {sortedPoints.map((p) => {
-            const color = getRiskColor(p.cases);
-            const radius = getRadius(p.cases);
+          <GeoJSON
+            key={heatmapLayerKey}
+            data={legislativeDistricts}
+            style={(feature) => {
+              const barangayNo = Number(feature.properties.barangayNo);
+              const point = casesByBarangay[barangayNo];
 
-            return (
-              <CircleMarker
-                key={p.district}
-                center={[p.lat, p.lng]}
-                radius={radius}
-                pathOptions={{
-                  color: color,
-                  weight: 2,
-                  fillColor: color,
-                  fillOpacity: 0.55,
-                }}
-              >
-                <Popup>
-                  <div className="text-sm space-y-1">
-                    <p className="font-semibold">{p.district}</p>
+              const cases = point?.cases ?? 0;
+              const hasCases = cases > 0;
+              const color = hasCases
+                ? getRiskColor(point.districtAvgIncident ?? 0)
+                : "#cbd5e1";
 
-                    <p className="flex justify-between gap-6">
-                      <span className="text-gray-600">Cases</span>
-                      <span className="font-medium tabular-nums">{p.cases}</span>
-                    </p>
+              return {
+                color: "#334166", // border color
+                weight: hasCases ? 0.5 : 0.35,
+                opacity: hasCases ? 0.7 : 0.35,
+                fillColor: color,
+                fillOpacity: hasCases ? 0.75 : 0.12,
+              };
+            }}
+            onEachFeature={(feature, layer) => {
+              const barangayNo = Number(feature.properties.barangayNo);
+              const barangay =
+                feature.properties.barangay || `Barangay ${barangayNo}`;
+              const district = feature.properties.district;
+              const point = casesByBarangay[barangayNo];
 
-                    <p className="flex justify-between gap-6">
-                      <span className="text-gray-600">Risk</span>
-                      <span className="font-medium" style={{ color }}>
-                        {p.risk}
-                      </span>
-                    </p>
-                  </div>
-                  
-                </Popup>
-              </CircleMarker>
-            );
-          })}
+              const cases = point?.cases ?? 0;
+              if (cases <= 0) return;
+
+              const risk = point?.risk ?? "No data";
+              const avgIncident = point?.districtAvgIncident ?? 0;
+              const districtTotalCases = point?.districtTotalCases ?? 0;
+              const color = getRiskColor(avgIncident);
+
+              layer.bindPopup(`
+                <div class="text-sm">
+                  <p><strong>${barangay}</strong></p>
+                  <p>Barangay No.: <strong>${barangayNo}</strong></p>
+                  <p>District: <strong>${point?.district || district}</strong></p>
+                  <p>Barangay cases: <strong>${cases}</strong></p>
+                  <p>District total cases: <strong>${districtTotalCases}</strong></p>
+                  <p>District avg incident: <strong>${Number(avgIncident).toFixed(2)}</strong></p>
+                  <p>Risk: <strong style="color:${color}">${risk}</strong></p>
+                </div>
+              `);
+            }}
+          />
         </MapContainer>
       </div>
 
       <div className="border-t pt-4">
         <h3 className="font-semibold">Note</h3>
         <p className="text-sm text-gray-600">
-          The map groups official case records into <b>total cases per district</b>.
-          Totals reflect the selected year and disease filters.
+          The map groups official case records into <b>barangay-number areas</b>
+          . Risk color reflects average incident per district for the selected
+          filters; popups show barangay number and cases.
         </p>
       </div>
     </div>

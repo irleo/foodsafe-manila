@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchDatasets, uploadDataset, downloadDatasetFile } from "../api/datasets";
+import {
+  fetchDatasets,
+  uploadDataset,
+  downloadDatasetFile,
+  downloadOfficialCaseTemplate,
+} from "../api/datasets";
 
 export function useDatasets(token, status = "validated") {
   const [recent, setRecent] = useState([]);
@@ -33,5 +38,9 @@ export function useDatasets(token, status = "validated") {
     [token]
   );
 
-  return { recent, loadingRecent, fetchRecent, upload, download };
+  const downloadTemplate = useCallback(async () => {
+    return downloadOfficialCaseTemplate({ token });
+  }, [token]);
+
+  return { recent, loadingRecent, fetchRecent, upload, download, downloadTemplate };
 }

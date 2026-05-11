@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -11,46 +11,138 @@ import {
   Cell,
 } from "recharts";
 
+const RANGE_OPTIONS = [
+  { label: "3M", value: 3 },
+  { label: "6M", value: 6 },
+  { label: "1Y", value: 12 },
+];
+
+function formatMonth(value) {
+  if (value == null) return "—";
+
+  const monthNumber = Number(value);
+
+  if (!Number.isFinite(monthNumber) || monthNumber < 1 || monthNumber > 12) {
+    return String(value);
+  }
+
+  return new Date(2026, monthNumber - 1, 1).toLocaleString(undefined, {
+    month: "short",
+  });
+}
+
+function getLabel(row) {
+  if (!row) return "";
+
+  if (row.label) return row.label;
+
+  if (row.year != null && row.month != null) {
+    return `${formatMonth(row.month)} ${row.year}`;
+  }
+
+  if (row.targetYear != null && row.targetMonth != null) {
+    return `${formatMonth(row.targetMonth)} ${row.targetYear}`;
+  }
+
+  if (row.period) return row.period;
+  if (row.date) return row.date;
+  if (row.ds) return row.ds;
+  if (row.year != null) return String(row.year);
+
+  return "";
+}
+
+function monthIndex(row) {
+  if (row?.year == null || row?.month == null) return null;
+  const year = Number(row.year);
+  const month = Number(row.month);
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return null;
+  return year * 12 + month - 1;
+}
+
 export default function YearlyPredictionErrorBarChart({
-  title = "Prediction Error by Year (Actual - Predicted)",
+  title = "Prediction Error by Period (Actual - Predicted)",
   data = [],
   height = 350,
-  mode = "signed", // "signed" | "absolute"
+  mode = "signed",
+  defaultRangeMonths = 6,
+  controls = null,
 }) {
+  const [rangeMonths, setRangeMonths] = useState(defaultRangeMonths);
+
   const chartData = useMemo(() => {
     const safe = Array.isArray(data) ? data : [];
-    return safe
-      .map((d) => {
-        const year = Number(d?.year);
-        const predicted = Number(d?.predicted ?? 0);
-        const actual = Number(d?.actual ?? 0);
 
-        if (!Number.isFinite(year)) return null;
-        if (!Number.isFinite(predicted) || !Number.isFinite(actual))
-          return null;
+    const rows = safe
+      .map((row, index) => {
+        const predicted = Number(row?.predicted);
+        const actual = Number(row?.actual);
+        const label = getLabel(row);
+        const periodIndex = monthIndex(row);
+
+        if (!label) return null;
+        if (!Number.isFinite(predicted) || !Number.isFinite(actual)) return null;
 
         const error = actual - predicted;
+
         return {
-          year,
+          id: index,
+          label,
+          periodIndex,
           predicted,
           actual,
           error,
           absError: Math.abs(error),
         };
       })
-      .filter(Boolean)
-      .sort((a, b) => a.year - b.year);
-  }, [data]);
+      .filter(Boolean);
+
+    const endIndex = Math.max(
+      ...rows
+        .filter((row) => row.periodIndex != null)
+        .map((row) => row.periodIndex),
+    );
+
+    if (!Number.isFinite(endIndex)) return rows;
+
+    const startIndex = endIndex - Number(rangeMonths) + 1;
+    return rows.filter(
+      (row) =>
+        row.periodIndex == null ||
+        (row.periodIndex >= startIndex && row.periodIndex <= endIndex),
+    );
+  }, [data, rangeMonths]);
 
   const dataKey = mode === "absolute" ? "absError" : "error";
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="font-semibold text-lg">{title}</h2>
 
-        <div className="text-sm text-gray-600">
-          {mode === "absolute" ? "Absolute error" : "Signed error"}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {controls}
+
+          <div className="inline-flex rounded-lg border border-gray-300 bg-gray-50 p-1">
+            {RANGE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setRangeMonths(option.value)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                  rangeMonths === option.value
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-gray-600 hover:bg-white"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="text-sm text-gray-600">
+            {mode === "absolute" ? "Absolute error" : "Signed error"}
+          </div>
         </div>
       </div>
 
@@ -61,38 +153,33 @@ export default function YearlyPredictionErrorBarChart({
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" />
+
+              <XAxis dataKey="label" tick={{ fontSize: 12 }} minTickGap={20} />
+
               <YAxis allowDecimals={false} />
+
               <Tooltip
-                labelFormatter={(label) => `Year: ${label}`}
-                formatter={(value, key, item) => {
-                  const row = item?.payload;
-                  if (!row) return [value, key];
-
-                  if (key === "error")
-                    return [value, "Error (Actual - Predicted)"];
-                  if (key === "absError") return [value, "Absolute error"];
-
-                  return [value, key];
-                }}
                 content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null;
-                  const row = payload[0].payload;
 
+                  const row = payload[0].payload;
                   const shownValue =
                     mode === "absolute" ? row.absError : row.error;
 
                   return (
                     <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-3 text-sm">
-                      <div className="font-semibold mb-2">{`Year: ${label}`}</div>
+                      <div className="font-semibold mb-2">{label}</div>
+
                       <div className="flex justify-between gap-6">
                         <span className="text-gray-600">Actual</span>
                         <span className="font-medium">{row.actual}</span>
                       </div>
+
                       <div className="flex justify-between gap-6">
                         <span className="text-gray-600">Predicted</span>
                         <span className="font-medium">{row.predicted}</span>
                       </div>
+
                       <div className="flex justify-between gap-6 mt-2">
                         <span className="text-gray-600">
                           {mode === "absolute" ? "Abs error" : "Error (A - P)"}
@@ -104,8 +191,8 @@ export default function YearlyPredictionErrorBarChart({
                 }}
               />
 
-              {/* Center line for signed error */}
               {mode === "signed" && <ReferenceLine y={0} />}
+
               <Bar
                 dataKey={dataKey}
                 name={
@@ -115,15 +202,15 @@ export default function YearlyPredictionErrorBarChart({
                 }
                 fill="#2563eb"
               >
-                {chartData.map((row, i) => (
+                {chartData.map((row, index) => (
                   <Cell
-                    key={`cell-${row.year}-${i}`}
+                    key={`cell-${row.label}-${index}`}
                     radius={
                       mode === "signed"
                         ? row[dataKey] >= 0
-                          ? [6, 6, 0, 0] // positive bar: round top corners
-                          : [0, 0, 6, 6] // negative bar: round bottom corners
-                        : [6, 6, 0, 0] // absolute mode: always positive
+                          ? [6, 6, 0, 0]
+                          : [0, 0, 6, 6]
+                        : [6, 6, 0, 0]
                     }
                   />
                 ))}

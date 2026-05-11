@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import PredictionRun from "../models/PredictionRun.js";
-import { refreshProphetPredictions } from "../services/predictions/refreshProphetPredictions.js";
+import { refreshMonthlyDistrictPredictions } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
+import Dataset from "../models/Dataset.js";
 
 function toDatasetScope(datasetId) {
   if (datasetId && mongoose.Types.ObjectId.isValid(datasetId)) {
@@ -11,24 +12,63 @@ function toDatasetScope(datasetId) {
 
 export const getPredictions = async (req, res) => {
   try {
-    const datasetScope = toDatasetScope(req.query.datasetId);
+    let datasetId = req.query.datasetId;
+    if (!datasetId) {
+      const latest = await Dataset.findOne({ status: "validated" })
+        .sort({ createdAt: -1 })
+        .select("_id")
+        .lean();
+      datasetId = latest?._id ? String(latest._id) : null;
+    }
+
+    const datasetScope = toDatasetScope(datasetId);
     const run = await PredictionRun.findOne({
       model: "prophet",
-      granularity: "yearly_total_cases",
+      granularity: "monthly_district_cases",
       datasetScope,
       status: "success",
     })
-      .select("payload generatedAt status")
+      .sort({ generatedAt: -1, createdAt: -1 })
+      .select(
+        "_id granularity basisDatasetId basisYear basisMonth forecastTargetYear forecastTargetMonth forecastHorizonMonths generatedAt trigger status payload",
+      )
       .lean();
 
-    if (!run?.payload) {
-      return res.status(404).json({
-        message:
-          "No saved forecast yet. Upload a dataset (or run a refresh) to generate predictions.",
+    if (!run) {
+      return res.json({
+        success: true,
+        hasPrediction: false,
+        message: "No saved monthly district prediction run found.",
       });
     }
 
-    return res.json(run.payload);
+    const districtFilter =
+      req.query.districtKey || req.query.district ? String(req.query.districtKey || req.query.district) : null;
+    const payload = run.payload || {};
+    const districts = Array.isArray(payload.districts) ? payload.districts : [];
+    const filtered =
+      districtFilter && districts.length
+        ? districts.filter(
+            (d) => d.districtKey === districtFilter || d.district === districtFilter,
+          )
+        : districts;
+
+    return res.json({
+      success: true,
+      hasPrediction: true,
+      predictionRunId: String(run._id),
+      granularity: run.granularity,
+      basisDatasetId: run.basisDatasetId ? String(run.basisDatasetId) : null,
+      basisYear: run.basisYear,
+      basisMonth: run.basisMonth,
+      forecastTargetYear: run.forecastTargetYear,
+      forecastTargetMonth: run.forecastTargetMonth,
+      forecastHorizonMonths: run.forecastHorizonMonths,
+      generatedAt: run.generatedAt,
+      trigger: run.trigger,
+      status: run.status,
+      payload: { ...payload, districts: filtered },
+    });
   } catch (err) {
     return res.status(500).json({ message: err?.message || "Server error" });
   }
@@ -37,11 +77,12 @@ export const getPredictions = async (req, res) => {
 export const refreshPredictions = async (req, res) => {
   try {
     const datasetId = req.body?.datasetId;
-    const force = Boolean(req.body?.force);
+    const horizonMonths = Number(req.body?.forecastHorizonMonths ?? 1);
 
-    const saved = await refreshProphetPredictions({
+    const saved = await refreshMonthlyDistrictPredictions({
       trigger: "manual",
       datasetId,
+      horizonMonths: Number.isFinite(horizonMonths) ? horizonMonths : 1,
       force: true,
     });
 
@@ -53,7 +94,16 @@ export const refreshPredictions = async (req, res) => {
       return res.status(isSetup ? 503 : 500).json({ message: msg });
     }
 
-    return res.json(saved?.payload || { status: saved?.status || "running" });
+    return res.json({
+      predictionRunId: saved?._id ? String(saved._id) : null,
+      granularity: saved?.granularity,
+      basisDatasetId: saved?.basisDatasetId ? String(saved.basisDatasetId) : null,
+      basisYear: saved?.basisYear,
+      basisMonth: saved?.basisMonth,
+      forecastTargetYear: saved?.forecastTargetYear,
+      forecastTargetMonth: saved?.forecastTargetMonth,
+      status: saved?.status,
+    });
   } catch (err) {
     const msg = err?.message || "Server error";
     const isSetup =

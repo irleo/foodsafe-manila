@@ -11,8 +11,15 @@ import {
   Area,
 } from "recharts";
 
+const RANGE_OPTIONS = [
+  { label: "3M", value: 3 },
+  { label: "6M", value: 6 },
+  { label: "1Y", value: 12 },
+];
+
 const HollowDot = ({ cx, cy, stroke, fill = "#ffffff" }) => {
   if (cx == null || cy == null) return null;
+
   return (
     <>
       <circle cx={cx} cy={cy} r={4} fill={fill} />
@@ -28,51 +35,110 @@ const HollowDot = ({ cx, cy, stroke, fill = "#ffffff" }) => {
   );
 };
 
-export default function PredictiveLineChart({
+function formatMonth(value) {
+  if (value == null) return "—";
+
+  const monthNumber = Number(value);
+
+  if (!Number.isFinite(monthNumber) || monthNumber < 1 || monthNumber > 12) {
+    return String(value);
+  }
+
+  return new Date(2026, monthNumber - 1, 1).toLocaleString(undefined, {
+    month: "short",
+  });
+}
+
+function getLabel(row) {
+  if (!row) return "";
+
+  if (row.label) return row.label;
+
+  if (row.year != null && row.month != null) {
+    return `${formatMonth(row.month)} ${row.year}`;
+  }
+
+  if (row.targetYear != null && row.targetMonth != null) {
+    return `${formatMonth(row.targetMonth)} ${row.targetYear}`;
+  }
+
+  if (row.period) return row.period;
+  if (row.date) return row.date;
+  if (row.ds) return row.ds;
+  if (row.year != null) return String(row.year);
+
+  return "";
+}
+
+function monthIndex(row) {
+  if (row?.year == null || row?.month == null) return null;
+  const year = Number(row.year);
+  const month = Number(row.month);
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return null;
+  return year * 12 + month - 1;
+}
+
+export default function YearlyActualVsPredictedLineChart({
   title = "Actual vs Prediction",
-  monthlyData = [],
-  yearlyData = [],
-  defaultView = "yearly",
+  data = [],
   height = 350,
+  defaultRangeMonths = 6,
+  controls = null,
 }) {
-  const [view, setView] = useState(defaultView);
+  const [rangeMonths, setRangeMonths] = useState(defaultRangeMonths);
 
   const chartData = useMemo(() => {
-    const source = view === "monthly" ? monthlyData : yearlyData;
-    const safe = Array.isArray(source) ? source : [];
+    const safe = Array.isArray(data) ? data : [];
 
-    return safe
-      .map((r, index) => {
-        const actual = Number(r?.actual);
-        const predicted = Number(r?.predicted);
-        const lowerBound = Number(r?.lowerBound);
-        const upperBound = Number(r?.upperBound);
+    const rows = safe
+      .map((row, index) => {
+        const actual = Number(row?.actual);
+        const predicted = Number(row?.predicted);
 
-        const isForecast = Boolean(r?.isForecast);
+        const lowerBound = Number(row?.lowerBound ?? row?.lower);
+        const upperBound = Number(row?.upperBound ?? row?.upper);
+
+        const isForecast = Boolean(row?.isForecast || row?.isPrimaryTarget);
+        const periodIndex = monthIndex(row);
 
         return {
           id: index,
-          label: r?.label ?? "",
+          label: getLabel(row),
+          periodIndex,
           actual: Number.isFinite(actual) ? actual : null,
           predicted: Number.isFinite(predicted) ? predicted : null,
           lowerBound: Number.isFinite(lowerBound) ? lowerBound : null,
           upperBound: Number.isFinite(upperBound) ? upperBound : null,
           isForecast,
 
-          // split actual / prediction into separate visible segments
           actualLine: !isForecast && Number.isFinite(actual) ? actual : null,
-          predictedLine: isForecast && Number.isFinite(predicted) ? predicted : null,
 
-          // optional bridge point so forecast starts smoothly from last actual
-          forecastBridge:
-            Number.isFinite(predicted) && isForecast ? predicted : null,
+          // Show predicted values for backtest rows and forecast rows.
+          predictedLine: Number.isFinite(predicted) ? predicted : null,
         };
       })
       .filter((row) => row.label);
-  }, [monthlyData, yearlyData, view]);
+
+    const target = rows.find((row) => row.isForecast && row.periodIndex != null);
+    const latestHistoricalIndex = Math.max(
+      ...rows
+        .filter((row) => !row.isForecast && row.periodIndex != null)
+        .map((row) => row.periodIndex),
+    );
+    const endIndex = target?.periodIndex ?? latestHistoricalIndex;
+
+    if (!Number.isFinite(endIndex)) return rows;
+
+    const startIndex = endIndex - Number(rangeMonths);
+    return rows.filter(
+      (row) =>
+        row.periodIndex == null ||
+        (row.periodIndex >= startIndex && row.periodIndex <= endIndex),
+    );
+  }, [data, rangeMonths]);
 
   const hasBounds = chartData.some(
-    (d) => d.lowerBound != null && d.upperBound != null
+    (row) => row.lowerBound != null && row.upperBound != null,
   );
 
   return (
@@ -80,29 +146,25 @@ export default function PredictiveLineChart({
       <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="font-semibold text-lg">{title}</h2>
 
-        <div className="inline-flex rounded-lg border border-gray-300 bg-gray-50 p-1 self-start">
-          <button
-            type="button"
-            onClick={() => setView("monthly")}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-              view === "monthly"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-gray-600 hover:bg-white"
-            }`}
-          >
-            Monthly
-          </button>
-          <button
-            type="button"
-            onClick={() => setView("yearly")}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-              view === "yearly"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-gray-600 hover:bg-white"
-            }`}
-          >
-            Yearly
-          </button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {controls}
+
+          <div className="inline-flex rounded-lg border border-gray-300 bg-gray-50 p-1 self-start">
+            {RANGE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setRangeMonths(option.value)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                  rangeMonths === option.value
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-gray-600 hover:bg-white"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -111,14 +173,13 @@ export default function PredictiveLineChart({
       ) : (
         <div style={{ height }} className="w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+            <LineChart
+              data={chartData}
+              margin={{ top: 10, right: 20, left: 0, bottom: 5 }}
+            >
               <CartesianGrid strokeDasharray="3 3" />
 
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 12 }}
-                minTickGap={20}
-              />
+              <XAxis dataKey="label" tick={{ fontSize: 12 }} minTickGap={20} />
 
               <YAxis allowDecimals={false} />
 
@@ -130,6 +191,7 @@ export default function PredictiveLineChart({
                     lowerBound: "Lower Bound",
                     upperBound: "Upper Bound",
                   };
+
                   return [value, labels[name] || name];
                 }}
               />
@@ -141,11 +203,11 @@ export default function PredictiveLineChart({
                     predictedLine: "Prediction",
                     confidenceBand: "Prediction Range",
                   };
+
                   return labels[value] || value;
                 }}
               />
 
-              {/* Shaded upper/lower prediction band */}
               {hasBounds && (
                 <>
                   <Area
@@ -156,6 +218,7 @@ export default function PredictiveLineChart({
                     activeDot={false}
                     legendType="none"
                   />
+
                   <Area
                     type="monotone"
                     dataKey="lowerBound"
@@ -170,7 +233,6 @@ export default function PredictiveLineChart({
                 </>
               )}
 
-              {/* Actual solid line */}
               <Line
                 type="monotone"
                 dataKey="actualLine"
@@ -182,7 +244,6 @@ export default function PredictiveLineChart({
                 connectNulls={false}
               />
 
-              {/* Predicted dashed line */}
               <Line
                 type="monotone"
                 dataKey="predictedLine"

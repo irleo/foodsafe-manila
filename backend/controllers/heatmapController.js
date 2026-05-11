@@ -1,11 +1,27 @@
 import mongoose from "mongoose";
 import OfficialCase from "../models/OfficialCase.js";
-import { manilaDistrictCoords } from "../constants/manilaDistrictCoords.js";
-import { normalizeDistrict } from "../utils/normalizeDistrict.js";
+import { normalizeDistrictKey } from "../constants/manilaDistrictCoords.js";
+
+function riskBand(cases) {
+  const n = Number(cases ?? 0);
+  if (n >= 31) return "Critical";
+  if (n >= 16) return "High";
+  if (n >= 6) return "Medium";
+  return "Low";
+}
+
+function getBarangayNo(value, fallback) {
+  const direct = Number(value);
+  if (Number.isFinite(direct)) return direct;
+
+  const match = String(fallback || "").match(/\d+/);
+  const parsed = match ? Number(match[0]) : NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 export const getDistrictHeatmap = async (req, res) => {
   try {
-    const { datasetId, year, disease } = req.query;
+    const { datasetId, year, month, disease, caseClassification } = req.query;
 
     if (!datasetId || !mongoose.Types.ObjectId.isValid(datasetId)) {
       return res.status(400).json({ message: "Invalid datasetId" });
@@ -19,33 +35,133 @@ export const getDistrictHeatmap = async (req, res) => {
       match.year = y;
     }
 
+    if (month !== undefined && month !== "") {
+      const m = Number(month);
+      if (!Number.isFinite(m) || m < 1 || m > 12)
+        return res.status(400).json({ message: "Invalid month" });
+      match.month = m;
+    }
+
     if (disease) {
       match.disease = String(disease).trim();
     }
 
-    // Group cases by district
+    if (caseClassification) {
+      match.caseClassification = String(caseClassification).trim().toLowerCase();
+    }
+
     const rows = await OfficialCase.aggregate([
       { $match: match },
-      { $group: { _id: "$district", totalCases: { $sum: "$cases" } } },
+      {
+        $group: {
+          _id: {
+            barangayNo: "$barangayNo",
+            barangay: "$barangay",
+            district: "$district",
+          },
+          totalCases: { $sum: "$cases" },
+        },
+      },
       { $sort: { totalCases: -1 } },
     ]);
 
+    const districtTotals = new Map();
+    const skippedBarangays = [];
+
+    for (const r of rows) {
+      const district = String(r._id?.district || "").trim();
+      const districtKey = normalizeDistrictKey(district);
+      const barangayNo = getBarangayNo(r._id?.barangayNo, r._id?.barangay);
+      const cases = Number(r.totalCases ?? 0);
+      if (barangayNo == null) {
+        skippedBarangays.push(r._id);
+        continue;
+      }
+
+      if (!districtTotals.has(districtKey)) {
+        districtTotals.set(districtKey, {
+          district,
+          totalCases: 0,
+          barangays: new Set(),
+        });
+      }
+      const entry = districtTotals.get(districtKey);
+      entry.totalCases += cases;
+      entry.barangays.add(barangayNo);
+    }
+
+    const districtStats = new Map(
+      [...districtTotals.entries()].map(([districtKey, entry]) => {
+        const barangayCount = Math.max(1, entry.barangays.size);
+        const avgIncidentPerBarangay = Number(
+          (entry.totalCases / barangayCount).toFixed(2),
+        );
+        return [
+          districtKey,
+          {
+            district: entry.district,
+            districtKey,
+            totalCases: entry.totalCases,
+            barangayCount,
+            avgIncidentPerBarangay,
+            risk: riskBand(avgIncidentPerBarangay),
+          },
+        ];
+      }),
+    );
+
     const points = rows
       .map((r) => {
-        const district = String(r._id || "").trim();
-        const norm = normalizeDistrict(district);
-        const coords = manilaDistrictCoords[norm];
-        if (!coords) return null; // skip unknown district
+        const district = String(r._id?.district || "").trim();
+        const districtKey = normalizeDistrictKey(district);
+        const barangayNo = getBarangayNo(r._id?.barangayNo, r._id?.barangay);
+        if (barangayNo == null) return null;
+        const districtStat = districtStats.get(districtKey);
+        const cases = Number(r.totalCases ?? 0);
         return {
+          barangay: r._id?.barangay || `Barangay ${barangayNo}`,
+          barangayNo,
           district,
-          lat: coords.lat,
-          lng: coords.lng,
-          cases: r.totalCases,
+          districtKey,
+          cases,
+          weight: cases,
+          districtAvgIncident: districtStat?.avgIncidentPerBarangay ?? 0,
+          districtTotalCases: districtStat?.totalCases ?? cases,
+          risk: districtStat?.risk ?? riskBand(0),
         };
       })
       .filter(Boolean);
 
-    return res.json(points);
+    const filterOptions = await OfficialCase.aggregate([
+      { $match: { datasetId: new mongoose.Types.ObjectId(datasetId) } },
+      {
+        $group: {
+          _id: null,
+          years: { $addToSet: "$year" },
+          months: { $addToSet: "$month" },
+          diseases: { $addToSet: "$disease" },
+          caseClassifications: { $addToSet: "$caseClassification" },
+        },
+      },
+    ]);
+
+    if (skippedBarangays.length) {
+      console.warn("Heatmap skipped barangays (missing barangayNo):", skippedBarangays);
+    }
+
+    return res.json({
+      points,
+      districtStats: [...districtStats.values()].sort(
+        (a, b) => b.avgIncidentPerBarangay - a.avgIncidentPerBarangay,
+      ),
+      skippedBarangays,
+      filterOptions: filterOptions[0] || {
+        years: [],
+        months: [],
+        diseases: [],
+        caseClassifications: [],
+      },
+    });
   } catch (err) {
     return res.status(500).json({ message: err?.message || "Server error" });
   }

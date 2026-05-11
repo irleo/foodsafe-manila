@@ -12,7 +12,206 @@ function riskCardClass(level) {
     return "border-2 rounded-xl p-6 bg-red-100 text-red-700 border-red-300";
   if (level === "medium")
     return "border-2 rounded-xl p-6 bg-yellow-100 text-yellow-700 border-yellow-300";
+  if (level === "insufficient")
+    return "border-2 rounded-xl p-6 bg-gray-100 text-gray-700 border-gray-300";
   return "border-2 rounded-xl p-6 bg-green-100 text-green-700 border-green-300";
+}
+
+function formatMonth(value) {
+  if (value == null) return "—";
+
+  const monthNumber = Number(value);
+
+  if (!Number.isFinite(monthNumber) || monthNumber < 1 || monthNumber > 12) {
+    return String(value);
+  }
+
+  return new Date(2026, monthNumber - 1, 1).toLocaleString(undefined, {
+    month: "long",
+  });
+}
+
+function formatYearMonth(year, month) {
+  if (year == null || month == null) return "—";
+  return `${formatMonth(month)} ${year}`;
+}
+
+function getRowLabel(row) {
+  if (!row) return "—";
+
+  if (row.year != null && row.month != null) {
+    return formatYearMonth(row.year, row.month);
+  }
+
+  if (row.targetYear != null && row.targetMonth != null) {
+    return formatYearMonth(row.targetYear, row.targetMonth);
+  }
+
+  if (row.period) return row.period;
+  if (row.date) return row.date;
+  if (row.ds) return row.ds;
+  if (row.year != null) return row.year;
+
+  return "—";
+}
+
+function toFiniteNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function normalizeForecastPoint(point) {
+  if (!point) return null;
+  return {
+    year: point.year ?? point.targetYear,
+    month: point.month ?? point.targetMonth,
+    predicted: toFiniteNumber(point.predictedCases ?? point.predicted),
+    lower: toFiniteNumber(point.lowerBound ?? point.lower),
+    upper: toFiniteNumber(point.upperBound ?? point.upper),
+    isPrimaryTarget: Boolean(point.isPrimaryTarget),
+  };
+}
+
+function hasPredictionResult(row) {
+  return (
+    Number.isFinite(Number(row?.actual)) &&
+    Number.isFinite(Number(row?.predicted))
+  );
+}
+
+function mergePeriodRow(map, year, month, patch) {
+  if (year == null || month == null) return;
+  const key = `${year}-${month}`;
+  map.set(key, {
+    ...(map.get(key) || { year, month }),
+    ...patch,
+  });
+}
+
+function buildRowsFromForecast(scope) {
+  const hist = Array.isArray(scope?.historicalSeries)
+    ? scope.historicalSeries
+    : [];
+  const backtest = Array.isArray(scope?.backtestSeries)
+    ? scope.backtestSeries
+    : [];
+  const fc = Array.isArray(scope?.forecast) ? scope.forecast : [];
+  const byPeriod = new Map();
+
+  for (const r of hist) {
+    mergePeriodRow(byPeriod, r.year, r.month, {
+      actual: toFiniteNumber(r.cases ?? r.actualCases ?? r.actual),
+      isForecast: false,
+    });
+  }
+
+  for (const r of backtest) {
+    mergePeriodRow(byPeriod, r.year, r.month, {
+      actual: toFiniteNumber(r.actualCases ?? r.actual),
+      predicted: toFiniteNumber(r.predictedCases ?? r.predicted),
+      lower: toFiniteNumber(r.lowerBound ?? r.lower),
+      upper: toFiniteNumber(r.upperBound ?? r.upper),
+      isForecast: false,
+    });
+  }
+
+  const target = normalizeForecastPoint(
+    fc.find((r) => r.isPrimaryTarget) || fc[0] || scope?.nextForecast,
+  );
+
+  if (target?.predicted != null) {
+    mergePeriodRow(byPeriod, target.year, target.month, {
+      actual: null,
+      predicted: target.predicted,
+      lower: target.lower,
+      upper: target.upper,
+      isPrimaryTarget: true,
+      isForecast: true,
+    });
+  }
+
+  return [...byPeriod.values()].sort(
+    (a, b) => a.year * 100 + a.month - (b.year * 100 + b.month),
+  );
+}
+
+function addToPeriod(map, year, month, fields) {
+  if (year == null || month == null) return;
+  const key = `${year}-${month}`;
+  const entry = map.get(key) || { year, month };
+  for (const [name, value] of Object.entries(fields)) {
+    const n = Number(value);
+    if (Number.isFinite(n)) entry[name] = (entry[name] ?? 0) + n;
+  }
+  map.set(key, entry);
+}
+
+function buildCityForecast(districts = []) {
+  const historical = new Map();
+  const backtest = new Map();
+  const forecast = new Map();
+
+  for (const district of Array.isArray(districts) ? districts : []) {
+    for (const r of district.historicalSeries || []) {
+      addToPeriod(historical, r.year, r.month, { cases: r.cases });
+    }
+    for (const r of district.backtestSeries || []) {
+      addToPeriod(backtest, r.year, r.month, {
+        actualCases: r.actualCases ?? r.actual,
+        predictedCases: r.predictedCases ?? r.predicted,
+        lowerBound: r.lowerBound ?? r.lower,
+        upperBound: r.upperBound ?? r.upper,
+      });
+    }
+    for (const r of district.forecast || []) {
+      if (!r.isPrimaryTarget) continue;
+      addToPeriod(forecast, r.year, r.month, {
+        predictedCases: r.predictedCases ?? r.predicted,
+        lowerBound: r.lowerBound ?? r.lower,
+        upperBound: r.upperBound ?? r.upper,
+      });
+      const key = `${r.year}-${r.month}`;
+      forecast.set(key, { ...forecast.get(key), isPrimaryTarget: true });
+    }
+  }
+
+  return {
+    historicalSeries: [...historical.values()],
+    backtestSeries: [...backtest.values()],
+    forecast: [...forecast.values()],
+  };
+}
+
+function calculateMetrics(rows) {
+  const predictionRows = rows.filter(
+    (row) => !row.isForecast && hasPredictionResult(row),
+  );
+  if (!predictionRows.length) return null;
+
+  const squaredErrors = [];
+  const pctErrors = [];
+
+  for (const row of predictionRows) {
+    const actual = Number(row.actual);
+    const predicted = Number(row.predicted);
+    const error = actual - predicted;
+    squaredErrors.push(error * error);
+    if (actual > 0) pctErrors.push(Math.abs(error) / actual);
+  }
+
+  const rmse = Math.sqrt(
+    squaredErrors.reduce((sum, value) => sum + value, 0) /
+      squaredErrors.length,
+  );
+  const mape = pctErrors.length
+    ? (pctErrors.reduce((sum, value) => sum + value, 0) / pctErrors.length) *
+      100
+    : null;
+
+  return {
+    rmse: Math.round(rmse),
+    mape: mape == null ? null : Number(mape.toFixed(1)),
+  };
 }
 
 export default function Predictions() {
@@ -23,22 +222,39 @@ export default function Predictions() {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [run, setRun] = useState(null);
-  const [selectedDistrict, setSelectedDistrict] = useState("all");
+  const [selectedChartDistrict, setSelectedChartDistrict] = useState("manila");
+  const [selectedErrorDistrict, setSelectedErrorDistrict] = useState("manila");
+  const [selectedHistoryDistrict, setSelectedHistoryDistrict] = useState("manila");
   const [loading, setLoading] = useState(false);
   const [emptyMsg, setEmptyMsg] = useState("");
 
   useEffect(() => {
     if (!token) return;
+
     let isMounted = true;
+
     (async () => {
       try {
         setLoading(true);
         setEmptyMsg("");
+
         const data = await fetchLatestPredictions(token);
+
         if (!isMounted) return;
+
+        if (data?.hasPrediction === false) {
+          setRun(null);
+          setEmptyMsg(
+            data?.message ||
+              "No saved monthly prediction run found. Upload official case data or run prediction refresh.",
+          );
+          return;
+        }
+
         setRun(data);
       } catch (e) {
         if (!isMounted) return;
+
         const msg = e?.message || "Failed to load saved forecast";
         setRun(null);
         setEmptyMsg(msg);
@@ -46,6 +262,7 @@ export default function Predictions() {
         if (isMounted) setLoading(false);
       }
     })();
+
     return () => {
       isMounted = false;
     };
@@ -55,17 +272,26 @@ export default function Predictions() {
     const doRefresh = async () => {
       if (!token) throw new Error("Sign in to refresh predictions.");
       if (!isAdmin) throw new Error("Admin access required to refresh.");
+
       setIsGenerating(true);
+
       try {
-        const data = await refreshPredictions(token);
+        await refreshPredictions(token);
+        const data = await fetchLatestPredictions(token);
+        if (data?.hasPrediction === false) throw new Error(data?.message || "No prediction run created.");
         setRun(data);
-        setSelectedDistrict("all");
+        setSelectedChartDistrict("manila");
+        setSelectedErrorDistrict("manila");
+        setSelectedHistoryDistrict("manila");
+
         setEmptyMsg("");
+
         return data;
       } finally {
         setIsGenerating(false);
       }
     };
+
     notify.promise(doRefresh(), {
       loading: "Refreshing saved forecast…",
       success: "Forecast refreshed",
@@ -73,50 +299,156 @@ export default function Predictions() {
     });
   };
 
-  const activeForecast = useMemo(() => {
-    if (!run) return null;
-    if (selectedDistrict === "all") return run.total;
-    return (
-      run.districts?.find(
-        (d) => d.ok && d.district === selectedDistrict,
-      ) || null
-    );
-  }, [run, selectedDistrict]);
-
-  const chartRows = activeForecast?.compareRows || [];
-
-  const metrics = activeForecast?.metrics;
-  const nextForecast = activeForecast?.nextForecast;
-
   const districtOptions = useMemo(() => {
-    const base = [{ value: "all", label: "All districts (city total)" }];
-    if (!run?.districts?.length) return base;
-    const ok = run.districts.filter((d) => d.ok).map((d) => d.district);
+    const districts = run?.payload?.districts;
+    const options = [{ value: "manila", label: "Whole Manila" }];
+    if (!Array.isArray(districts) || districts.length === 0) return options;
     return [
-      ...base,
-      ...ok.map((d) => ({ value: d, label: d })),
+      ...options,
+      ...districts.map((d) => ({
+        value: d.districtKey || d.district,
+        label: d.district,
+      })),
     ];
   }, [run]);
 
-  const okDistricts = useMemo(
-    () => (run?.districts || []).filter((d) => d.ok),
+  const districtForecasts = useMemo(() => {
+    const districts = run?.payload?.districts;
+    return Array.isArray(districts) ? districts : [];
+  }, [run]);
+
+  const cityForecast = useMemo(
+    () => buildCityForecast(run?.payload?.districts || []),
     [run],
   );
 
+  const cityChartRows = useMemo(
+    () => buildRowsFromForecast(cityForecast),
+    [cityForecast],
+  );
+
+  const selectedChartScope = useMemo(
+    () =>
+      selectedChartDistrict === "manila"
+        ? cityForecast
+        : districtForecasts.find(
+            (d) =>
+              d.districtKey === selectedChartDistrict ||
+              d.district === selectedChartDistrict,
+          ) || null,
+    [cityForecast, districtForecasts, selectedChartDistrict],
+  );
+
+  const selectedHistoryScope = useMemo(
+    () =>
+      selectedHistoryDistrict === "manila"
+        ? cityForecast
+        : districtForecasts.find(
+            (d) =>
+              d.districtKey === selectedHistoryDistrict ||
+              d.district === selectedHistoryDistrict,
+          ) || null,
+    [cityForecast, districtForecasts, selectedHistoryDistrict],
+  );
+
+  const selectedErrorScope = useMemo(
+    () =>
+      selectedErrorDistrict === "manila"
+        ? cityForecast
+        : districtForecasts.find(
+            (d) =>
+              d.districtKey === selectedErrorDistrict ||
+              d.district === selectedErrorDistrict,
+          ) || null,
+    [cityForecast, districtForecasts, selectedErrorDistrict],
+  );
+
+  const chartRows = useMemo(
+    () => buildRowsFromForecast(selectedChartScope),
+    [selectedChartScope],
+  );
+
+  const historyRows = useMemo(
+    () => buildRowsFromForecast(selectedHistoryScope),
+    [selectedHistoryScope],
+  );
+
+  const errorRows = useMemo(
+    () => buildRowsFromForecast(selectedErrorScope),
+    [selectedErrorScope],
+  );
+
+  const selectedChartLabel = useMemo(
+    () =>
+      districtOptions.find((option) => option.value === selectedChartDistrict)
+        ?.label || "Whole Manila",
+    [districtOptions, selectedChartDistrict],
+  );
+
+  const selectedHistoryLabel = useMemo(
+    () =>
+      districtOptions.find((option) => option.value === selectedHistoryDistrict)
+        ?.label || "Whole Manila",
+    [districtOptions, selectedHistoryDistrict],
+  );
+
+  const selectedErrorLabel = useMemo(
+    () =>
+      districtOptions.find((option) => option.value === selectedErrorDistrict)
+        ?.label || "Whole Manila",
+    [districtOptions, selectedErrorDistrict],
+  );
+
+  const nextForecast = useMemo(() => {
+    const fc = Array.isArray(cityForecast?.forecast) ? cityForecast.forecast : [];
+    return normalizeForecastPoint(
+      fc.find((r) => r.isPrimaryTarget) || cityForecast?.nextForecast || null,
+    );
+  }, [cityForecast]);
+
+  const predictionHistoryRows = useMemo(
+    () => historyRows.filter((row) => !row.isForecast && hasPredictionResult(row)),
+    [historyRows],
+  );
+
+  const metrics = useMemo(() => calculateMetrics(cityChartRows), [cityChartRows]);
+
+  const okDistricts = useMemo(() => {
+    const districts = run?.payload?.districts;
+    if (!Array.isArray(districts)) return [];
+    return districts.map((district) => {
+        const forecast = Array.isArray(district.forecast)
+          ? district.forecast
+          : [];
+        const targetForecast = normalizeForecastPoint(
+          forecast.find((r) => r.isPrimaryTarget) ||
+            district.nextForecast ||
+            null,
+        );
+        return { ...district, targetForecast };
+      });
+  }, [run]);
+
   const horizonLabel = useMemo(() => {
-    if (!run?.forecastStartYear || !run?.forecastEndYear) return null;
-    const same = run.forecastStartYear === run.forecastEndYear;
-    const yPart = same
-      ? String(run.forecastStartYear)
-      : `${run.forecastStartYear}–${run.forecastEndYear}`;
+    if (!run) return null;
+
     const basisY = run.basisYear;
     const basisM = run.basisMonth;
-    if (basisY == null) return `Predicted year(s): ${yPart}.`;
-    const basisPart =
-      basisM != null
-        ? `Official data through ${basisY}-${String(basisM).padStart(2, "0")}`
-        : `Official yearly data through ${basisY}`;
-    return `Predicting ${yPart} from ${basisPart}.`;
+    const targetY = run.forecastTargetYear;
+    const targetM = run.forecastTargetMonth;
+    const horizon = run.forecastHorizonMonths;
+
+    if (basisY == null || basisM == null || targetY == null || targetM == null) {
+      return null;
+    }
+
+    return `Official data through ${formatYearMonth(
+      basisY,
+      basisM,
+    )}. Forecast target month: ${formatYearMonth(
+      targetY,
+      targetM,
+    )}. Horizon: ${horizon ?? 1} month${Number(horizon ?? 1) === 1 ? "" : "s"}.`;
   }, [run]);
 
   return (
@@ -125,30 +457,15 @@ export default function Predictions() {
         <div>
           <h1 className="text-2xl font-bold space-y-6">Predictions</h1>
           <p className="text-gray-600 mt-1 max-w-3xl">
-            Yearly case-count forecasts using{" "}
+            Monthly case-count forecasts using{" "}
             <span className="font-medium">Facebook Prophet</span> on official
-            data. Totals and each district use the same method: one series per
-            scope (sum of cases across diseases), annual granularity, expanding
-            backtest for the chart and full-history fit for the next-year
-            forecast. Confidence intervals are Prophet’s default prediction
-            bands.
+            data. Each district uses one monthly time series based on official
+            case counts. The forecast shows the next target month based on the
+            latest available official data.
           </p>
         </div>
 
         <div className="flex items-center gap-4 shrink-0">
-          <select
-            value={selectedDistrict}
-            onChange={(e) => setSelectedDistrict(e.target.value)}
-            disabled={!run}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white disabled:opacity-50"
-            title="Select scope for charts and metrics"
-          >
-            {districtOptions.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
           {isAdmin && (
             <button
               type="button"
@@ -173,7 +490,7 @@ export default function Predictions() {
                 <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
                 <path d="M8 16H3v5"></path>
               </svg>
-              Refresh forecast
+              {isGenerating ? "Refreshing..." : "Refresh forecast"}
             </button>
           )}
         </div>
@@ -220,18 +537,24 @@ export default function Predictions() {
             <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
             <polyline points="16 7 22 7 22 13"></polyline>
           </svg>
-          <p className="text-sm text-gray-600">Next year (point estimate)</p>
+
+          <p className="text-sm text-gray-600">
+            Manila next month (point estimate)
+          </p>
+
           <p className="text-3xl">
             {nextForecast ? nextForecast.predicted : "—"}
           </p>
+
           <p className="text-sm text-gray-600 mt-2">
             {nextForecast
-              ? `Calendar year ${nextForecast.targetYear} (model trained on years ≤ ${nextForecast.basisYear})`
+              ? `Target: ${formatYearMonth(nextForecast.year, nextForecast.month)}`
               : "No forecast loaded yet"}
           </p>
-          {nextForecast && (
+
+          {nextForecast?.lower != null && nextForecast?.upper != null && (
             <p className="text-xs text-gray-500 mt-2">
-              95% interval (approx.): {nextForecast.lower} – {nextForecast.upper}{" "}
+              95% interval approx.: {nextForecast.lower} – {nextForecast.upper}{" "}
               cases
             </p>
           )}
@@ -255,10 +578,13 @@ export default function Predictions() {
             <rect width="18" height="18" x="3" y="4" rx="2"></rect>
             <path d="M3 10h18"></path>
           </svg>
+
           <p className="text-sm text-gray-600">Model</p>
+
           <p className="text-2xl font-semibold">
-            {run ? "Prophet (yearly)" : "—"}
+            {run ? "Prophet (monthly)" : "—"}
           </p>
+
           <p className="text-sm text-gray-600 mt-2">
             {run?.generatedAt
               ? `Generated ${new Date(run.generatedAt).toLocaleString()}`
@@ -283,57 +609,99 @@ export default function Predictions() {
             <path d="M12 9v4"></path>
             <path d="M12 17h.01"></path>
           </svg>
+
           <p className="text-sm text-gray-600">Backtest error (MAPE / RMSE)</p>
+
           <p className="text-3xl">
             {metrics?.mape != null ? `${metrics.mape}%` : "—"} /{" "}
             {metrics?.rmse != null ? metrics.rmse : "—"}
           </p>
+
           <p className="text-sm text-gray-600 mt-2">
             {metrics?.mape != null
-              ? "Mean absolute % error on years with enough history to fit Prophet"
+              ? "Citywide mean absolute % error on periods with enough history to fit Prophet"
               : "Run a forecast to see metrics"}
           </p>
         </div>
       </div>
 
       <YearlyActualVsPredictedLineChart
-        title={
-          selectedDistrict === "all"
-            ? "Actual vs predicted (city total, yearly)"
-            : `Actual vs predicted (${selectedDistrict}, yearly)`
+        title={`Actual vs predicted (${selectedChartLabel}, monthly)`}
+        data={chartRows}
+        controls={
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center">
+            <label className="text-sm text-gray-600" htmlFor="chart-district">
+              District
+            </label>
+            <select
+              id="chart-district"
+              value={selectedChartDistrict}
+              onChange={(e) => setSelectedChartDistrict(e.target.value)}
+              disabled={!run || districtOptions.length === 0}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white disabled:opacity-50"
+              title="Select district for charts"
+            >
+              {districtOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
         }
-        data={chartRows}
       />
+
       <YearlyPredictionErrorBarChart
-        data={chartRows}
+        title={`Prediction Error by Period (${selectedErrorLabel})`}
+        data={errorRows}
         mode="signed"
+        controls={
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center">
+            <label className="text-sm text-gray-600" htmlFor="error-district">
+              District
+            </label>
+            <select
+              id="error-district"
+              value={selectedErrorDistrict}
+              onChange={(e) => setSelectedErrorDistrict(e.target.value)}
+              disabled={!run || districtOptions.length === 0}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white disabled:opacity-50"
+              title="Select district for prediction error chart"
+            >
+              {districtOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        }
       />
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="font-semibold text-lg">District next-year outlook</h2>
+          <h2 className="font-semibold text-lg">District next-month outlook</h2>
           <p className="text-sm text-gray-500 max-w-md text-right">
-            Each card uses the same Prophet setup as above, for that district’s
-            yearly case total. Risk score reflects relative share of the
-            predicted next-year total across districts (not a clinical score).
+            Each card uses the same Prophet setup for that district’s monthly
+            case total. Risk score reflects relative share of the predicted
+            next-month total across districts, not a clinical score.
           </p>
         </div>
-        {!run?.districts?.length ? (
+
+        {!run?.payload?.districts?.length ? (
           <div className="text-sm text-gray-500">
             Generate a forecast to load per-district results.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {okDistricts.map((d) => (
-              <div
-                key={d.district}
-                className={riskCardClass(d.riskLevel)}
-              >
+              <div key={d.district} className={riskCardClass(d.riskLevel)}>
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <p className="text-sm text-gray-600">District</p>
                     <p className="font-medium">{d.district}</p>
                   </div>
+
                   {d.riskLevel === "high" && (
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -353,9 +721,11 @@ export default function Predictions() {
                     </svg>
                   )}
                 </div>
+
                 <div className="space-y-3">
                   <div>
                     <p className="text-sm text-gray-600">Relative risk score</p>
+
                     <div className="flex items-center gap-2 mt-1">
                       <div className="flex-1 bg-white rounded-full h-2 overflow-hidden">
                         <div
@@ -363,19 +733,35 @@ export default function Predictions() {
                           style={{ width: `${d.riskScore ?? 0}%` }}
                         />
                       </div>
-                      <span className="text-sm">{d.riskScore ?? 0}%</span>
+
+                      <span className="text-sm">
+                        {d.riskScore == null ? "N/A" : `${d.riskScore}%`}
+                      </span>
                     </div>
                   </div>
+
                   <div>
-                    <p className="text-sm text-gray-600">Predicted cases (next year)</p>
-                    <p className="text-2xl">{d.nextForecast?.predicted ?? "—"}</p>
+                    <p className="text-sm text-gray-600">
+                      Predicted cases (Actual Prediction Month)
+                    </p>
+                    <p className="text-2xl">
+                      {d.targetForecast?.predicted ?? "No sufficient data"}
+                    </p>
                   </div>
+
                   <div>
                     <p className="text-sm text-gray-600">Risk band (UI)</p>
-                    <p className="capitalize">{d.riskLevel ?? "—"}</p>
+                    <p className="capitalize">
+                      {d.riskLevel === "insufficient"
+                        ? "No sufficient data"
+                        : d.riskLevel ?? "—"}
+                    </p>
                   </div>
+
                   <div>
-                    <p className="text-sm text-gray-600">MAPE / RMSE (backtest)</p>
+                    <p className="text-sm text-gray-600">
+                      MAPE / RMSE (backtest)
+                    </p>
                     <p className="text-sm">
                       {d.metrics?.mape != null ? `${d.metrics.mape}%` : "—"} /{" "}
                       {d.metrics?.rmse != null ? d.metrics.rmse : "—"}
@@ -389,43 +775,73 @@ export default function Predictions() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="font-semibold text-lg">Prediction History</h2>
-          <p className="text-sm text-gray-500">
-            {selectedDistrict === "all"
-              ? "City total — yearly actual vs one-step Prophet predictions"
-              : `${selectedDistrict} — yearly actual vs one-step Prophet predictions`}
-          </p>
+        <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-semibold text-lg">Monthly Prediction History</h2>
+            <p className="text-sm text-gray-500">
+              {selectedHistoryLabel} — monthly actual vs one-step Prophet predictions
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <label className="text-sm text-gray-600" htmlFor="history-district">
+              History district
+            </label>
+            <select
+              id="history-district"
+              value={selectedHistoryDistrict}
+              onChange={(e) => setSelectedHistoryDistrict(e.target.value)}
+              disabled={!run || districtOptions.length === 0}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white disabled:opacity-50"
+              title="Select district for prediction history"
+            >
+              {districtOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
+
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="text-left p-3">Year</th>
+                <th className="text-left p-3">Period</th>
                 <th className="text-left p-3">Predicted</th>
                 <th className="text-left p-3">Actual</th>
                 <th className="text-left p-3">Abs error %</th>
                 <th className="text-left p-3">Interval (95% approx.)</th>
               </tr>
             </thead>
+
             <tbody>
-              {chartRows.length === 0 ? (
+              {predictionHistoryRows.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="p-3 text-sm text-gray-500">
-                    No rows yet. Generate a forecast.
+                    No prediction-result rows yet. Refresh the forecast to generate backtest history.
                   </td>
                 </tr>
               ) : (
-                chartRows.map((row) => {
-                  const actual = Number(row.actual ?? 0);
-                  const predicted = Number(row.predicted ?? 0);
+                predictionHistoryRows.map((row, index) => {
+                  const actual = Number(row.actual);
+                  const predicted = Number(row.predicted);
+
                   const absPct =
                     actual > 0
-                      ? `${((Math.abs(actual - predicted) / actual) * 100).toFixed(1)}%`
+                      ? `${(
+                          (Math.abs(actual - predicted) / actual) *
+                          100
+                        ).toFixed(1)}%`
                       : "—";
+
                   return (
-                    <tr key={row.year} className="border-b border-gray-100">
-                      <td className="p-3">{row.year}</td>
+                    <tr
+                      key={`${getRowLabel(row)}-${index}`}
+                      className="border-b border-gray-100"
+                    >
+                      <td className="p-3">{getRowLabel(row)}</td>
                       <td className="p-3">{predicted}</td>
                       <td className="p-3">{actual}</td>
                       <td className="p-3">{absPct}</td>

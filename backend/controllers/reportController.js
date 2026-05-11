@@ -192,6 +192,7 @@ export const createReport = async (req, res) => {
       reportedAt: parsedReportedAt,
       reportedBy: req.user.id,
       source: "citizen_app",
+      caseClassification: "suspected",
       isCounted,
       excludeReason,
     };
@@ -255,7 +256,16 @@ export const getReports = async (req, res) => {
       .sort({ reportedAt: -1 })
       .limit(limit);
 
-    return res.json(reports);
+    // Back-compat: ensure caseClassification exists for old docs
+    return res.json(
+      reports.map((r) => {
+        const obj = typeof r?.toObject === "function" ? r.toObject() : r;
+        return {
+          ...obj,
+          caseClassification: obj?.caseClassification || "suspected",
+        };
+      })
+    );
   } catch (error) {
     return res.status(500).json({ message: "Failed to fetch reports." });
   }

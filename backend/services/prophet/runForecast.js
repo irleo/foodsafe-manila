@@ -40,14 +40,17 @@ export function runProphetForecast(series) {
       );
     });
     child.on("close", (code) => {
-      const trimmed = stdout.trim();
+      const text = (stdout || "").trim();
+      // Some Prophet/CmdStan stacks print non-JSON logs; parse last JSON object.
+      const idx = text.lastIndexOf("{");
+      const candidate = idx >= 0 ? text.slice(idx) : text;
       let parsed;
       try {
-        parsed = trimmed ? JSON.parse(trimmed) : null;
+        parsed = candidate ? JSON.parse(candidate) : null;
       } catch {
         reject(
           new Error(
-            `Prophet script returned non-JSON. stderr: ${stderr || "(empty)"} stdout: ${trimmed.slice(0, 500)}`,
+            `Prophet script returned non-JSON. stderr: ${stderr || "(empty)"} stdout: ${text.slice(0, 500)}`,
           ),
         );
         return;

@@ -1,13 +1,18 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 /**
- * Load latest saved forecast payload (DB-backed).
+ * Load latest saved PredictionRun (DB-backed).
  * @param {string} token
- * @param {{ datasetId?: string }} [opts]
+ * @param {{ datasetId?: string, districtKey?: string, district?: string }} [opts]
  */
-export async function fetchLatestPredictions(token, { datasetId } = {}) {
+export async function fetchLatestPredictions(
+  token,
+  { datasetId, districtKey, district } = {},
+) {
   const qs = new URLSearchParams();
   if (datasetId) qs.set("datasetId", datasetId);
+  if (districtKey) qs.set("districtKey", districtKey);
+  if (district) qs.set("district", district);
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   const res = await fetch(`${API_BASE}/api/predictions${suffix}`, {
     headers: { Authorization: token ? `Bearer ${token}` : "" },
@@ -22,16 +27,19 @@ export async function fetchLatestPredictions(token, { datasetId } = {}) {
 /**
  * Admin-only: refresh predictions now (recompute + persist).
  * @param {string} token
- * @param {{ datasetId?: string }} [opts]
+ * @param {{ datasetId?: string, forecastHorizonMonths?: number }} [opts]
  */
-export async function refreshPredictions(token, { datasetId } = {}) {
+export async function refreshPredictions(
+  token,
+  { datasetId, forecastHorizonMonths } = {},
+) {
   const res = await fetch(`${API_BASE}/api/predictions/refresh`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: token ? `Bearer ${token}` : "",
     },
-    body: JSON.stringify({ datasetId }),
+    body: JSON.stringify({ datasetId, forecastHorizonMonths }),
   });
   const j = await res.json().catch(() => ({}));
   if (!res.ok) {

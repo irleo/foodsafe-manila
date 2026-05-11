@@ -1,4 +1,12 @@
 export const manilaDistrictCoords = {
+  // Official-case heatmap centroids for Manila council districts (1–6).
+  district_1:    { lat: 14.6105, lng: 120.9725 },
+  district_2:    { lat: 14.6030, lng: 120.9815 },
+  district_3:    { lat: 14.6105, lng: 120.9950 },
+  district_4:    { lat: 14.5865, lng: 120.9815 },
+  district_5:    { lat: 14.5745, lng: 120.9990 },
+  district_6:    { lat: 14.5785, lng: 121.0100 },
+
   binondo:      { lat: 14.6013, lng: 120.9754 },
   quiapo:       { lat: 14.5986, lng: 120.9836 },
   sampaloc:     { lat: 14.6092, lng: 120.9890 },
@@ -15,10 +23,13 @@ export const manilaDistrictCoords = {
   santa_ana:    { lat: 14.5760, lng: 121.0050 },
 };
 
-export function toManilaDistrictKey(district) {
-  return String(district || "")
-    .trim()
+export function normalizeDistrictKey(value = "") {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const m = raw.match(/district\s*(\d+)/i);
+  if (m?.[1]) return `district_${m[1]}`;
+  return raw
     .toLowerCase()
-    .replace(/[.\-]/g, " ")
+    .replace(/[.-]/g, " ")
     .replace(/\s+/g, "_");
 }

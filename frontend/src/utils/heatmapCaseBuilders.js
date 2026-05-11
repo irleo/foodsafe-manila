@@ -1,4 +1,4 @@
-import { manilaDistrictCoords, toManilaDistrictKey } from "../constants/manilaDistrictCoords";
+import { manilaDistrictCoords, normalizeDistrictKey } from "../constants/manilaDistrictCoords";
 
 // ---------- Risk logic (shared with legend) ----------
 
@@ -77,7 +77,7 @@ export function buildDistrictHeatmapPointsFromCases(rows = []) {
 
     if (!district || !Number.isFinite(cases) || cases < 0) continue;
 
-    const key = toManilaDistrictKey(district);
+    const key = normalizeDistrictKey(district);
     const coords = manilaDistrictCoords[key];
     if (!coords) continue; // skip districts without centroids
 
@@ -115,16 +115,24 @@ export function buildDistrictHeatmapPointsFromCases(rows = []) {
 export function buildRiskStatsFromDistrictPoints(points = []) {
   const stats = { Low: 0, Medium: 0, High: 0, Critical: 0 };
   for (const p of Array.isArray(points) ? points : []) {
-    stats[getRiskBand(p.cases)] += 1;
+    const risk = p?.risk || getRiskBand(p?.districtAvgIncident ?? p?.cases ?? 0);
+    if (stats[risk] != null) stats[risk] += 1;
   }
   return stats;
 }
 
 export function buildTopDistrictsFromPoints(points = [], limit = 5) {
   return [...(points || [])]
-    .sort((a, b) => (b.cases ?? 0) - (a.cases ?? 0))
+    .sort(
+      (a, b) =>
+        (b.totalCases ?? b.districtTotalCases ?? b.cases ?? 0) -
+        (a.totalCases ?? a.districtTotalCases ?? a.cases ?? 0),
+    )
     .slice(0, limit)
-    .map((p) => ({ name: p.district, cases: p.cases ?? 0 }));
+    .map((p) => ({
+      name: p.district,
+      cases: p.totalCases ?? p.districtTotalCases ?? p.cases ?? 0,
+    }));
 }
 
 export function buildTopDiseasesFromCases(caseRows = [], limit = 5) {

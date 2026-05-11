@@ -12,7 +12,7 @@ const predictionRunSchema = new mongoose.Schema(
 
     granularity: {
       type: String,
-      enum: ["yearly_total_cases"],
+      enum: ["yearly_total_cases", "monthly_district_cases"],
       required: true,
       index: true,
     },
@@ -110,6 +110,28 @@ const predictionRunSchema = new mongoose.Schema(
       max: 2100,
       index: true,
     },
+
+    // Monthly forecast targets (used when granularity = monthly_district_cases)
+    forecastTargetYear: {
+      type: Number,
+      default: null,
+      min: 2015,
+      max: 2100,
+      index: true,
+    },
+    forecastTargetMonth: {
+      type: Number,
+      default: null,
+      min: 1,
+      max: 12,
+      index: true,
+    },
+    forecastHorizonMonths: {
+      type: Number,
+      default: null,
+      min: 1,
+      max: 36,
+    },
   },
   { timestamps: true }
 );
@@ -117,8 +139,7 @@ const predictionRunSchema = new mongoose.Schema(
 // Ensure single run per (model+granularity+scope). This prevents recompute storms
 // and guarantees "only one forecast exists per dataset upload".
 predictionRunSchema.index(
-  { model: 1, granularity: 1, datasetScope: 1 },
-  { unique: true }
+  { model: 1, granularity: 1, datasetScope: 1, generatedAt: -1 }
 );
 
 // Checking latest forecast basis

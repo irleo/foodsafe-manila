@@ -1,3 +1,11 @@
+# Files
+rawHealthOffice.xlsx
+cleanedOfficialCases.xlsx
+task.txt
+
+# Folders
+uploads
+
 # Logs
 logs
 *.log

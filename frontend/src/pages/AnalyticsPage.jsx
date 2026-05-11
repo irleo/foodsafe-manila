@@ -2,8 +2,9 @@ import { useMemo } from "react";
 // import { useAuth } from "../context/AuthContext";
 // import { mockReports } from "../data/mockReports";
 
-import { mockOfficialCases } from "../data/mockOfficialCases";
-import { normalizeToCaseRows } from "../utils/normalizeCases";
+import { useAuth } from "../context/AuthContext";
+import { useLatestDatasetId } from "../hooks/useLatestDatasetId";
+import { useOfficialCases } from "../hooks/useOfficialCases";
 import { buildAnalyticsCasesViewModel } from "../utils/analyticsCasesViewModel";
 
 // import { useReports } from "../hooks/useReports";
@@ -15,8 +16,14 @@ import AnalyticsGrid from "../components/analytics/AnalyticsGrid";
 const COLORS = ["#ef4444", "#facc15", "#22c55e"];
 
 export default function Analytics() {
-  // const { auth } = useAuth();
-  // const token = auth?.accessToken;
+  const { auth } = useAuth();
+  const token = auth?.accessToken;
+  const { datasetId } = useLatestDatasetId(token);
+  const { items: officialItems, loading, errorMsg } = useOfficialCases({
+    token,
+    datasetId,
+    limit: 5000,
+  });
 
   // // Reports Version
   // const { reports, loading, errorMsg } = useReports(token);
@@ -26,9 +33,17 @@ export default function Analytics() {
   //   [finalReports],
   // );
 
-  const loading = false;
-  const errorMsg = "";
-  const caseRows = useMemo(() => normalizeToCaseRows(mockOfficialCases), []);
+  const caseRows = useMemo(() => {
+    const safe = Array.isArray(officialItems) ? officialItems : [];
+    return safe.map((r) => ({
+      city: r.city ?? "Manila",
+      district: r.district,
+      disease: r.disease,
+      year: Number(r.year),
+      cases: Number(r.cases),
+    }));
+  }, [officialItems]);
+
   const vm = useMemo(() => buildAnalyticsCasesViewModel(caseRows), [caseRows]);
   
   
