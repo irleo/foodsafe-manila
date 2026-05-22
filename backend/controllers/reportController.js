@@ -1,5 +1,9 @@
 import Report from "../models/Report.js";
 import { manilaDistrictCoords } from "../constants/manilaDistrictCoords.js";
+import {
+  createNotification,
+  createUnusualReportNotification,
+} from "../services/notificationService.js";
 
 const ALLOWED_SYMPTOMS = new Set([
   "nausea",
@@ -14,6 +18,7 @@ const ALLOWED_SYMPTOMS = new Set([
 
 const MAX_REPORTS_PER_24H = 3;
 const DUPLICATE_WINDOW_HOURS = 6;
+const UNUSUAL_REPORT_THRESHOLD_24H = 10;
 
 function normalizeSymptom(s) {
   return String(s).trim().toLowerCase().replace(/\s+/g, "_");
@@ -198,6 +203,39 @@ export const createReport = async (req, res) => {
     };
 
     const report = await Report.create(payload);
+
+    const alertDistrict = exposureDistrictKey || reporterDistrictKey;
+    const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const districtReportCount24h = await Report.countDocuments({
+      source: "citizen_app",
+      isCounted: true,
+      reportedAt: { $gte: windowStart },
+      $or: [
+        { exposureDistrict: alertDistrict },
+        { exposureDistrict: null, "location.district": alertDistrict },
+      ],
+    });
+
+    await createNotification({
+      type: "report_new",
+      title: "New Report Received",
+      message: `Report from ${alertDistrict.replace(/_/g, " ")} (${clampedCaseCount} case/s).`,
+      dotColor: "yellow",
+      metadata: {
+        reportId: String(report._id),
+        districtKey: alertDistrict,
+        caseCount: clampedCaseCount,
+      },
+    });
+
+    if (districtReportCount24h >= UNUSUAL_REPORT_THRESHOLD_24H) {
+      await createUnusualReportNotification({
+        districtKey: alertDistrict,
+        fromDate: windowStart,
+        count: districtReportCount24h,
+      });
+    }
+
     return res.status(201).json(report);
   } catch (error) {
     console.error("Error creating report:", error);

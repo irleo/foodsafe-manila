@@ -7,6 +7,7 @@ import OfficialCase from "../models/OfficialCase.js";
 import { logActivity } from "../utils/logActivity.js";
 import { importOfficialCasesXlsx } from "../services/officialCaseImportService.js";
 import { refreshMonthlyDistrictPredictions } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
+import { createNotification } from "../services/notificationService.js";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -314,6 +315,13 @@ export const uploadDataset = async (req, res) => {
 
       if (!result.success) {
         cleanupUploadedFile(req);
+        await createNotification({
+          type: "dataset_failed",
+          title: "Dataset Validation Failed",
+          message: `${name}: ${result?.reason || "Validation failed."}`,
+          dotColor: "red",
+          metadata: { name, reason: result?.reason || null },
+        });
         return res.status(400).json(result);
       }
 
@@ -323,6 +331,14 @@ export const uploadDataset = async (req, res) => {
         title: "Official cases imported",
         subtitle: `${name} imported (${result.formatType}).`,
         metadata: { datasetId: result.datasetId, name, formatType: result.formatType },
+      });
+
+      await createNotification({
+        type: "dataset_validated",
+        title: "Dataset Validated",
+        message: `${name} validated successfully${Number.isFinite(result.insertedRows) ? ` (${result.insertedRows} records)` : ""}.`,
+        dotColor: "green",
+        metadata: { datasetId: result.datasetId, name, insertedRows: result.insertedRows },
       });
 
       // Non-blocking prediction refresh. Upload succeeds even if prediction fails.
@@ -418,6 +434,13 @@ export const uploadDataset = async (req, res) => {
         : "No valid rows found. Check your columns/format.";
 
       await dataset.save();
+      await createNotification({
+        type: "dataset_failed",
+        title: "Dataset Validation Failed",
+        message: `${dataset.name}: ${dataset.errorMessage}`,
+        dotColor: "red",
+        metadata: { datasetId: String(dataset._id), name: dataset.name },
+      });
 
       cleanupUploadedFile(req);
 
@@ -453,6 +476,14 @@ export const uploadDataset = async (req, res) => {
       metadata: { datasetId: dataset._id, recordsCount: cases.length },
     });
 
+    await createNotification({
+      type: "dataset_validated",
+      title: "Dataset Validated",
+      message: `${dataset.name} validated successfully (${cases.length} records).`,
+      dotColor: "green",
+      metadata: { datasetId: String(dataset._id), name: dataset.name, recordsCount: cases.length },
+    });
+
     return res.status(201).json({
       message: "Dataset uploaded and validated.",
       dataset,
@@ -465,6 +496,13 @@ export const uploadDataset = async (req, res) => {
       dataset.status = "failed";
       dataset.errorMessage = error.message || "Upload failed.";
       await dataset.save().catch(() => {});
+      await createNotification({
+        type: "dataset_failed",
+        title: "Dataset Validation Failed",
+        message: `${dataset.name}: ${dataset.errorMessage}`,
+        dotColor: "red",
+        metadata: { datasetId: String(dataset._id), name: dataset.name },
+      });
     }
     return res.status(500).json({ message: error.message });
   }

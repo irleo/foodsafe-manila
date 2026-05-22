@@ -1,8 +1,19 @@
-export default function NotificationsDropdown({ items = [] }) {
+export default function NotificationsDropdown({
+  items = [],
+  onToggleUnread,
+  onMarkAllRead,
+}) {
   return (
     <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-      <div className="p-4 border-b border-gray-200">
+      <div className="p-4 border-b border-gray-200 flex items-center justify-between gap-2">
         <h3 className="font-semibold text-[18px]">Notifications</h3>
+        <button
+          type="button"
+          onClick={onMarkAllRead}
+          className="text-xs text-blue-600 hover:text-blue-700"
+        >
+          Mark all read
+        </button>
       </div>
 
       <div className="max-h-96 overflow-y-auto">
@@ -22,6 +33,10 @@ export default function NotificationsDropdown({ items = [] }) {
                     ? "bg-yellow-500"
                     : n.dotColor === "green"
                       ? "bg-green-500"
+                      : n.dotColor === "red"
+                        ? "bg-red-500"
+                        : n.dotColor === "purple"
+                          ? "bg-purple-500"
                       : "bg-blue-500",
                 ].join(" ")}
               />
@@ -29,6 +44,13 @@ export default function NotificationsDropdown({ items = [] }) {
                 <p className="text-sm">{n.title}</p>
                 <p className="text-xs text-gray-600 mt-1">{n.message}</p>
                 <p className="text-xs text-gray-400 mt-1">{n.time}</p>
+                <button
+                  type="button"
+                  className="text-[11px] text-blue-600 hover:text-blue-700 mt-1"
+                  onClick={() => onToggleUnread?.(n)}
+                >
+                  {n.unread ? "Mark as read" : "Mark as unread"}
+                </button>
               </div>
             </div>
           </div>

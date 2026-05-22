@@ -1,6 +1,4 @@
-import Dataset from "../models/Dataset.js";
-import Report from "../models/Report.js";
-import User from "../models/User.js";
+import Notification from "../models/Notification.js";
 
 function toNotification({
   id,
@@ -24,60 +22,63 @@ function toNotification({
 export const getNotifications = async (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 5, 20);
-
-    const [latestReports, latestDatasets, pendingUsers] = await Promise.all([
-      Report.find({})
-        .sort({ reportedAt: -1, createdAt: -1 })
-        .limit(limit)
-        .select("reportedAt location.district exposureDistrict caseCount"),
-      Dataset.find({})
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .select("name status createdAt recordsCount"),
-      User.find({ status: "pending" })
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .select("username createdAt"),
-    ]);
-
-    const reportNotifications = latestReports.map((r) =>
-      toNotification({
-        id: `report_${r._id}`,
-        title: "New Report Received",
-        message: `Report from ${r.exposureDistrict || r.location?.district || "unknown_district"} (${r.caseCount ?? 1} case/s).`,
-        createdAt: r.reportedAt || r.createdAt,
-        dotColor: "yellow",
-      }),
-    );
-
-    const datasetNotifications = latestDatasets.map((d) =>
-      toNotification({
-        id: `dataset_${d._id}`,
-        title: "Dataset Update",
-        message: `${d.name} is ${d.status || "updated"}${Number.isFinite(d.recordsCount) ? ` (${d.recordsCount} records)` : ""}.`,
-        createdAt: d.createdAt,
-        dotColor: "green",
-      }),
-    );
-
-    const userNotifications = pendingUsers.map((u) =>
-      toNotification({
-        id: `user_${u._id}`,
-        title: "New User Request",
-        message: `${u.username || "A user"} requested access.`,
-        createdAt: u.createdAt,
-        dotColor: "blue",
-      }),
-    );
-
-    const notifications = [...reportNotifications, ...datasetNotifications, ...userNotifications]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, limit);
+    const notifications = await Notification.find({})
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .select("title message createdAt dotColor unread");
 
     return res.json(
-      notifications.map(({ createdAt, ...rest }) => rest),
+      notifications.map((n) =>
+        toNotification({
+          id: String(n._id),
+          title: n.title,
+          message: n.message,
+          createdAt: n.createdAt,
+          dotColor: n.dotColor || "blue",
+          unread: Boolean(n.unread),
+        }),
+      ),
     );
   } catch (error) {
     return res.status(500).json({ message: "Failed to fetch notifications." });
+  }
+};
+
+export const markNotificationRead = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updated = await Notification.findByIdAndUpdate(
+      id,
+      { $set: { unread: false } },
+      { new: true },
+    ).select("_id");
+    if (!updated) return res.status(404).json({ message: "Notification not found." });
+    return res.json({ success: true, id: String(updated._id), unread: false });
+  } catch (_) {
+    return res.status(500).json({ message: "Failed to mark notification as read." });
+  }
+};
+
+export const markNotificationUnread = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updated = await Notification.findByIdAndUpdate(
+      id,
+      { $set: { unread: true } },
+      { new: true },
+    ).select("_id");
+    if (!updated) return res.status(404).json({ message: "Notification not found." });
+    return res.json({ success: true, id: String(updated._id), unread: true });
+  } catch (_) {
+    return res.status(500).json({ message: "Failed to mark notification as unread." });
+  }
+};
+
+export const markAllNotificationsRead = async (_req, res) => {
+  try {
+    await Notification.updateMany({ unread: true }, { $set: { unread: false } });
+    return res.json({ success: true });
+  } catch (_) {
+    return res.status(500).json({ message: "Failed to mark all notifications as read." });
   }
 };

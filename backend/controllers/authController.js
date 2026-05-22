@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { createNotification } from "../services/notificationService.js";
 
 // POST /api/auth/request-access
 export const requestAccess = async (req, res) => {
@@ -59,6 +60,13 @@ export const requestAccess = async (req, res) => {
         existingUser.approvedBy = undefined;
 
         await existingUser.save();
+        await createNotification({
+          type: "user_access_request",
+          title: "New User Request",
+          message: `${existingUser.username || "A user"} requested access.`,
+          dotColor: "blue",
+          metadata: { userId: String(existingUser._id), email: existingUser.email },
+        });
 
         return res.status(200).json({
           message: "Access request resubmitted. Awaiting approval.",
@@ -87,6 +95,13 @@ export const requestAccess = async (req, res) => {
     });
 
     await user.save();
+    await createNotification({
+      type: "user_access_request",
+      title: "New User Request",
+      message: `${user.username || "A user"} requested access.`,
+      dotColor: "blue",
+      metadata: { userId: String(user._id), email: user.email },
+    });
 
     return res.status(201).json({
       message: "Access request submitted. Awaiting approval.",

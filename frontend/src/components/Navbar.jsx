@@ -17,6 +17,17 @@ export default function Navbar({ toggleSidebar }) {
   const token = auth?.accessToken;
   const hasUnread = notifications.some((n) => n?.unread);
 
+  const fetchNotifications = async () => {
+    if (!token) return;
+    const res = await fetch(`${API_BASE}/api/notifications?limit=20`, {
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error("Failed to fetch notifications");
+    const data = await res.json();
+    setNotifications(Array.isArray(data) ? data : []);
+  };
+
   useEffect(() => {
     if (!open || !token) return;
 
@@ -24,15 +35,11 @@ export default function Navbar({ toggleSidebar }) {
 
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/notifications?limit=5`, {
+        const res = await fetch(`${API_BASE}/api/notifications?limit=20`, {
           headers: { Authorization: `Bearer ${token}` },
           credentials: "include",
         });
-
-        if (!res.ok) {
-          throw new Error("Failed to fetch notifications");
-        }
-
+        if (!res.ok) throw new Error("Failed to fetch notifications");
         const data = await res.json();
         if (!isMounted) return;
         setNotifications(Array.isArray(data) ? data : []);
@@ -46,6 +53,39 @@ export default function Navbar({ toggleSidebar }) {
       isMounted = false;
     };
   }, [open, token]);
+
+  const toggleUnread = async (notification) => {
+    if (!token || !notification?.id) return;
+    const endpoint = notification.unread
+      ? `${API_BASE}/api/notifications/${notification.id}/read`
+      : `${API_BASE}/api/notifications/${notification.id}/unread`;
+    try {
+      const res = await fetch(endpoint, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to update notification");
+      await fetchNotifications();
+    } catch {
+      // no-op
+    }
+  };
+
+  const markAllRead = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/notifications/read-all`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to mark all as read");
+      await fetchNotifications();
+    } catch {
+      // no-op
+    }
+  };
 
   if (loading) return <Spinner />;
 
@@ -98,7 +138,13 @@ export default function Navbar({ toggleSidebar }) {
                   <span className="absolute right-1 top-1 inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
                 ) : null}
               </button>
-              {open && <NotificationsDropdown items={notifications} />}
+              {open && (
+                <NotificationsDropdown
+                  items={notifications}
+                  onToggleUnread={toggleUnread}
+                  onMarkAllRead={markAllRead}
+                />
+              )}
             </div>
 
             {auth?.accessToken && (

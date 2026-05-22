@@ -4,6 +4,7 @@ import PredictionRun from "../../models/PredictionRun.js";
 import { runProphetMonthlyForecast } from "../prophet/runMonthlyForecast.js";
 import Dataset from "../../models/Dataset.js";
 import { normalizeDistrictKey } from "../../constants/manilaDistrictCoords.js";
+import { createNotification } from "../notificationService.js";
 
 function ymToInt(year, month) {
   return year * 100 + month;
@@ -264,6 +265,20 @@ export async function refreshMonthlyDistrictPredictions({
       },
       { new: true }
     ).lean();
+
+    const targetMonth = `${target.year}-${String(target.month).padStart(2, "0")}`;
+    await createNotification({
+      type: "prediction_generated",
+      title: "Prediction Generated",
+      message: `Monthly prediction generated for ${targetMonth}.`,
+      dotColor: "purple",
+      targetMonth,
+      metadata: {
+        predictionRunId: String(saved?._id || running._id),
+        forecastTargetYear: target.year,
+        forecastTargetMonth: target.month,
+      },
+    });
 
     return saved;
   } catch (err) {

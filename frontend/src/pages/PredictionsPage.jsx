@@ -200,8 +200,7 @@ function calculateMetrics(rows) {
   }
 
   const rmse = Math.sqrt(
-    squaredErrors.reduce((sum, value) => sum + value, 0) /
-      squaredErrors.length,
+    squaredErrors.reduce((sum, value) => sum + value, 0) / squaredErrors.length,
   );
   const mape = pctErrors.length
     ? (pctErrors.reduce((sum, value) => sum + value, 0) / pctErrors.length) *
@@ -224,7 +223,8 @@ export default function Predictions() {
   const [run, setRun] = useState(null);
   const [selectedChartDistrict, setSelectedChartDistrict] = useState("manila");
   const [selectedErrorDistrict, setSelectedErrorDistrict] = useState("manila");
-  const [selectedHistoryDistrict, setSelectedHistoryDistrict] = useState("manila");
+  const [selectedHistoryDistrict, setSelectedHistoryDistrict] =
+    useState("manila");
   const [loading, setLoading] = useState(false);
   const [emptyMsg, setEmptyMsg] = useState("");
 
@@ -278,7 +278,8 @@ export default function Predictions() {
       try {
         await refreshPredictions(token);
         const data = await fetchLatestPredictions(token);
-        if (data?.hasPrediction === false) throw new Error(data?.message || "No prediction run created.");
+        if (data?.hasPrediction === false)
+          throw new Error(data?.message || "No prediction run created.");
         setRun(data);
         setSelectedChartDistrict("manila");
         setSelectedErrorDistrict("manila");
@@ -400,33 +401,39 @@ export default function Predictions() {
   );
 
   const nextForecast = useMemo(() => {
-    const fc = Array.isArray(cityForecast?.forecast) ? cityForecast.forecast : [];
+    const fc = Array.isArray(cityForecast?.forecast)
+      ? cityForecast.forecast
+      : [];
     return normalizeForecastPoint(
       fc.find((r) => r.isPrimaryTarget) || cityForecast?.nextForecast || null,
     );
   }, [cityForecast]);
 
   const predictionHistoryRows = useMemo(
-    () => historyRows.filter((row) => !row.isForecast && hasPredictionResult(row)),
+    () =>
+      historyRows.filter((row) => !row.isForecast && hasPredictionResult(row)),
     [historyRows],
   );
 
-  const metrics = useMemo(() => calculateMetrics(cityChartRows), [cityChartRows]);
+  const metrics = useMemo(
+    () => calculateMetrics(cityChartRows),
+    [cityChartRows],
+  );
 
   const okDistricts = useMemo(() => {
     const districts = run?.payload?.districts;
     if (!Array.isArray(districts)) return [];
     return districts.map((district) => {
-        const forecast = Array.isArray(district.forecast)
-          ? district.forecast
-          : [];
-        const targetForecast = normalizeForecastPoint(
-          forecast.find((r) => r.isPrimaryTarget) ||
-            district.nextForecast ||
-            null,
-        );
-        return { ...district, targetForecast };
-      });
+      const forecast = Array.isArray(district.forecast)
+        ? district.forecast
+        : [];
+      const targetForecast = normalizeForecastPoint(
+        forecast.find((r) => r.isPrimaryTarget) ||
+          district.nextForecast ||
+          null,
+      );
+      return { ...district, targetForecast };
+    });
   }, [run]);
 
   const horizonLabel = useMemo(() => {
@@ -438,7 +445,12 @@ export default function Predictions() {
     const targetM = run.forecastTargetMonth;
     const horizon = run.forecastHorizonMonths;
 
-    if (basisY == null || basisM == null || targetY == null || targetM == null) {
+    if (
+      basisY == null ||
+      basisM == null ||
+      targetY == null ||
+      targetM == null
+    ) {
       return null;
     }
 
@@ -742,7 +754,9 @@ export default function Predictions() {
 
                   <div>
                     <p className="text-sm text-gray-600">
-                      Predicted cases (Actual Prediction Month)
+                      {nextForecast
+                        ? `Predicted Cases (${formatYearMonth(nextForecast.year, nextForecast.month)})`
+                        : "Latest data"}
                     </p>
                     <p className="text-2xl">
                       {d.targetForecast?.predicted ?? "No sufficient data"}
@@ -754,7 +768,7 @@ export default function Predictions() {
                     <p className="capitalize">
                       {d.riskLevel === "insufficient"
                         ? "No sufficient data"
-                        : d.riskLevel ?? "—"}
+                        : (d.riskLevel ?? "—")}
                     </p>
                   </div>
 
@@ -777,9 +791,12 @@ export default function Predictions() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-semibold text-lg">Monthly Prediction History</h2>
+            <h2 className="font-semibold text-lg">
+              Monthly Prediction History
+            </h2>
             <p className="text-sm text-gray-500">
-              {selectedHistoryLabel} — monthly actual vs one-step Prophet predictions
+              {selectedHistoryLabel} — monthly actual vs one-step Prophet
+              predictions
             </p>
           </div>
 
@@ -820,7 +837,8 @@ export default function Predictions() {
               {predictionHistoryRows.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="p-3 text-sm text-gray-500">
-                    No prediction-result rows yet. Refresh the forecast to generate backtest history.
+                    No prediction-result rows yet. Refresh the forecast to
+                    generate backtest history.
                   </td>
                 </tr>
               ) : (
