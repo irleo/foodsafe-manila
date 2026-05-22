@@ -79,7 +79,8 @@ export default function ReportLogsTab() {
               </select>
             </div>
 
-            <div>
+                {/* Visibility */}
+            {/* <div>
               <div className="mb-1 flex items-center gap-4  text-xs font-medium uppercase tracking-wide text-gray-500">
                 Visibility
                 <div className="group relative">
@@ -115,7 +116,7 @@ export default function ReportLogsTab() {
                   Counted
                 </button>
               </div>
-            </div>
+            </div> */}
           </div>
         </div>
       </div>
