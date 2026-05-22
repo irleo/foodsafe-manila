@@ -1,5 +1,8 @@
 import express from "express";
 import dotenv from "dotenv";
+import cors from "cors";
+import cookieParser from "cookie-parser";
+import rateLimit from "express-rate-limit";
 
 import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/users.js";
@@ -15,14 +18,15 @@ import predictionsRouter from "./routes/predictions.js";
 
 import { connectDB } from "./config/db.js";
 import { registerPredictionCron } from "./jobs/predictionCron.js";
-import cors from "cors";
-import cookieParser from "cookie-parser";
-import rateLimit from "express-rate-limit";
 
 dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
 const allowedOriginsEnv = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
-  .map(s => s.trim())
+  .map((s) => s.trim())
   .filter(Boolean);
 
 const allowedOrigins =
@@ -30,36 +34,39 @@ const allowedOrigins =
     ? allowedOriginsEnv
     : ["http://localhost:5173", "http://localhost:5174", "http://localhost:5100"];
 
-const PORT = process.env.PORT || 5000;
+// Middleware
+app.use(express.json());
+app.use(cookieParser());
 
-const app = express();
-
-app.use(express.json()); // Middleware to parse JSON bodies
 app.use(
   cors({
     origin: (origin, cb) => {
-      console.log("CORS origin:", origin, "Allowed:", allowedOrigins);
       if (!origin) return cb(null, true);
-      if (allowedOrigins.includes(origin)) return cb(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return cb(null, true);
+      }
+
       return cb(new Error(`CORS blocked for origin: ${origin}`));
     },
     credentials: true,
   })
 );
 
-// RATE LIMIT
+// Required if deployed behind one proxy/load balancer
 app.set("trust proxy", 1);
 
+// Rate limiters
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 600, // general API 
+  max: 600,
   standardHeaders: true,
   legacyHeaders: false,
 });
 
 const authLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20, // brute-force protection
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: "Too many login attempts. Please try again later.",
@@ -67,23 +74,29 @@ const authLoginLimiter = rateLimit({
 
 const refreshLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300, // allow refresh to work reliably
+  max: 300,
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-app.use("/api", apiLimiter);
+// Limits first
 app.use("/api/auth/login", authLoginLimiter);
 app.use("/api/auth/refresh", refreshLimiter);
+app.use("/api", apiLimiter);
 
-app.use(cookieParser()); // Middleware to parse cookies
+// Health/root route
+app.get("/", (req, res) => {
+  res.json({
+    message: "Food Safe API is running",
+  });
+});
 
+// API routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/datasets", datasetRoutes);
 app.use("/api/analytics", analyticsRouter);
-
 app.use("/api/cases", casesRouter);
 app.use("/api/heatmap", heatmapRouter);
 app.use("/api/activity", activityRoutes);
@@ -91,9 +104,37 @@ app.use("/api/notifications", notificationRouter);
 app.use("/api/health", healthRouter);
 app.use("/api/predictions", predictionsRouter);
 
-connectDB();
-registerPredictionCron();
-
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    message: "Route not found",
+    path: req.originalUrl,
+  });
 });
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error(err);
+
+  res.status(err.status || 500).json({
+    message: err.message || "Server Error",
+  });
+});
+
+// Start server
+const startServer = async () => {
+  try {
+    await connectDB();
+
+    registerPredictionCron();
+
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("Failed to start server:", error);
+    process.exit(1);
+  }
+};
+
+startServer();
