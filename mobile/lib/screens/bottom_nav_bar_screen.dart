@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:foodsafe_manila/screens/alerts_screen.dart';
-import 'package:foodsafe_manila/screens/insights_screen.dart';
+import 'package:foodsafe_manila/screens/analytics_screen.dart';
 import 'package:foodsafe_manila/screens/report_history_screen.dart';
 import 'package:foodsafe_manila/screens/report_form_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../screens/home_screen.dart';
 import '../screens/map_screen.dart';
+import '../services/api_client.dart';
 import '../services/risk_alert_service.dart';
 import '../services/session.dart';
 import 'personal_info_screen.dart';
@@ -19,22 +20,65 @@ class BottomNavBarScreen extends StatefulWidget {
   State<BottomNavBarScreen> createState() => _BottomNavBarScreenState();
 }
 
-class _BottomNavBarScreenState extends State<BottomNavBarScreen> {
+class _BottomNavBarScreenState extends State<BottomNavBarScreen>
+    with WidgetsBindingObserver {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final GlobalKey<HomeScreenState> _homeKey = GlobalKey<HomeScreenState>();
+  final GlobalKey<MapScreenState> _mapKey = GlobalKey<MapScreenState>();
+  final GlobalKey<AnalyticsScreenState> _analyticsKey =
+      GlobalKey<AnalyticsScreenState>();
+  final GlobalKey<AlertsScreenState> _alertsKey = GlobalKey<AlertsScreenState>();
+
   int _selectedIndex = 0;
   final PageController _pageController = PageController();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     RiskAlertService.instance.startMonitoring();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     RiskAlertService.instance.stopMonitoring();
     _pageController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _onAppResumed();
+    }
+  }
+
+  Future<void> _onAppResumed() async {
+    final ok = await ApiClient.refreshSessionOnResume();
+    if (!mounted) return;
+    if (!ok) {
+      Navigator.pushReplacementNamed(context, '/login');
+      return;
+    }
+    _refreshCurrentTab();
+  }
+
+  void _refreshCurrentTab() {
+    switch (_selectedIndex) {
+      case 0:
+        _homeKey.currentState?.refreshData();
+        break;
+      case 1:
+        _mapKey.currentState?.refreshData();
+        break;
+      case 2:
+        _analyticsKey.currentState?.refreshData();
+        break;
+      case 3:
+        _alertsKey.currentState?.refreshData();
+        break;
+    }
   }
 
   @override
@@ -249,13 +293,14 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen> {
         controller: _pageController,
         children: <Widget>[
           HomeScreen(
+            key: _homeKey,
             onProfileTap: () {
               _scaffoldKey.currentState?.openEndDrawer();
             },
           ),
-          const MapScreen(),
-          const AnalyticsScreen(),
-          const AlertsScreen(),
+          MapScreen(key: _mapKey),
+          AnalyticsScreen(key: _analyticsKey),
+          AlertsScreen(key: _alertsKey),
         ],
         onPageChanged: (page) {
           setState(() {

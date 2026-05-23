@@ -1248,7 +1248,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
 
                       // Location
                       Text(
-                        "CURRENT DISTRICT LOCATION",
+                        "CURRENT LOCATION",
                         style: GoogleFonts.inter(
                           fontSize: 11,
                           color: Colors.grey,
@@ -1648,6 +1648,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
 
         menuStyle: MenuStyle(
           backgroundColor: WidgetStatePropertyAll(Colors.white),
+          maximumSize: const WidgetStatePropertyAll(Size(double.infinity, 280)),
           shape: WidgetStatePropertyAll(
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),

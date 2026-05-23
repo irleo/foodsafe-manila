@@ -8,10 +8,10 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.onProfileTap});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreen> createState() => HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class HomeScreenState extends State<HomeScreen> {
   final user = Session.currentUser;
   Map<String, dynamic>? dashboardData;
   bool isLoading = true;
@@ -22,7 +22,10 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadDashboard();
   }
 
+  Future<void> refreshData() => _loadDashboard();
+
   Future<void> _loadDashboard() async {
+    setState(() => isLoading = true);
     final data = await ApiService.getDashboard();
     if (!mounted) return;
     setState(() {

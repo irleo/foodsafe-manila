@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../services/api_service.dart';
 import '../services/manila_geo_service.dart';
 import '../services/risk_alert_service.dart';
@@ -9,10 +10,10 @@ class AlertsScreen extends StatefulWidget {
   const AlertsScreen({super.key});
 
   @override
-  State<AlertsScreen> createState() => _AlertsScreenState();
+  State<AlertsScreen> createState() => AlertsScreenState();
 }
 
-class _AlertsScreenState extends State<AlertsScreen> {
+class AlertsScreenState extends State<AlertsScreen> {
   int unreadCount = 0;
   RiskLevel? selectedFilter;
   bool showFilterChips = false;
@@ -46,6 +47,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
         return RiskLevel.low;
     }
   }
+
+  Future<void> refreshData() => _loadAlerts();
 
   Future<void> _loadAlerts() async {
     setState(() => isLoading = true);
@@ -145,7 +148,12 @@ class _AlertsScreenState extends State<AlertsScreen> {
         ),
       ),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 2.4,
+                color: Colors.blue,
+              ),
+            )
           : SafeArea(
             child: Stack(
               children: [
@@ -154,9 +162,31 @@ class _AlertsScreenState extends State<AlertsScreen> {
                     Expanded(
                       child: filteredAlerts.isEmpty
                           ? Center(
-                              child: Text(
-                                'No alerts available',
-                                style: GoogleFonts.inter(color: Colors.grey),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    LucideIcons.bellOff,
+                                    size: 64,
+                                    color: Colors.grey.shade300,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'No alerts available',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 18,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Notified alerts will appear here',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade400,
+                                    ),
+                                  ),
+                                ],
                               ),
                             )
                           : ListView.builder(

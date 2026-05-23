@@ -21,7 +21,7 @@ Future<void> main() async {
   }
   runApp(
     MainApp(
-      initialRoute: Session.currentUser != null ? '/dashboard' : '/login',
+      initialRoute: ApiClient.hasAuthenticatedSession ? '/dashboard' : '/login',
     ),
   );
 }

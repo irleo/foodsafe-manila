@@ -209,6 +209,41 @@ class ApiService {
     return ApiClient.decodeMap(response);
   }
 
+  /// Newest validated dataset (same scope as web `useLatestDatasetId`).
+  static Future<String?> fetchLatestValidatedDatasetId() async {
+    final response = await ApiClient.get(
+      '/datasets',
+      query: {'status': 'validated'},
+    );
+    if (response.statusCode != 200) return null;
+
+    final rows = ApiClient.decodeList(response);
+    if (rows.isEmpty) return null;
+    final id = rows.first['_id'] ?? rows.first['id'];
+    return id?.toString();
+  }
+
+  /// District/barangay heatmap — mirrors web `GET /api/heatmap/districts`.
+  static Future<Map<String, dynamic>?> fetchDistrictHeatmap({
+    required String datasetId,
+    String selectedYear = 'All',
+    String selectedMonth = 'All',
+    String selectedDisease = 'All',
+    String selectedCaseClassification = 'All',
+  }) async {
+    final query = <String, String>{'datasetId': datasetId};
+    if (selectedYear != 'All') query['year'] = selectedYear;
+    if (selectedMonth != 'All') query['month'] = selectedMonth;
+    if (selectedDisease != 'All') query['disease'] = selectedDisease;
+    if (selectedCaseClassification != 'All') {
+      query['caseClassification'] = selectedCaseClassification;
+    }
+
+    final response = await ApiClient.get('/heatmap/districts', query: query);
+    if (response.statusCode != 200) return null;
+    return ApiClient.decodeMap(response);
+  }
+
   static Future<Map<String, dynamic>?> getNearbyRisk({
     int? barangayNo,
     double? lat,

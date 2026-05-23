@@ -77,26 +77,58 @@ class ApiClient {
   }) async {
     var response = await request();
 
-    if (auth && response.statusCode == 401 && Session.refreshToken != null) {
+    if (auth &&
+        (response.statusCode == 401 || response.statusCode == 403) &&
+        Session.refreshToken != null) {
       final refreshed = await _refreshAccessToken();
       if (refreshed) {
         response = await request();
+        if (response.statusCode == 401 || response.statusCode == 403) {
+          await Session.clear();
+        }
+      } else {
+        await Session.clear();
       }
     }
 
     return response;
   }
 
-  /// Restores an expired access token on cold start when a refresh token exists.
+  /// Restores a valid access token on cold start (web parity: fresh token before data fetch).
   static Future<void> warmSession() async {
     if (Session.currentUser == null) return;
-    if (Session.accessToken != null && Session.accessToken!.isNotEmpty) return;
-    if (Session.refreshToken == null) {
-      await Session.clear();
+
+    final refreshToken = Session.refreshToken;
+    if (refreshToken == null || refreshToken.isEmpty) {
+      if (Session.accessToken == null || Session.accessToken!.isEmpty) {
+        await Session.clear();
+      }
       return;
     }
+
     final ok = await _refreshAccessToken();
     if (!ok) await Session.clear();
+  }
+
+  /// Refreshes tokens when the app returns to the foreground.
+  static Future<bool> refreshSessionOnResume() async {
+    if (Session.currentUser == null) return false;
+
+    final refreshToken = Session.refreshToken;
+    if (refreshToken == null || refreshToken.isEmpty) {
+      await Session.clear();
+      return false;
+    }
+
+    final ok = await _refreshAccessToken();
+    if (!ok) await Session.clear();
+    return ok;
+  }
+
+  static bool get hasAuthenticatedSession {
+    return Session.currentUser != null &&
+        Session.accessToken != null &&
+        Session.accessToken!.isNotEmpty;
   }
 
   static Future<bool> _refreshAccessToken() async {
