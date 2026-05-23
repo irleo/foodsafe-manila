@@ -49,6 +49,8 @@ export const createReport = async (req, res) => {
       datasetId,
       location,
       exposureDistrict, // reported at district A but suspect exposure at district B
+      exposureBarangay,
+      exposureBarangayNo,
       symptoms,
       caseCount,
       foodSource,
@@ -61,7 +63,7 @@ export const createReport = async (req, res) => {
       });
     }
 
-    const { name, district, coordinates } = location;
+    const { name, district, coordinates, barangay, barangayNo } = location;
 
     if (!name || !district) {
       return res.status(400).json({
@@ -183,14 +185,34 @@ export const createReport = async (req, res) => {
       excludeReason = "duplicate_window";
     }
 
+    const parsedBarangayNo =
+      barangayNo !== undefined && barangayNo !== null
+        ? Number(barangayNo)
+        : null;
+
+    const parsedExposureBarangayNo =
+      exposureBarangayNo !== undefined && exposureBarangayNo !== null
+        ? Number(exposureBarangayNo)
+        : null;
+
     const payload = {
       datasetId: datasetId || null,
       location: {
         name: String(name).trim(),
         district: reporterDistrictKey,
+        barangay: barangay ? String(barangay).trim() : null,
+        barangayNo:
+          Number.isFinite(parsedBarangayNo) && parsedBarangayNo >= 1
+            ? parsedBarangayNo
+            : null,
         coordinates: { lat, lng },
       },
       exposureDistrict: exposureDistrictKey, // store separately
+      exposureBarangay: exposureBarangay ? String(exposureBarangay).trim() : null,
+      exposureBarangayNo:
+        Number.isFinite(parsedExposureBarangayNo) && parsedExposureBarangayNo >= 1
+          ? parsedExposureBarangayNo
+          : null,
       symptoms: normalizedSymptoms,
       caseCount: clampedCaseCount,
       foodSource: foodSource ? String(foodSource).trim() : null,
@@ -243,9 +265,74 @@ export const createReport = async (req, res) => {
   }
 };
 
+export const getUserReports = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (req.user?.accountType === "citizen" && String(req.user.id) !== String(userId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const reports = await Report.find({ reportedBy: userId }).sort({ reportedAt: -1 });
+
+    const formattedReports = reports.map((report) => {
+      const obj = report.toObject({ getters: true, versionKey: false });
+      const loc = obj.location || {};
+      const reportLocation = loc.name || loc.district || "Unknown";
+      const exposureSite =
+        obj.exposureDistrict || obj.exposureBarangay || loc.name || "Unknown";
+      const symptomsValue = obj.symptoms;
+      const symptomsString = Array.isArray(symptomsValue)
+        ? symptomsValue.join(", ")
+        : (symptomsValue ?? "");
+
+      return {
+        ...obj,
+        report_location: reportLocation,
+        food_location: exposureSite,
+        food_source: obj.foodSource ?? "",
+        symptoms: symptomsString,
+        reported_at: obj.reportedAt
+          ? obj.reportedAt.toISOString()
+          : obj.createdAt?.toISOString(),
+      };
+    });
+
+    return res.json(formattedReports);
+  } catch (error) {
+    console.error("Error fetching user reports:", error);
+    return res.status(500).json({ message: "Failed to load reports" });
+  }
+};
+
+export const getLastUserReport = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (req.user?.accountType === "citizen" && String(req.user.id) !== String(userId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const latestReport = await Report.findOne({ reportedBy: userId }).sort({
+      reportedAt: -1,
+    });
+
+    return res.json({
+      lastReportAt: latestReport ? latestReport.reportedAt : null,
+    });
+  } catch (error) {
+    console.error("Error fetching last report:", error);
+    return res.status(500).json({ message: "Failed to load last report" });
+  }
+};
+
 export const getReports = async (req, res) => {
   if (process.env.NODE_ENV !== "production") {
     console.log("HIT getReports", req.method, req.originalUrl);
+  }
+
+  if (req.user?.accountType === "citizen") {
+    return res.status(403).json({ message: "Access denied" });
   }
 
   try {

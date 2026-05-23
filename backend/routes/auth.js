@@ -6,6 +6,12 @@ import {
   refreshToken, 
   requestAccess,
 } from '../controllers/authController.js';
+import {
+  registerCitizen,
+  checkPhoneExists,
+  resetCitizenPassword,
+  refreshCitizenToken,
+} from '../controllers/citizenAuthController.js';
 
 const requestAccessLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -20,5 +26,11 @@ router.post('/login', login);
 router.post('/logout', logout);
 router.get('/refresh', refreshToken);
 router.post("/request-access", requestAccessLimiter, requestAccess);
+
+// Citizen mobile auth (same /api/auth prefix as web)
+router.post('/register', registerCitizen);
+router.get('/user/exists', checkPhoneExists);
+router.post('/reset-password', resetCitizenPassword);
+router.post('/mobile/refresh', refreshCitizenToken);
 
 export default router;

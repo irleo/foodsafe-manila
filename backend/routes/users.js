@@ -7,6 +7,7 @@ import {
   deleteUser,
   getProfile,
 } from "../controllers/userController.js";
+import { updateCitizenProfile } from "../controllers/citizenUserController.js";
 
 const router = express.Router();
 
@@ -35,5 +36,8 @@ router.delete("/:id", verifyToken, verifyRole("admin"), deleteUser);
 
 // Logged-in user's profile
 router.get("/me", verifyToken, getProfile);
+
+// Citizen mobile profile update
+router.put("/:id", verifyToken, updateCitizenProfile);
 
 export default router;

@@ -127,6 +127,12 @@ export const requestAccess = async (req, res) => {
 
 // POST /api/auth/login
 export const login = async (req, res) => {
+  // Mobile citizen login uses phone; admin web login uses email.
+  if (req.body?.phone) {
+    const { loginCitizen } = await import("./citizenAuthController.js");
+    return loginCitizen(req, res);
+  }
+
   const { email, password } = req.body;
   const isProd = process.env.NODE_ENV === "production";
 

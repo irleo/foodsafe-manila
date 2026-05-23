@@ -15,6 +15,7 @@ import activityRoutes from "./routes/activity.js";
 import notificationRouter from "./routes/notifications.js";
 import healthRouter from "./routes/health.js";
 import predictionsRouter from "./routes/predictions.js";
+import mobileRouter from "./routes/mobile.js";
 
 import { connectDB } from "./config/db.js";
 import { registerPredictionCron } from "./jobs/predictionCron.js";
@@ -32,7 +33,12 @@ const allowedOriginsEnv = (process.env.ALLOWED_ORIGINS || "")
 const allowedOrigins =
   allowedOriginsEnv.length > 0
     ? allowedOriginsEnv
-    : ["http://localhost:5173", "http://localhost:5174", "http://localhost:5100"];
+    : [
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5100",
+        "http://localhost:3000",
+      ];
 
 // Middleware
 app.use(express.json());
@@ -103,6 +109,7 @@ app.use("/api/activity", activityRoutes);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/health", healthRouter);
 app.use("/api/predictions", predictionsRouter);
+app.use("/api", mobileRouter);
 
 // 404 handler
 app.use((req, res) => {
