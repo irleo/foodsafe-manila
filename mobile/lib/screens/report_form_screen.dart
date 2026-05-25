@@ -10,6 +10,7 @@ import '../services/api_client.dart';
 import '../services/location_service.dart';
 import '../services/manila_geo_service.dart';
 import '../services/session.dart';
+import '../widgets/app_loading.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 
@@ -1459,7 +1460,8 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                     ? const SizedBox(
                         width: 18,
                         height: 18,
-                        child: CircularProgressIndicator(
+                        child: AppLoadingIndicator(
+                          size: 18,
                           strokeWidth: 2,
                           color: Colors.white,
                         ),

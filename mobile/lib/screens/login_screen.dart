@@ -4,6 +4,7 @@ import '../widgets/snackbar_widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_service.dart';
 import '../services/session.dart';
+import '../widgets/app_loading.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -225,7 +226,8 @@ class _LogInScreenState extends State<LoginScreen> {
                                     ? const SizedBox(
                                         width: 20,
                                         height: 20,
-                                        child: CircularProgressIndicator(
+                                        child: AppLoadingIndicator(
+                                          size: 20,
                                           strokeWidth: 2,
                                           color: Colors.white,
                                         ),

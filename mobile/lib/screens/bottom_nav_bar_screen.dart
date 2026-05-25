@@ -297,6 +297,8 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
             onProfileTap: () {
               _scaffoldKey.currentState?.openEndDrawer();
             },
+            onNavigateToAlerts: () => _onTappedBar(3),
+            onNavigateToMap: () => _onTappedBar(1),
           ),
           MapScreen(key: _mapKey),
           AnalyticsScreen(key: _analyticsKey),

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:foodsafe_manila/widgets/snackbar_widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_service.dart';
+import '../widgets/app_loading.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -406,7 +407,8 @@ class _SignupScreenState extends State<SignupScreen> {
                 ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(
+                    child: AppLoadingIndicator(
+                      size: 20,
                       strokeWidth: 2,
                       color: Colors.white,
                     ),
@@ -530,7 +532,8 @@ class _SignupScreenState extends State<SignupScreen> {
                     ? const SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(
+                        child: AppLoadingIndicator(
+                          size: 20,
                           strokeWidth: 2,
                           color: Colors.white,
                         ),
@@ -686,7 +689,8 @@ class _SignupScreenState extends State<SignupScreen> {
                     ? const SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(
+                        child: AppLoadingIndicator(
+                          size: 20,
                           strokeWidth: 2,
                           color: Colors.white,
                         ),

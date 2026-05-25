@@ -6,6 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../services/api_service.dart';
 import '../services/otp_service.dart';
+import '../widgets/app_loading.dart';
 import '../widgets/snackbar_widgets.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -361,7 +362,8 @@ class _ForgotScreenState extends State<ForgotPasswordScreen> {
                 ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(
+                    child: AppLoadingIndicator(
+                      size: 20,
                       strokeWidth: 2,
                       color: Colors.white,
                     ),
@@ -534,7 +536,8 @@ class _ForgotScreenState extends State<ForgotPasswordScreen> {
                     ? const SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(
+                        child: AppLoadingIndicator(
+                          size: 20,
                           strokeWidth: 2,
                           color: Colors.white,
                         ),
@@ -643,7 +646,8 @@ class _ForgotScreenState extends State<ForgotPasswordScreen> {
                 ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(
+                    child: AppLoadingIndicator(
+                      size: 20,
                       strokeWidth: 2,
                       color: Colors.white,
                     ),

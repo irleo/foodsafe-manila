@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Dropdown with a fixed maximum menu height so long lists scroll instead of
 /// covering the full viewport.
@@ -55,7 +56,7 @@ class ConstrainedDropdown extends StatelessWidget {
             dropdownColor: Colors.white,
             menuMaxHeight: menuMaxHeight,
             menuWidth: 120,
-            icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+            icon: Icon(LucideIcons.chevronDown, size: 16),
             style: GoogleFonts.inter(fontSize: 12, color: Colors.black87),
 
             // ✅ THIS controls the selected value display (button)

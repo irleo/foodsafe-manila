@@ -10,6 +10,7 @@ import 'dart:convert';
 import '../services/api_service.dart';
 import '../services/manila_geo_service.dart';
 import '../utils/heatmap_case_builders.dart';
+import '../widgets/app_loading.dart';
 import '../widgets/constrained_dropdown.dart';
 
 class MapScreen extends StatefulWidget {
@@ -682,18 +683,7 @@ class MapScreenState extends State<MapScreen> {
                     ],
                   ),
                   if (isLoading)
-                    Container(
-                      color: Colors.white.withValues(alpha: 0.6),
-                      child: Center(
-                        child: Text(
-                          'Loading heatmap…',
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                    ),
+                    const AppLoadingOverlay(message: 'Loading heatmap…'),
                   if (errorMsg != null)
                     Container(
                       width: double.infinity,

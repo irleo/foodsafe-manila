@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../services/api_service.dart';
 import '../services/session.dart';
+import '../widgets/app_loading.dart';
 
 class ReportHistoryScreen extends StatefulWidget {
   const ReportHistoryScreen({super.key});
@@ -289,12 +290,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
               // SCROLLABLE AREA
               Expanded(
                 child: _isLoading
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                          strokeWidth: 4,
-                          color: Colors.blue,
-                        ),
-                      )
+                    ? const AppLoadingCenter(message: 'Loading reports…')
                     : _reports.isEmpty
                     ? Center(
                         child: Column(

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../services/api_service.dart';
-import '../services/manila_geo_service.dart';
+import '../services/alerts_repository.dart';
 import '../services/risk_alert_service.dart';
 import '../widgets/alerts_widgets.dart';
+import '../widgets/app_loading.dart';
 
 class AlertsScreen extends StatefulWidget {
   const AlertsScreen({super.key});
@@ -16,8 +16,8 @@ class AlertsScreen extends StatefulWidget {
 class AlertsScreenState extends State<AlertsScreen> {
   int unreadCount = 0;
   RiskLevel? selectedFilter;
-  bool showFilterChips = false;
   bool isLoading = true;
+  String? errorMessage;
   List<AlertItem> alerts = [];
 
   @override
@@ -37,77 +37,31 @@ class AlertsScreenState extends State<AlertsScreen> {
     _loadAlerts();
   }
 
-  RiskLevel _levelFromString(String? level) {
-    switch (level) {
-      case 'high':
-        return RiskLevel.high;
-      case 'moderate':
-        return RiskLevel.moderate;
-      default:
-        return RiskLevel.low;
-    }
-  }
-
   Future<void> refreshData() => _loadAlerts();
 
   Future<void> _loadAlerts() async {
-    setState(() => isLoading = true);
-    final heatmap = await ApiService.getRiskHeatmap(months: '6');
-    final areas = (heatmap?['areas'] as List<dynamic>? ?? [])
-        .cast<Map<String, dynamic>>();
-
-    final highAreas = areas
-        .where((a) => a['riskLevel'] == 'high')
-        .toList()
-      ..sort(
-        (a, b) => ((b['riskScore'] as num?) ?? 0)
-            .compareTo((a['riskScore'] as num?) ?? 0),
-      );
-
-    final built = highAreas.take(12).map((area) {
-      final district = area['district']?.toString() ?? '';
-      final barangay = area['barangay']?.toString() ?? '';
-      final barangayNo = (area['barangayNo'] as num?)?.toInt() ?? 0;
-      final location = ManilaGeoService.formatLocation(
-        district: district,
-        locality: barangay,
-        barangayNo: barangayNo,
-      );
-
-      return AlertItem(
-        title: 'Area Risk Alert',
-        risk: _levelFromString(area['riskLevel']?.toString()),
-        message:
-            'Elevated foodborne illness risk detected. Official: ${area['officialCases'] ?? 0}, Suspected: ${area['suspectedCases'] ?? 0}.',
-        location: location,
-        timeAgo: 'Live',
-        cases: '${area['totalCases'] ?? 0} total cases',
-        distance: 'Score ${area['riskScore'] ?? 0}',
-      );
-    }).toList();
-
-    final live = RiskAlertService.instance.latestMessage.value;
-    if (live != null) {
-      built.insert(
-        0,
-        AlertItem(
-          title: 'You are in a high-risk area',
-          risk: RiskLevel.high,
-          message: live,
-          location: 'Current GPS location',
-          timeAgo: 'Now',
-          cases: 'Active alert',
-          distance: 'Immediate',
-        ),
-      );
-    }
-
-    if (!mounted) return;
     setState(() {
-      alerts = built;
-      unreadCount = built.length;
-      isLoading = false;
+      isLoading = true;
+      errorMessage = null;
     });
+
+    try {
+      final built = await AlertsRepository.instance.fetchAlerts();
+      if (!mounted) return;
+      setState(() {
+        alerts = built;
+        unreadCount = built.length;
+        isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        alerts = [];
+        unreadCount = 0;
+        isLoading = false;
+        errorMessage = 'Failed to load alerts. Pull to refresh.';
+      });
+    }
   }
 
   List<AlertItem> get filteredAlerts {
@@ -130,7 +84,7 @@ class AlertsScreenState extends State<AlertsScreen> {
           ),
         ),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(36), 
+          preferredSize: const Size.fromHeight(36),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Row(
@@ -148,92 +102,139 @@ class AlertsScreenState extends State<AlertsScreen> {
         ),
       ),
       body: isLoading
-          ? const Center(
-              child: CircularProgressIndicator(
-                strokeWidth: 2.4,
-                color: Colors.blue,
-              ),
-            )
-          : SafeArea(
-            child: Stack(
-              children: [
-                Column(
-                  children: [
-                    Expanded(
-                      child: filteredAlerts.isEmpty
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    LucideIcons.bellOff,
-                                    size: 64,
-                                    color: Colors.grey.shade300,
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    'No alerts available',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 18,
-                                      color: Colors.grey.shade500,
+          ? const AppLoadingCenter(message: 'Loading alerts…')
+          : errorMessage != null
+              ? _buildErrorState()
+              : SafeArea(
+                  child: Stack(
+                    children: [
+                      Column(
+                        children: [
+                          Expanded(
+                            child: filteredAlerts.isEmpty
+                                ? _buildEmptyState()
+                                : RefreshIndicator(
+                                    onRefresh: _loadAlerts,
+                                    color: AppLoadingIndicator.primaryColor,
+                                    child: ListView.builder(
+                                      physics:
+                                          const AlwaysScrollableScrollPhysics(),
+                                      padding: const EdgeInsets.fromLTRB(
+                                        16,
+                                        16,
+                                        16,
+                                        80,
+                                      ),
+                                      itemCount: filteredAlerts.length,
+                                      itemBuilder: (context, index) {
+                                        return Padding(
+                                          padding:
+                                              const EdgeInsets.only(bottom: 16),
+                                          child: AlertCard(
+                                            item: filteredAlerts[index],
+                                          ),
+                                        );
+                                      },
                                     ),
                                   ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Notified alerts will appear here',
+                          ),
+                        ],
+                      ),
+                      if (unreadCount > 0)
+                        Positioned(
+                          left: 16,
+                          right: 16,
+                          bottom: 36,
+                          child: Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 430),
+                              child: SizedBox(
+                                height: 48,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF2563EB),
+                                    foregroundColor: Colors.white,
+                                    shape: const StadiumBorder(),
+                                    elevation: 6,
+                                  ),
+                                  onPressed: () => setState(() => unreadCount = 0),
+                                  child: Text(
+                                    "Mark All as Read ($unreadCount)",
                                     style: GoogleFonts.inter(
                                       fontSize: 14,
-                                      color: Colors.grey.shade400,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                ],
+                                ),
                               ),
-                            )
-                          : ListView.builder(
-                              padding: const EdgeInsets.all(16),
-                              itemCount: filteredAlerts.length,
-                              itemBuilder: (context, index) {
-                                return AlertCard(item: filteredAlerts[index]);
-                              },
-                            ),
-                    ),
-                  ],
-                ),
-                if(unreadCount > 0)
-                Positioned(
-                  left: 16,
-                  right: 16,
-                  bottom: 36,
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 430),
-                      child: SizedBox(
-                        height: 48,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB),
-                            foregroundColor: Colors.white,
-                            shape: const StadiumBorder(),
-                            elevation: 6,
-                          ),
-                          onPressed: () => setState(() => unreadCount = 0),
-                          child: Text(
-                            unreadCount == 0
-                                ? "All Read"
-                                : "Mark All as Read ($unreadCount)",
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-                      ),
-                    ),
+                    ],
                   ),
                 ),
-              ],
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            LucideIcons.bellOff,
+            size: 64,
+            color: Colors.grey.shade300,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No alerts available',
+            style: GoogleFonts.inter(
+              fontSize: 18,
+              color: Colors.grey.shade500,
             ),
-          )
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Risk alerts will appear here when areas are elevated',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: Colors.grey.shade400,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(LucideIcons.circleAlert, size: 48, color: Colors.grey.shade400),
+            const SizedBox(height: 12),
+            Text(
+              errorMessage!,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: _loadAlerts,
+              child: Text(
+                'Retry',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w600,
+                  color: AppLoadingIndicator.primaryColor,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -248,6 +249,7 @@ class AlertsScreenState extends State<AlertsScreen> {
         ),
       ),
       selected: selected,
+      checkmarkColor: Colors.white,
       selectedColor: const Color(0xFF2563EB),
       backgroundColor: const Color(0xFFF3F4F6),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),

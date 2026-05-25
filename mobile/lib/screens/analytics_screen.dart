@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../services/api_service.dart';
 import '../services/manila_geo_service.dart';
+import '../widgets/app_loading.dart';
 import '../widgets/constrained_dropdown.dart';
 
 class AnalyticsScreen extends StatefulWidget {
@@ -475,6 +476,10 @@ class AnalyticsScreenState extends State<AnalyticsScreen> {
         ? const Color(0xFF059669) // green
         : const Color(0xFFDC2626); // red
 
+    IconData growthIcon = growthValue >= 0
+        ? Icons.trending_up
+        : Icons.trending_down;
+
     return Column(
       children: [
         /// KPI CARDS
@@ -505,7 +510,7 @@ class AnalyticsScreenState extends State<AnalyticsScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.trending_down, size: 14, color: growthColor),
+                        Icon(growthIcon, size: 14, color: growthColor),
                         SizedBox(width: 4),
                         Text(
                           growthText,
@@ -574,18 +579,9 @@ class AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Widget chartLoading() {
-    return SizedBox(
+    return const SizedBox(
       height: 180,
-      child: Center(
-        child: SizedBox(
-          width: 22,
-          height: 22,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.4,
-            color: Colors.blue,
-          ),
-        ),
-      ),
+      child: Center(child: AppLoadingIndicator(size: 22)),
     );
   }
 
@@ -1676,18 +1672,9 @@ class AnalyticsScreenState extends State<AnalyticsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (isOverviewLoading)
-                  SizedBox(
+                  const SizedBox(
                     height: 130,
-                    child: Center(
-                      child: SizedBox(
-                        width: 15,
-                        height: 15,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.4,
-                          color: Colors.blue,
-                        ),
-                      ),
-                    ),
+                    child: Center(child: AppLoadingIndicator(size: 22)),
                   )
                 else if (!isOverviewLoading) ...[
                   Container(

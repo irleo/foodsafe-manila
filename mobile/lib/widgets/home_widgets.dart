@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:foodsafe_manila/screens/alerts_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../services/location_service.dart';
+import '../widgets/alerts_widgets.dart';
+import 'app_loading.dart';
 
 class Header extends StatefulWidget {
   final VoidCallback onTap;
@@ -93,8 +95,8 @@ class _HeaderState extends State<Header> {
                           color: const Color(0xFFF3F4F6).withValues(alpha: .15),
                           borderRadius: BorderRadius.circular(999),
                         ),
-                        child: const Icon(
-                          Icons.person,
+                        child: Icon(
+                          LucideIcons.user,
                           color: Colors.white,
                         ),
                       ),
@@ -133,7 +135,7 @@ class _HeaderState extends State<Header> {
 
                 Row(
                   children: [
-                    const Icon(Icons.location_on_outlined,
+                    Icon(LucideIcons.mapPin,
                         size: 16, color: Colors.white),
                     const SizedBox(width: 6),
                     Text(
@@ -166,11 +168,13 @@ class _HeaderState extends State<Header> {
 class DashboardSummaryCard extends StatelessWidget {
   final Map<String, dynamic>? data;
   final bool isLoading;
+  final String? error;
 
   const DashboardSummaryCard({
     super.key,
     this.data,
     this.isLoading = false,
+    this.error,
   });
 
   String _getCurrentYear() {
@@ -190,19 +194,30 @@ class DashboardSummaryCard extends StatelessWidget {
     final dateRange = _getDateRange();
 
     if (isLoading) {
-      return const _Card(
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
+      return const _Card(child: AppLoadingCard());
+    }
+
+    if (error != null) {
+      return _Card(
+        child: Text(
+          error!,
+          style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF6B7280)),
         ),
       );
     }
 
     final totalCases = data?['totalCases']?.toString() ?? '0';
     final topDisease = data?['topDisease']?.toString() ?? 'N/A';
-    final highRiskDistricts = data?['highRiskDistricts']?.toString() ?? '0';
+    final topDistrict = data?['topDistrict']?.toString() ?? 'N/A';
+    final growthRaw = data?['growth'];
+    final growthValue = double.tryParse(growthRaw?.toString() ?? '') ?? 0;
+    final growthText =
+        '${growthValue >= 0 ? '+' : ''}${growthValue.toStringAsFixed(1)}%';
+    final growthColor = growthValue >= 0
+        ? const Color(0xFF059669)
+        : const Color(0xFFDC2626);
+    final growthIcon =
+        growthValue >= 0 ? Icons.trending_up : Icons.trending_down;
 
     return _Card(
       child: Column(
@@ -246,12 +261,15 @@ class DashboardSummaryCard extends StatelessWidget {
                   child: _StatTile(
                     bg: const Color(0xFFFFF1F2),
                     border: const Color(0xFFFECACA),
-                    icon: Icons.monitor_heart_outlined,
+                    icon: LucideIcons.activity,
                     iconColor: const Color(0xFFDC2626),
                     label: "Total Cases",
                     value: totalCases,
                     sub: dateRange,
                     valueColor: const Color(0xFFB91C1C),
+                    growthText: growthText,
+                    growthColor: growthColor,
+                    growthIcon: growthIcon,
                   ),
                 ),
               ],
@@ -269,11 +287,10 @@ class DashboardSummaryCard extends StatelessWidget {
                   child: _StatTile(
                     bg: const Color(0xFFFAF5FF),
                     border: const Color(0xFFE9D5FF),
-                    icon: Icons.groups_2_outlined,
+                    icon: LucideIcons.stethoscope,
                     iconColor: const Color(0xFF7C3AED),
-                    label: "Most Common",
+                    label: "Top Disease",
                     value: topDisease,
-                    sub: "Illness Type",
                     valueColor: const Color(0xFF6D28D9),
                     isSmallValue: true,
                   ),
@@ -281,14 +298,14 @@ class DashboardSummaryCard extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: _StatTile(
-                    bg: const Color(0xFFFFF7ED),
-                    border: const Color(0xFFFED7AA),
-                    icon: Icons.warning_amber_rounded,
-                    iconColor: const Color(0xFFD97706),
-                    label: "High Risk",
-                    value: highRiskDistricts,
-                    sub: "Districts",
-                    valueColor: const Color(0xFFB45309),
+                    bg: const Color(0xFFEFF6FF),
+                    border: const Color(0xFFBFDBFE),
+                    icon: LucideIcons.mapPin,
+                    iconColor: const Color(0xFF2563EB),
+                    label: "Top District",
+                    value: topDistrict,
+                    valueColor: const Color(0xFF1D4ED8),
+                    isSmallValue: true,
                   ),
                 ),
               ],
@@ -307,9 +324,12 @@ class _StatTile extends StatelessWidget {
   final Color iconColor;
   final String label;
   final String value;
-  final String sub;
+  final String? sub;
   final Color valueColor;
   final bool isSmallValue;
+  final String? growthText;
+  final Color? growthColor;
+  final IconData? growthIcon;
 
   const _StatTile({
     required this.bg,
@@ -318,51 +338,215 @@ class _StatTile extends StatelessWidget {
     required this.iconColor,
     required this.label,
     required this.value,
-    required this.sub,
+    this.sub,
     required this.valueColor,
     this.isSmallValue = false,
+    this.growthText,
+    this.growthColor,
+    this.growthIcon,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: 100,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, size: 16, color: iconColor),
-              const SizedBox(width: 6),
+              Row(
+                children: [
+                  Icon(icon, size: 16, color: iconColor),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                value,
+                style: GoogleFonts.inter(
+                  fontSize: isSmallValue ? 13 : 16,
+                  fontWeight: FontWeight.w800,
+                  color: valueColor,
+                  height: 1.3
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
               Text(
                 label,
                 style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w500,
                   color: valueColor,
                 ),
               ),
+              if(sub != null)
+              Text(
+                sub!,
+                style: GoogleFonts.inter(fontSize: 8, color: valueColor.withValues(alpha: 0.85)),
+              )
+              else
+                SizedBox.shrink()
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: GoogleFonts.inter(
-              fontSize: isSmallValue ? 13 : 22,
-              color: valueColor,
+          if (growthText != null && growthColor != null)
+            Align(
+              alignment: Alignment.topRight,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Color.lerp(growthColor!, Colors.white, 0.85),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(growthIcon ?? Icons.trending_up,
+                        size: 14, color: growthColor),
+                    const SizedBox(width: 4),
+                    Text(
+                      growthText!,
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: growthColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+        ],
+      )
+    );
+  }
+}
+
+/* ---------------- Map CTA ---------------- */
+
+class YourAreaRiskCard extends StatelessWidget {
+  final Map<String, dynamic>? data;
+  final bool isLoading;
+  final String? error;
+
+  const YourAreaRiskCard({
+    super.key,
+    this.data,
+    this.isLoading = false,
+    this.error,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) return const _Card(child: AppLoadingCard());
+
+    if (error != null) {
+      return _Card(
+        child: Row(
+          children: [
+            const Icon(LucideIcons.mapPin, color: Color(0xFF6B7280), size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                error!,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: const Color(0xFF6B7280),
+                ),
+              ),
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          ],
+        ),
+      );
+    }
+
+    final area = data?['area'] as Map<String, dynamic>?;
+    final isHigh = data?['isHighRisk'] == true;
+    final level = area?['riskLevel']?.toString() ?? 'low';
+    final score = area?['riskScore'] ?? 0;
+    final total = area?['totalCases'] ?? 0;
+    final location = LocationService.cachedAddress ?? 'Your location';
+
+    late final Color accent;
+    late final Color bg;
+    late final String label;
+
+    if (isHigh || level == 'high') {
+      accent = const Color(0xFFDC2626);
+      bg = const Color(0xFFFEE2E2);
+      label = 'High Risk Area';
+    } else if (level == 'moderate') {
+      accent = const Color(0xFFD97706);
+      bg = const Color(0xFFFEF3C7);
+      label = 'Moderate Risk Area';
+    } else {
+      accent = const Color(0xFF16A34A);
+      bg = const Color(0xFFDCFCE7);
+      label = 'Low Risk Area';
+    }
+
+    return _Card(
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+            child: Icon(
+              isHigh ? LucideIcons.triangleAlert : LucideIcons.shield,
+              color: accent,
+            ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            sub,
-            style: GoogleFonts.inter(fontSize: 10, color: valueColor.withValues(alpha: 0.85)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Your Area',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: const Color(0xFF9CA3AF),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: accent,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  location,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: const Color(0xFF6B7280),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$total cases · Risk score $score',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: const Color(0xFF9CA3AF),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -370,15 +554,25 @@ class _StatTile extends StatelessWidget {
   }
 }
 
-/* ---------------- Map CTA ---------------- */
-
 class MapCtaCard extends StatelessWidget {
-  const MapCtaCard({super.key});
+  final Map<String, int> riskStats;
+  final bool isLoading;
+  final VoidCallback? onTap;
+
+  const MapCtaCard({
+    super.key,
+    this.riskStats = const {},
+    this.isLoading = false,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final high = (riskStats['High'] ?? 0) + (riskStats['Critical'] ?? 0);
+    final moderate = riskStats['Medium'] ?? 0;
+
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, '/map'),
+      onTap: onTap,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(16),
@@ -402,7 +596,7 @@ class MapCtaCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                _IconBubble(icon: Icons.navigation_rounded),
+                _IconBubble(icon: LucideIcons.navigation),
                 SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -427,15 +621,23 @@ class MapCtaCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                Icon(Icons.location_on_outlined, color: Colors.white),
+                Icon(LucideIcons.mapPin, color: Colors.white),
               ],
             ),
             const SizedBox(height: 12),
             Row(
-              children: const [
-                _DotLabel(color: Color(0xFFF87171), text: "3 High Risk Zones"),
-                SizedBox(width: 14),
-                _DotLabel(color: Color(0xFFFACC15), text: "5 Moderate"),
+              children: [
+                _DotLabel(
+                  color: const Color(0xFFF87171),
+                  text: isLoading
+                      ? 'Loading zones…'
+                      : '$high High Risk Zones',
+                ),
+                const SizedBox(width: 14),
+                _DotLabel(
+                  color: const Color(0xFFFACC15),
+                  text: isLoading ? '' : '$moderate Moderate',
+                ),
               ],
             ),
           ],
@@ -494,83 +696,178 @@ class _DotLabel extends StatelessWidget {
 /* ---------------- Current Risk ---------------- */
 
 class CurrentRiskCard extends StatelessWidget {
-  final Map<String, dynamic>? data;
+  final Map<String, int> riskStats;
   final bool isLoading;
+  final String? error;
 
   const CurrentRiskCard({
     super.key,
-    this.data,
+    this.riskStats = const {},
     this.isLoading = false,
+    this.error,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return const _Card(
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.all(20),
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
+    if (isLoading) return const _Card(child: AppLoadingCard());
+
+    if (error != null) {
+      return _Card(
+        child: Text(
+          error!,
+          style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF6B7280)),
         ),
       );
     }
 
-    final high = data?['highRiskDistricts']?.toString() ?? '0';
-    final moderate = data?['moderateRiskDistricts']?.toString() ?? '0';
-    final low = data?['lowRiskDistricts']?.toString() ?? '0';
-    final suspected = data?['suspectedReports']?.toString() ?? '0';
+    final low = '${riskStats['Low'] ?? 0}';
+    final medium = '${riskStats['Medium'] ?? 0}';
+    final high = '${riskStats['High'] ?? 0}';
+    final critical = '${riskStats['Critical'] ?? 0}';
 
     return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  "Current Risk Status",
-                  style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800),
-                ),
-              ),
-              Text(
-                '$suspected suspected',
-                style: GoogleFonts.inter(fontSize: 11, color: Colors.grey),
-              ),
-            ],
+          Text(
+            'Current Risk Status',
+            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'District-level risk from validated case data',
+            style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF9CA3AF)),
           ),
           const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
                 child: _RiskMini(
-                  icon: Icons.warning_amber_rounded,
-                  bg: Color(0xFFFEE2E2),
-                  fg: Color(0xFFDC2626),
-                  value: high,
-                  label: "High Risk",
-                ),
-              ),
-              Expanded(
-                child: _RiskMini(
-                  icon: Icons.trending_up_rounded,
-                  bg: Color(0xFFFEF3C7),
-                  fg: Color(0xFFD97706),
-                  value: moderate,
-                  label: "Moderate",
-                ),
-              ),
-              Expanded(
-                child: _RiskMini(
-                  icon: Icons.shield_outlined,
-                  bg: Color(0xFFDCFCE7),
-                  fg: Color(0xFF16A34A),
+                  icon: LucideIcons.shield,
+                  bg: const Color(0xFFDCFCE7),
+                  fg: const Color(0xFF16A34A),
                   value: low,
-                  label: "Low Risk",
+                  label: 'Low',
+                ),
+              ),
+              Expanded(
+                child: _RiskMini(
+                  icon: LucideIcons.activity,
+                  bg: const Color(0xFFFEF9C3),
+                  fg: const Color(0xFFCA8A04),
+                  value: medium,
+                  label: 'Medium',
+                ),
+              ),
+              Expanded(
+                child: _RiskMini(
+                  icon: LucideIcons.trendingUp,
+                  bg: const Color(0xFFFFEDD5),
+                  fg: const Color(0xFFF97316),
+                  value: high,
+                  label: 'High',
+                ),
+              ),
+              Expanded(
+                child: _RiskMini(
+                  icon: LucideIcons.triangleAlert,
+                  bg: const Color(0xFFFEE2E2),
+                  fg: const Color(0xFFDC2626),
+                  value: critical,
+                  label: 'Critical',
                 ),
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class TopDistrictsSection extends StatelessWidget {
+  final List<Map<String, dynamic>> districts;
+  final bool isLoading;
+  final String? error;
+
+  const TopDistrictsSection({
+    super.key,
+    this.districts = const [],
+    this.isLoading = false,
+    this.error,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Top Affected Districts',
+            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 12),
+          if (isLoading)
+            const AppLoadingCard(padding: EdgeInsets.all(16))
+          else if (error != null)
+            Text(
+              error!,
+              style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF6B7280)),
+            )
+          else if (districts.isEmpty)
+            Text(
+              'No district data available.',
+              style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF9CA3AF)),
+            )
+          else
+            ...districts.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final d = entry.value;
+              final name = d['name']?.toString() ?? '';
+              final cases = d['cases']?.toString() ?? '0';
+              return Padding(
+                padding: EdgeInsets.only(bottom: idx < districts.length - 1 ? 8 : 0),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${idx + 1}',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF2563EB),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        name,
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '$cases cases',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: const Color(0xFF6B7280),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
         ],
       ),
     );
@@ -624,46 +921,19 @@ class _RiskMini extends StatelessWidget {
 /* ---------------- Nearby Alerts ---------------- */
 
 class NearbyAlertsSection extends StatelessWidget {
-  const NearbyAlertsSection({super.key});
+  final List<AlertItem> alerts;
+  final bool isLoading;
+  final VoidCallback? onSeeAll;
+
+  const NearbyAlertsSection({
+    super.key,
+    this.alerts = const [],
+    this.isLoading = false,
+    this.onSeeAll,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final items = const [
-      _NearbyAlertItem(
-        title: "Salmonella",
-        risk: "High Risk",
-        riskBg: Color(0xFFFEE2E2),
-        riskFg: Color(0xFFB91C1C),
-        iconBg: Color(0xFFFEE2E2),
-        iconFg: Color(0xFFDC2626),
-        meta: "0.5 km away",
-        cases: "45 cases",
-        time: "2 hours ago",
-      ),
-      _NearbyAlertItem(
-        title: "Food Poisoning",
-        risk: "Moderate Risk",
-        riskBg: Color(0xFFFEF3C7),
-        riskFg: Color(0xFF92400E),
-        iconBg: Color(0xFFFEF3C7),
-        iconFg: Color(0xFFD97706),
-        meta: "1.2 km away",
-        cases: "12 cases",
-        time: "5 hours ago",
-      ),
-      _NearbyAlertItem(
-        title: "E. Coli",
-        risk: "Low Risk",
-        riskBg: Color(0xFFDCFCE7),
-        riskFg: Color(0xFF166534),
-        iconBg: Color(0xFFDCFCE7),
-        iconFg: Color(0xFF16A34A),
-        meta: "2.8 km away",
-        cases: "3 cases",
-        time: "1 day ago",
-      ),
-    ];
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -671,159 +941,225 @@ class NearbyAlertsSection extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                "Nearby Alerts",
+                'Nearby Alerts',
                 style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800),
               ),
             ),
             TextButton(
-              onPressed: () => Navigator.push(
-                context, 
-                MaterialPageRoute(
-                  builder: (context) => const AlertsScreen(),
-                ),
-              ),
+              onPressed: onSeeAll,
               child: Text(
-                "See All",
+                'See All',
                 style: GoogleFonts.inter(
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF2563EB),
+                  color: const Color(0xFF2563EB),
                 ),
               ),
             ),
           ],
         ),
         const SizedBox(height: 8),
-        ...items.map(
-          (e) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: _NearbyAlertCard(item: e),
+        if (isLoading)
+          const _Card(child: AppLoadingCard())
+        else if (alerts.isEmpty)
+          _Card(
+            child: Row(
+              children: [
+                Icon(LucideIcons.bellOff, color: Colors.grey.shade400, size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'No active risk alerts in your area.',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: const Color(0xFF6B7280),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          ...alerts.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _NearbyAlertCard(item: item),
+            ),
           ),
-        ),
       ],
     );
   }
 }
 
-class _NearbyAlertItem {
-  final String title;
-  final String risk;
-  final Color riskBg;
-  final Color riskFg;
-  final Color iconBg;
-  final Color iconFg;
-  final String meta;
-  final String cases;
-  final String time;
-
-  const _NearbyAlertItem({
-    required this.title,
-    required this.risk,
-    required this.riskBg,
-    required this.riskFg,
-    required this.iconBg,
-    required this.iconFg,
-    required this.meta,
-    required this.cases,
-    required this.time,
-  });
-}
-
 class _NearbyAlertCard extends StatelessWidget {
-  final _NearbyAlertItem item;
+  final AlertItem item;
+
   const _NearbyAlertCard({required this.item});
 
   @override
   Widget build(BuildContext context) {
-    return _Card(
-      radius: 14,
-      padding: const EdgeInsets.all(14),
-      child: Row(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: item.iconBg,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.warning_amber_rounded, color: item.iconFg),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+    final colors = _riskColorsFor(item.risk);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => showAlertDetailSheet(context, item),
+        borderRadius: BorderRadius.circular(14),
+        child: _Card(
+          radius: 14,
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: colors.bg,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(LucideIcons.triangleAlert, color: colors.icon),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        item.title,
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            item.title,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
+                        _RiskPillCompact(level: item.risk),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      item.message,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: const Color(0xFF6B7280),
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: item.riskBg,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        item.risk,
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: item.riskFg,
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(
+                          LucideIcons.mapPin,
+                          size: 14,
+                          color: Color(0xFF6B7280),
                         ),
-                      ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            item.location,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: const Color(0xFF6B7280),
+                            ),
+                          ),
+                        ),
+                        Text(
+                          item.timeAgo,
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: const Color(0xFF9CA3AF),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.location_on_outlined,
-                      size: 14,
-                      color: Color(0xFF6B7280),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      item.meta,
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: Color(0xFF6B7280),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      item.cases,
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: Color(0xFF6B7280),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      item.time,
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: Color(0xFF9CA3AF),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
+  }
+}
+
+class _RiskPillCompact extends StatelessWidget {
+  final RiskLevel level;
+
+  const _RiskPillCompact({required this.level});
+
+  @override
+  Widget build(BuildContext context) {
+    late final Color bg;
+    late final Color fg;
+    late final String label;
+
+    switch (level) {
+      case RiskLevel.high:
+        bg = const Color(0xFFFEE2E2);
+        fg = const Color(0xFFB91C1C);
+        label = 'High';
+        break;
+      case RiskLevel.moderate:
+        bg = const Color(0xFFFEF3C7);
+        fg = const Color(0xFFB45309);
+        label = 'Moderate';
+        break;
+      case RiskLevel.low:
+        bg = const Color(0xFFDCFCE7);
+        fg = const Color(0xFF15803D);
+        label = 'Low';
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: fg,
+        ),
+      ),
+    );
+  }
+}
+
+class _NearbyRiskColors {
+  final Color bg;
+  final Color icon;
+
+  const _NearbyRiskColors({required this.bg, required this.icon});
+}
+
+_NearbyRiskColors _riskColorsFor(RiskLevel level) {
+  switch (level) {
+    case RiskLevel.high:
+      return const _NearbyRiskColors(
+        bg: Color(0xFFFEE2E2),
+        icon: Color(0xFFDC2626),
+      );
+    case RiskLevel.moderate:
+      return const _NearbyRiskColors(
+        bg: Color(0xFFFEF3C7),
+        icon: Color(0xFFD97706),
+      );
+    case RiskLevel.low:
+      return const _NearbyRiskColors(
+        bg: Color(0xFFDCFCE7),
+        icon: Color(0xFF16A34A),
+      );
   }
 }
 
@@ -838,12 +1174,12 @@ class HealthTipsSection extends StatelessWidget {
       _TipItem(
         title: "Food Safety",
         desc: "Always wash hands before eating and food preparation",
-        icon: Icons.shield_outlined,
+        icon: LucideIcons.shield,
       ),
       _TipItem(
         title: "Prevent Contamination",
         desc: "Cook food thoroughly and store at proper temperatures",
-        icon: Icons.info_outline,
+        icon: LucideIcons.info,
       ),
     ];
 

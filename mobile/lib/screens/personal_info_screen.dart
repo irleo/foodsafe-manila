@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../services/api_service.dart';
 import '../services/session.dart';
+import '../widgets/app_loading.dart';
 
 class PersonalInfoScreen extends StatefulWidget {
   const PersonalInfoScreen({super.key});
@@ -294,7 +295,8 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
                                     ? const SizedBox(
                                         width: 20,
                                         height: 20,
-                                        child: CircularProgressIndicator(
+                                        child: AppLoadingIndicator(
+                                          size: 20,
                                           strokeWidth: 2,
                                           color: Colors.white,
                                         ),
