@@ -10,6 +10,8 @@ import {
   Users,
 } from "lucide-react";
 
+import logo from "../../../mobile/assets/foodsafe_logo.png"
+
 const adminFeatures = [
   { icon: BarChart3, text: "Advanced analytics and data visualization" },
   { icon: Activity, text: "Real-time outbreak monitoring" },
@@ -23,14 +25,6 @@ const citizenFeatures = [
   { icon: Shield, text: "Health tips and prevention guides" },
   { icon: Activity, text: "Nearby outbreak tracking" },
 ];
-
-function BrandMark() {
-  return (
-    <div className="bg-blue-600 p-2 rounded-lg">
-      <Activity className="w-6 h-6 text-white" />
-    </div>
-  );
-}
 
 function FeatureList({ items, accent }) {
   return (
@@ -95,23 +89,15 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
+      <header className="bg-blue-600 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <BrandMark />
-            <div>
-              <h1 className="text-lg font-semibold leading-tight">
-                DOH Disease Monitoring
-              </h1>
-              <p className="text-xs text-gray-600">
-                Department of Health - Philippines
-              </p>
-            </div>
+            <img src={logo} className="h-11 w-auto" alt="Logo" />
           </div>
 
           <Link
             to="/login"
-            className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-sm font-medium"
+            className="px-4 py-2 text-white hover:bg-blue-50 rounded-lg transition-colors text-sm font-medium"
           >
             Sign In
           </Link>
@@ -143,7 +129,7 @@ export default function LandingPage() {
               </div>
             }
             title="Admin Dashboard"
-            subtitle="For DOH officials, health analysts, and researchers"
+            subtitle="For MHD officials, health analysts, and researchers"
             features={adminFeatures}
             buttonTo="/login"
             buttonText="Access Admin Portal"
@@ -222,15 +208,8 @@ export default function LandingPage() {
       <footer className="bg-gray-900 text-white py-8">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="bg-blue-600 p-2 rounded-lg">
-              <Activity className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-medium">DOH Disease Monitoring System</span>
+            <img src={logo} className="h-11 w-auto" alt="Logo" />
           </div>
-
-          <p className="text-sm text-gray-400 mb-2">
-            Department of Health - Republic of the Philippines
-          </p>
           <p className="text-xs text-gray-500">
             © 2026 All rights reserved. Data Privacy Act of 2012 Compliant.
           </p>

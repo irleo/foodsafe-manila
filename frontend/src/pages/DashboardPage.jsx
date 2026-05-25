@@ -113,7 +113,7 @@ export default function Dashboard() {
                 : "User Dashboard"}
             </h2>
             <p className="text-sm text-gray-700 mb-3">
-              This web platform is designed for DOH officials, health analysts,
+              This web platform is designed for MHD officials, health analysts,
               and researchers to manage and analyze disease outbreak data.
               <strong className="block mt-2">For Citizens:</strong> Check out
               the mobile app version of <strong>Foodsafe Manila</strong>.

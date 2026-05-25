@@ -19,7 +19,7 @@ export default function OfficialDatasetsTab() {
   const [datasetName, setDatasetName] = useState("");
   const [coverageStart, setCoverageStart] = useState("");
   const [coverageEnd, setCoverageEnd] = useState("");
-  const [dataSource, setDataSource] = useState("Department of Health (DOH)");
+  const [dataSource, setDataSource] = useState("Manila Health Department (MHD)");
 
   const [validating, setValidating] = useState(false);
   const [uploading, setUploading] = useState(false);

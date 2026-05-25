@@ -12,6 +12,7 @@ import {
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { notify } from "../utils/toast";
+import logo from "../../../mobile/assets/foodsafe_logo.png"
 
 const MAX_REASON = 300;
 
@@ -131,27 +132,19 @@ const RequestAccess = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl">
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <div className="flex items-center justify-center mb-6">
-            <div className="bg-blue-600 p-3 rounded-xl">
-              <IdentificationIcon className="w-8 h-8 text-white" />
-            </div>
+      <div className="w-full max-w-2xl bg-blue-600 rounded-2xl">
+        <div className="flex items-center justify-center">
+          <div className="p-8">
+            <img src={logo} className="h-auto w-108" alt="Logo" />
           </div>
-
-          <h1 className="text-center mb-2 text-2xl font-semibold">
-            Request Access
-          </h1>
-          <p className="text-center text-gray-600 mb-8">
-            Disease Monitoring System - DOH Philippines
-          </p>
-
+        </div>
+        <div className="bg-white rounded-2xl shadow-2xl p-8">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
             <p className="text-sm text-blue-800 font-semibold">
               For Health Officials & Researchers Only
             </p>
             <p className="text-sm text-blue-700 mt-2">
-              This registration is for DOH personnel, health analysts, and
+              This registration is for MHD personnel, health analysts, and
               authorized researchers who need access to the administrative
               dashboard for data analytics and outbreak monitoring.
             </p>
@@ -162,8 +155,8 @@ const RequestAccess = () => {
               Are you a citizen looking for health alerts?
             </p>
             <p className="text-sm text-green-700 mt-2">
-              Please download the <strong>DOH Disease Alert Mobile App</strong>{" "}
-              from Google Play or App Store to receive early warnings and
+              Please download the <strong>Foodsafe Manila Mobile App</strong>{" "}
+              from Google Play to receive early warnings and
               outbreak notifications in your area.
             </p>
           </div>
@@ -439,7 +432,7 @@ const RequestAccess = () => {
           <div className="mt-6 pt-6 border-t border-gray-200 text-xs text-gray-600 text-center">
             <p>
               By submitting this form, you agree that your information will be
-              reviewed by DOH administrators. This system contains sensitive
+              reviewed by MHD administrators. This system contains sensitive
               health data and access is granted only to authorized personnel.
             </p>
           </div>
