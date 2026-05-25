@@ -211,6 +211,12 @@ class ApiService {
 
   /// Newest validated dataset (same scope as web `useLatestDatasetId`).
   static Future<String?> fetchLatestValidatedDatasetId() async {
+    final dataset = await fetchLatestValidatedDataset();
+    return dataset?['id']?.toString();
+  }
+
+  /// Newest validated dataset row including coverage metadata.
+  static Future<Map<String, dynamic>?> fetchLatestValidatedDataset() async {
     final response = await ApiClient.get(
       '/datasets',
       query: {'status': 'validated'},
@@ -219,8 +225,35 @@ class ApiService {
 
     final rows = ApiClient.decodeList(response);
     if (rows.isEmpty) return null;
-    final id = rows.first['_id'] ?? rows.first['id'];
-    return id?.toString();
+
+    final row = rows.first;
+    final id = row['_id'] ?? row['id'];
+    return {
+      'id': id?.toString(),
+      'coverageStart': row['coverageStart'],
+      'coverageEnd': row['coverageEnd'],
+    };
+  }
+
+  /// Official case rows for a dataset (no classification filter = all types).
+  static Future<List<Map<String, dynamic>>> fetchOfficialCasesByDataset(
+    String datasetId, {
+    int limit = 1000,
+  }) async {
+    final response = await ApiClient.get(
+      '/cases/$datasetId',
+      query: {'limit': '$limit'},
+    );
+    if (response.statusCode != 200) return [];
+
+    final data = ApiClient.decodeMap(response);
+    final items = data['items'];
+    if (items is! List) return [];
+
+    return items
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
   }
 
   /// District/barangay heatmap — mirrors web `GET /api/heatmap/districts`.

@@ -167,32 +167,20 @@ class _HeaderState extends State<Header> {
 
 class DashboardSummaryCard extends StatelessWidget {
   final Map<String, dynamic>? data;
+  final String? referencePeriod;
   final bool isLoading;
   final String? error;
 
   const DashboardSummaryCard({
     super.key,
     this.data,
+    this.referencePeriod,
     this.isLoading = false,
     this.error,
   });
 
-  String _getCurrentYear() {
-    return DateTime.now().year.toString();
-  }
-
-  String _getDateRange() {
-    final now = DateTime.now();
-    final startOfYear = DateTime(now.year, 1, 1);
-    final formatter = DateFormat('MMM d');
-    return "${formatter.format(startOfYear)}–${formatter.format(now)}, ${now.year}";
-  }
-
   @override
   Widget build(BuildContext context) {
-    final currentYear = _getCurrentYear();
-    final dateRange = _getDateRange();
-
     if (isLoading) {
       return const _Card(child: AppLoadingCard());
     }
@@ -223,33 +211,14 @@ class DashboardSummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          /// HEADER ROW
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  "Dashboard Summary",
-                  style: GoogleFonts.inter(
-                      fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFDBEAFE),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  currentYear,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF1E40AF),
-                  ),
-                ),
-              ),
-            ],
+          Text(
+            'Dashboard Summary',
+            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800),
           ),
+          if (referencePeriod != null && referencePeriod!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            _SectionReferenceDate(label: referencePeriod!),
+          ],
           const SizedBox(height: 12),
 
           /// STAT TILES ROW 1
@@ -265,7 +234,6 @@ class DashboardSummaryCard extends StatelessWidget {
                     iconColor: const Color(0xFFDC2626),
                     label: "Total Cases",
                     value: totalCases,
-                    sub: dateRange,
                     valueColor: const Color(0xFFB91C1C),
                     growthText: growthText,
                     growthColor: growthColor,
@@ -324,7 +292,6 @@ class _StatTile extends StatelessWidget {
   final Color iconColor;
   final String label;
   final String value;
-  final String? sub;
   final Color valueColor;
   final bool isSmallValue;
   final String? growthText;
@@ -338,7 +305,6 @@ class _StatTile extends StatelessWidget {
     required this.iconColor,
     required this.label,
     required this.value,
-    this.sub,
     required this.valueColor,
     this.isSmallValue = false,
     this.growthText,
@@ -388,13 +354,6 @@ class _StatTile extends StatelessWidget {
                   color: valueColor,
                 ),
               ),
-              if(sub != null)
-              Text(
-                sub!,
-                style: GoogleFonts.inter(fontSize: 8, color: valueColor.withValues(alpha: 0.85)),
-              )
-              else
-                SizedBox.shrink()
             ],
           ),
           if (growthText != null && growthColor != null)
@@ -430,125 +389,45 @@ class _StatTile extends StatelessWidget {
   }
 }
 
-/* ---------------- Map CTA ---------------- */
-
-class YourAreaRiskCard extends StatelessWidget {
-  final Map<String, dynamic>? data;
+class TopDiseaseSection extends StatelessWidget {
+  final List<Map<String, dynamic>> diseases;
+  final String? referencePeriod;
   final bool isLoading;
   final String? error;
 
-  const YourAreaRiskCard({
+  const TopDiseaseSection({
     super.key,
-    this.data,
+    this.diseases = const [],
+    this.referencePeriod,
     this.isLoading = false,
     this.error,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) return const _Card(child: AppLoadingCard());
+    return _RankedMetricsSection(
+      title: 'Top Reported Diseases',
+      emptyMessage: 'No disease data available.',
+      items: diseases,
+      referencePeriod: referencePeriod,
+      isLoading: isLoading,
+      error: error,
+    );
+  }
+}
 
-    if (error != null) {
-      return _Card(
-        child: Row(
-          children: [
-            const Icon(LucideIcons.mapPin, color: Color(0xFF6B7280), size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                error!,
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: const Color(0xFF6B7280),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+class _SectionReferenceDate extends StatelessWidget {
+  final String label;
 
-    final area = data?['area'] as Map<String, dynamic>?;
-    final isHigh = data?['isHighRisk'] == true;
-    final level = area?['riskLevel']?.toString() ?? 'low';
-    final score = area?['riskScore'] ?? 0;
-    final total = area?['totalCases'] ?? 0;
-    final location = LocationService.cachedAddress ?? 'Your location';
+  const _SectionReferenceDate({required this.label});
 
-    late final Color accent;
-    late final Color bg;
-    late final String label;
-
-    if (isHigh || level == 'high') {
-      accent = const Color(0xFFDC2626);
-      bg = const Color(0xFFFEE2E2);
-      label = 'High Risk Area';
-    } else if (level == 'moderate') {
-      accent = const Color(0xFFD97706);
-      bg = const Color(0xFFFEF3C7);
-      label = 'Moderate Risk Area';
-    } else {
-      accent = const Color(0xFF16A34A);
-      bg = const Color(0xFFDCFCE7);
-      label = 'Low Risk Area';
-    }
-
-    return _Card(
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-            child: Icon(
-              isHigh ? LucideIcons.triangleAlert : LucideIcons.shield,
-              color: accent,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Your Area',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: const Color(0xFF9CA3AF),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: accent,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  location,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: const Color(0xFF6B7280),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '$total cases · Risk score $score',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: const Color(0xFF9CA3AF),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: GoogleFonts.inter(
+        fontSize: 11,
+        color: const Color(0xFF9CA3AF),
       ),
     );
   }
@@ -566,101 +445,87 @@ class MapCtaCard extends StatelessWidget {
     this.onTap,
   });
 
+  static const _riskLegend = [
+    (key: 'Low', label: 'Low', color: Color(0xFF22C55E)),
+    (key: 'Medium', label: 'Medium', color: Color(0xFFEAB308)),
+    (key: 'High', label: 'High', color: Color(0xFFF97316)),
+    (key: 'Critical', label: 'Critical', color: Color(0xFFEF4444)),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    final high = (riskStats['High'] ?? 0) + (riskStats['Critical'] ?? 0);
-    final moderate = riskStats['Medium'] ?? 0;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF14B8A6), Color(0xFF0D9488)],
-          ),
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: const [
-            BoxShadow(
-              blurRadius: 18,
-              offset: Offset(0, 8),
-              color: Color(0x22000000),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                _IconBubble(icon: LucideIcons.navigation),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Interactive Disease Map",
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        "Explore outbreak zones with filters & live data",
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          color: Color(0xFFCCFBF1),
-                        ),
-                      ),
-                    ],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: _Card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      LucideIcons.map,
+                      color: Color(0xFF2563EB),
+                      size: 22,
+                    ),
                   ),
-                ),
-                Icon(LucideIcons.mapPin, color: Colors.white),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                _DotLabel(
-                  color: const Color(0xFFF87171),
-                  text: isLoading
-                      ? 'Loading zones…'
-                      : '$high High Risk Zones',
-                ),
-                const SizedBox(width: 14),
-                _DotLabel(
-                  color: const Color(0xFFFACC15),
-                  text: isLoading ? '' : '$moderate Moderate',
-                ),
-              ],
-            ),
-          ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Heatmap',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF111827),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'View district risk zones',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: const Color(0xFF6B7280),
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    LucideIcons.chevronRight,
+                    size: 20,
+                    color: Color(0xFF9CA3AF),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: _riskLegend.map((entry) {
+                  final count = isLoading ? '—' : '${riskStats[entry.key] ?? 0}';
+                  return _DotLabel(
+                    color: entry.color,
+                    text: '$count ${entry.label}',
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
         ),
       ),
-    );
-  }
-}
-
-class _IconBubble extends StatelessWidget {
-  final IconData icon;
-  const _IconBubble({required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Icon(icon, color: Colors.white),
     );
   }
 }
@@ -673,18 +538,19 @@ class _DotLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 10,
-          height: 10,
+          width: 8,
+          height: 8,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
         Text(
           text,
           style: GoogleFonts.inter(
-            color: Colors.white,
-            fontSize: 12,
+            color: const Color(0xFF374151),
+            fontSize: 11,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -732,11 +598,6 @@ class CurrentRiskCard extends StatelessWidget {
           Text(
             'Current Risk Status',
             style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'District-level risk from validated case data',
-            style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF9CA3AF)),
           ),
           const SizedBox(height: 14),
           Row(
@@ -787,13 +648,45 @@ class CurrentRiskCard extends StatelessWidget {
 
 class TopDistrictsSection extends StatelessWidget {
   final List<Map<String, dynamic>> districts;
+  final String? referencePeriod;
   final bool isLoading;
   final String? error;
 
   const TopDistrictsSection({
     super.key,
     this.districts = const [],
+    this.referencePeriod,
     this.isLoading = false,
+    this.error,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _RankedMetricsSection(
+      title: 'Top Affected Districts',
+      emptyMessage: 'No district data available.',
+      items: districts,
+      referencePeriod: referencePeriod,
+      isLoading: isLoading,
+      error: error,
+    );
+  }
+}
+
+class _RankedMetricsSection extends StatelessWidget {
+  final String title;
+  final String emptyMessage;
+  final List<Map<String, dynamic>> items;
+  final String? referencePeriod;
+  final bool isLoading;
+  final String? error;
+
+  const _RankedMetricsSection({
+    required this.title,
+    required this.emptyMessage,
+    required this.items,
+    this.referencePeriod,
+    required this.isLoading,
     this.error,
   });
 
@@ -804,30 +697,42 @@ class TopDistrictsSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Top Affected Districts',
+            title,
             style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800),
           ),
+          if (referencePeriod != null && referencePeriod!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            _SectionReferenceDate(label: referencePeriod!),
+          ],
           const SizedBox(height: 12),
           if (isLoading)
             const AppLoadingCard(padding: EdgeInsets.all(16))
           else if (error != null)
             Text(
               error!,
-              style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF6B7280)),
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: const Color(0xFF6B7280),
+              ),
             )
-          else if (districts.isEmpty)
+          else if (items.isEmpty)
             Text(
-              'No district data available.',
-              style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF9CA3AF)),
+              emptyMessage,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: const Color(0xFF9CA3AF),
+              ),
             )
           else
-            ...districts.asMap().entries.map((entry) {
+            ...items.asMap().entries.map((entry) {
               final idx = entry.key;
-              final d = entry.value;
-              final name = d['name']?.toString() ?? '';
-              final cases = d['cases']?.toString() ?? '0';
+              final item = entry.value;
+              final name = item['name']?.toString() ?? '';
+              final cases = item['cases']?.toString() ?? '0';
               return Padding(
-                padding: EdgeInsets.only(bottom: idx < districts.length - 1 ? 8 : 0),
+                padding: EdgeInsets.only(
+                  bottom: idx < items.length - 1 ? 8 : 0,
+                ),
                 child: Row(
                   children: [
                     Container(

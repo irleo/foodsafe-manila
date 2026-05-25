@@ -172,7 +172,7 @@ class MapScreenState extends State<MapScreen> {
       riskStats = HeatmapCaseBuilders.buildRiskStatsFromDistrictPoints(stats);
       topDistricts = HeatmapCaseBuilders.buildTopDistrictsFromPoints(
         stats,
-        limit: 5,
+        limit: 6,
       );
 
       await _buildPolygons();
@@ -708,13 +708,12 @@ class MapScreenState extends State<MapScreen> {
                     bottom: 50,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                        vertical: 10,
-                        horizontal: 10,
+                        vertical: 12,
+                        horizontal: 8,
                       ),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.95),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       child: Row(
                         children: [
@@ -725,7 +724,7 @@ class MapScreenState extends State<MapScreen> {
                               const Color(0xFF22C55E),
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          _divider(),
                           Expanded(
                             child: _statCard(
                               'Medium',
@@ -733,7 +732,7 @@ class MapScreenState extends State<MapScreen> {
                               const Color(0xFFEAB308),
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          _divider(),
                           Expanded(
                             child: _statCard(
                               'High',
@@ -741,7 +740,7 @@ class MapScreenState extends State<MapScreen> {
                               const Color(0xFFF97316),
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          _divider(),
                           Expanded(
                             child: _statCard(
                               'Critical',
@@ -783,32 +782,28 @@ class MapScreenState extends State<MapScreen> {
   }
 
   Widget _statCard(String label, int value, Color valueColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        children: [
-          Text(
-            '$label Risk',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(fontSize: 9, color: Colors.black54),
+    return Column(
+      children: [
+        Text(
+          label.toUpperCase(),
+          textAlign: TextAlign.center,
+          style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w500, color: Colors.black45),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '$value',
+          style: GoogleFonts.inter(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: valueColor,
           ),
-          const SizedBox(height: 4),
-          Text(
-            '$value',
-            style: GoogleFonts.inter(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: valueColor,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
+  }
+
+  Widget _divider() {
+    return Container(width: 1, height: 36, color: Colors.grey.shade200);
   }
 
   Widget _sectionTitle(String title) {
