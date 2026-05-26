@@ -20,6 +20,7 @@ export function useHeatmapPoints({
 } = {}) {
   const [points, setPoints] = useState([]);
   const [districtStats, setDistrictStats] = useState([]);
+  const [diseaseStats, setDiseaseStats] = useState([]);
   const [filterOptions, setFilterOptions] = useState({});
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
@@ -46,6 +47,7 @@ export function useHeatmapPoints({
       setLoading(false);
       setPoints([]);
       setDistrictStats([]);
+      setDiseaseStats([]);
       return;
     }
 
@@ -63,12 +65,16 @@ export function useHeatmapPoints({
         setDistrictStats(
           Array.isArray(data?.districtStats) ? data.districtStats : [],
         );
+        setDiseaseStats(
+          Array.isArray(data?.diseaseStats) ? data.diseaseStats : [],
+        );
         setFilterOptions(data?.filterOptions || {});
       } catch (err) {
         if (!isMounted) return;
         setErrorMsg(err?.message || "Failed to load heatmap data.");
         setPoints([]);
         setDistrictStats([]);
+        setDiseaseStats([]);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -79,5 +85,12 @@ export function useHeatmapPoints({
     };
   }, [token, query]);
 
-  return { points, districtStats, filterOptions, loading, errorMsg };
+  return {
+    points,
+    districtStats,
+    diseaseStats,
+    filterOptions,
+    loading,
+    errorMsg,
+  };
 }
