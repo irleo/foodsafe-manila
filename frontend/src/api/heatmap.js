@@ -27,6 +27,7 @@ export async function fetchDistrictHeatmap(
   return {
     points,
     districtStats: Array.isArray(j.districtStats) ? j.districtStats : [],
+    diseaseStats: Array.isArray(j.diseaseStats) ? j.diseaseStats : [],
     filterOptions: j.filterOptions || {},
   };
 }

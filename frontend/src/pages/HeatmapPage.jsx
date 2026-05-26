@@ -50,14 +50,15 @@ export default function Heatmap() {
   const [selectedCaseClassification, setSelectedCaseClassification] =
     useState("All");
 
-  const { points, districtStats, filterOptions, loading, errorMsg } = useHeatmapPoints({
-    token,
-    datasetId,
-    selectedYear,
-    selectedMonth,
-    selectedDisease,
-    selectedCaseClassification,
-  });
+  const { points, districtStats, diseaseStats, filterOptions, loading, errorMsg } =
+    useHeatmapPoints({
+      token,
+      datasetId,
+      selectedYear,
+      selectedMonth,
+      selectedDisease,
+      selectedCaseClassification,
+    });
 
   const yearOptions = useMemo(() => {
     const years = Array.isArray(filterOptions?.years)
@@ -94,24 +95,8 @@ export default function Heatmap() {
   }, [filterOptions]);
 
   const title = useMemo(() => {
-    const y = selectedYear === "All" ? "All Years" : selectedYear;
-    const m =
-      selectedMonth === "All"
-        ? "All Months"
-        : MONTH_OPTIONS.find((month) => month.value === Number(selectedMonth))
-            ?.label || selectedMonth;
-    const d = selectedDisease === "All" ? "All Diseases" : selectedDisease;
-    const c =
-      selectedCaseClassification === "All"
-        ? "All Classifications"
-        : selectedCaseClassification;
     return `Manila Risk Map`;
-  }, [
-    selectedYear,
-    selectedMonth,
-    selectedDisease,
-    selectedCaseClassification,
-  ]);
+  }, []);
 
   const showNoData =
     (selectedYear !== "All" ||
@@ -125,8 +110,13 @@ export default function Heatmap() {
     [districtStats],
   );
 
-  // We don't have disease breakdown from the heatmap endpoint; keep this card empty for now.
-  const topDiseases = useMemo(() => [], []);
+  const topDiseases = useMemo(
+    () =>
+      (Array.isArray(diseaseStats) ? diseaseStats : [])
+        .sort((a, b) => (b.cases ?? 0) - (a.cases ?? 0))
+        .slice(0, 5),
+    [diseaseStats],
+  );
 
   const loadingOverlay = loading ? (
     <div className="absolute inset-0 z-[950] bg-white/60 flex items-center justify-center text-sm text-gray-700">

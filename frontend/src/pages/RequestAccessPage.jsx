@@ -12,7 +12,7 @@ import {
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { notify } from "../utils/toast";
-import logo from "../../../mobile/assets/foodsafe_logo.png"
+import logo from "../../../mobile/assets/foodsafe_logo.png";
 
 const MAX_REASON = 300;
 
@@ -135,7 +135,13 @@ const RequestAccess = () => {
       <div className="w-full max-w-2xl bg-blue-600 rounded-2xl">
         <div className="flex items-center justify-center">
           <div className="p-8">
-            <img src={logo} className="h-auto w-108" alt="Logo" />
+            <img
+              src={logo}
+              className="h-14 sm:h-16 w-auto object-contain mx-auto select-none"
+              alt="FoodSafe Manila"
+              draggable="false"
+              decoding="async"
+            />
           </div>
         </div>
         <div className="bg-white rounded-2xl shadow-2xl p-8">

@@ -7,11 +7,11 @@ import {
 import NotificationsDropdown from "./NotificationsDropdown";
 import Spinner from "./Spinner";
 import { useEffect, useState } from "react";
-import logo from "../../../mobile/assets/foodsafe_logo.png"
+import logo from "../../../mobile/assets/foodsafe_logo.png";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
-export default function Navbar({ toggleSidebar }) {
+export default function Navbar() {
   const { auth, loading } = useAuth();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -97,7 +97,13 @@ export default function Navbar({ toggleSidebar }) {
 
           {/* Logo */}
           <div className="flex items-center gap-2">
-            <img src={logo} className="h-11 w-auto" alt="Logo" />
+            <img
+              src={logo}
+              className="h-9 sm:h-10 w-auto object-contain select-none"
+              alt="FoodSafe Manila"
+              draggable="false"
+              decoding="async"
+            />
           </div>
 
           {/* Right side */}

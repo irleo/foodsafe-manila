@@ -5,18 +5,24 @@ import { useAuth } from "../context/AuthContext";
 import { notify } from "../utils/toast";
 
 import { ArrowLeft, Activity, Eye, EyeOff } from "lucide-react";
-import logo from "../../../mobile/assets/foodsafe_logo.png"
+import logo from "../../../mobile/assets/foodsafe_logo.png";
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const REMEMBER_EMAIL_KEY = "foodsafe.rememberedEmail";
 
 const Login = () => {
   const { setAuth } = useAuth();
   const navigate = useNavigate();
+  const rememberedEmail =
+    typeof window !== "undefined"
+      ? window.localStorage.getItem(REMEMBER_EMAIL_KEY) || ""
+      : "";
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [form, setForm] = useState({ email: rememberedEmail, password: "" });
+  const [rememberMe, setRememberMe] = useState(Boolean(rememberedEmail));
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async (e) => {
@@ -42,6 +48,12 @@ const Login = () => {
         success: "Login succesful!",
         error: (e) => e?.response?.data?.message || "Login failed.",
       });
+
+      if (rememberMe) {
+        window.localStorage.setItem(REMEMBER_EMAIL_KEY, form.email.trim());
+      } else {
+        window.localStorage.removeItem(REMEMBER_EMAIL_KEY);
+      }
 
       navigate("/");
     } catch (err) {
@@ -70,7 +82,13 @@ const Login = () => {
         <div className="bg-blue-600 rounded-2xl shadow-2xl">
           <div className="flex items-center justify-center">
             <div className="p-8">
-              <img src={logo}/>
+              <img
+                src={logo}
+                className="h-14 sm:h-16 w-auto object-contain mx-auto select-none"
+                alt="FoodSafe Manila"
+                draggable="false"
+                decoding="async"
+              />
             </div>
           </div>
           <div className="bg-white rounded-2xl p-8">
@@ -80,7 +98,11 @@ const Login = () => {
               </div>
             )}
 
-            <form className="space-y-6" onSubmit={handleLogin} autoComplete="on">
+            <form
+              className="space-y-6"
+              onSubmit={handleLogin}
+              autoComplete="on"
+            >
               <div>
                 <label
                   htmlFor="email"
@@ -126,7 +148,9 @@ const Login = () => {
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
                     disabled={loading}
                   >
                     {showPassword ? (
@@ -150,18 +174,21 @@ const Login = () => {
               </button>
 
               <div className="flex items-center justify-between text-sm">
+                <label className="inline-flex items-center gap-2 text-gray-700">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    disabled={loading}
+                  />
+                  <span>Remember me</span>
+                </label>
                 <Link
                   to="/forgot-password"
                   className="text-blue-600 hover:text-blue-700 text-sm"
                 >
                   Forgot Password?
-                </Link>
-
-                <Link
-                  to="/request-access"
-                  className="text-blue-600 hover:text-blue-700"
-                >
-                  Request Access
                 </Link>
               </div>
             </form>

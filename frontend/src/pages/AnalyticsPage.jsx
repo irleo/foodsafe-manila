@@ -19,7 +19,11 @@ export default function Analytics() {
   const { auth } = useAuth();
   const token = auth?.accessToken;
   const { datasetId } = useLatestDatasetId(token);
-  const { items: officialItems, loading, errorMsg } = useOfficialCases({
+  const {
+    items: officialItems,
+    loading,
+    errorMsg,
+  } = useOfficialCases({
     token,
     datasetId,
     limit: 5000,
@@ -45,8 +49,7 @@ export default function Analytics() {
   }, [officialItems]);
 
   const vm = useMemo(() => buildAnalyticsCasesViewModel(caseRows), [caseRows]);
-  
-  
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -56,47 +59,27 @@ export default function Analytics() {
             Analysis of historical foodborne disease trends and patterns
           </p>
         </div>
-        {/* EXPORT BUTTONS */}
-        {/* <div className="flex gap-2">
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              className="lucide lucide-download w-4 h-4"
-            >
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" x2="12" y1="15" y2="3"></line>
-            </svg>
-            Export CSV
-          </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              className="lucide lucide-download w-4 h-4"
-            >
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" x2="12" y1="15" y2="3"></line>
-            </svg>
-            Export PNG
-          </button>
-        </div> */}
+        {/* EXPORT */}
+
+        <button className="flex items-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            className="lucide lucide-download w-4 h-4"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" x2="12" y1="15" y2="3"></line>
+          </svg>
+          Export
+        </button>
       </div>
 
       {errorMsg && (

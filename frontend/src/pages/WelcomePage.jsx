@@ -10,7 +10,7 @@ import {
   Users,
 } from "lucide-react";
 
-import logo from "../../../mobile/assets/foodsafe_logo.png"
+import logo from "../../../mobile/assets/foodsafe_logo.png";
 
 const adminFeatures = [
   { icon: BarChart3, text: "Advanced analytics and data visualization" },
@@ -29,12 +29,15 @@ const citizenFeatures = [
 function FeatureList({ items, accent }) {
   return (
     <ul className="space-y-3 text-left">
-      {items.map(({ icon: Icon, text }, idx) => (
-        <li key={idx} className="flex items-start gap-3">
-          <Icon className={`w-5 h-5 mt-0.5 flex-shrink-0 ${accent}`} />
-          <span className="text-sm text-gray-700">{text}</span>
-        </li>
-      ))}
+      {items.map((item, idx) => {
+        const IconComponent = item.icon;
+        return (
+          <li key={idx} className="flex items-start gap-3">
+            <IconComponent className={`w-5 h-5 mt-0.5 flex-shrink-0 ${accent}`} />
+            <span className="text-sm text-gray-700">{item.text}</span>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -92,7 +95,13 @@ export default function LandingPage() {
       <header className="bg-blue-600 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={logo} className="h-11 w-auto" alt="Logo" />
+            <img
+              src={logo}
+              className="h-9 sm:h-10 w-auto object-contain select-none"
+              alt="FoodSafe Manila"
+              draggable="false"
+              decoding="async"
+            />
           </div>
 
           <Link
@@ -208,7 +217,13 @@ export default function LandingPage() {
       <footer className="bg-gray-900 text-white py-8">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <img src={logo} className="h-11 w-auto" alt="Logo" />
+            <img
+              src={logo}
+              className="h-9 sm:h-10 w-auto object-contain select-none"
+              alt="FoodSafe Manila"
+              draggable="false"
+              decoding="async"
+            />
           </div>
           <p className="text-xs text-gray-500">
             © 2026 All rights reserved. Data Privacy Act of 2012 Compliant.

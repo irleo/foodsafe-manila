@@ -20,6 +20,11 @@ const userSchema = new mongoose.Schema(
     // optional audit fields
     approvedAt: { type: Date },
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+
+    resetOtpHash: { type: String, default: null, select: false },
+    resetOtpExpiresAt: { type: Date, default: null, select: false },
+    resetOtpRequestedAt: { type: Date, default: null, select: false },
+    resetOtpAttempts: { type: Number, default: 0, select: false },
   },
   { timestamps: true }
 );

@@ -19,6 +19,30 @@ function getBarangayNo(value, fallback) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function isLikelyDiseaseName(value) {
+  const v = String(value || "").trim();
+  if (!v) return false;
+  const normalized = v.toLowerCase();
+  const blocked = new Set([
+    "all",
+    "total",
+    "grand total",
+    "unknown",
+    "n/a",
+    "na",
+    "none",
+    "others",
+    "other",
+    "undefined",
+    "null",
+  ]);
+  if (blocked.has(normalized)) return false;
+  if (normalized.includes("classification")) return false;
+  if (normalized.includes("district")) return false;
+  if (normalized.includes("barangay")) return false;
+  return true;
+}
+
 export const getDistrictHeatmap = async (req, res) => {
   try {
     const { datasetId, year, month, disease, caseClassification } = req.query;
@@ -132,17 +156,29 @@ export const getDistrictHeatmap = async (req, res) => {
       })
       .filter(Boolean);
 
-    const filterOptions = await OfficialCase.aggregate([
-      { $match: { datasetId: new mongoose.Types.ObjectId(datasetId) } },
-      {
-        $group: {
-          _id: null,
-          years: { $addToSet: "$year" },
-          months: { $addToSet: "$month" },
-          diseases: { $addToSet: "$disease" },
-          caseClassifications: { $addToSet: "$caseClassification" },
+    const [filterOptions, diseaseStats] = await Promise.all([
+      OfficialCase.aggregate([
+        { $match: { datasetId: new mongoose.Types.ObjectId(datasetId) } },
+        {
+          $group: {
+            _id: null,
+            years: { $addToSet: "$year" },
+            months: { $addToSet: "$month" },
+            diseases: { $addToSet: "$disease" },
+            caseClassifications: { $addToSet: "$caseClassification" },
+          },
         },
-      },
+      ]),
+      OfficialCase.aggregate([
+        { $match: match },
+        {
+          $group: {
+            _id: "$disease",
+            cases: { $sum: "$cases" },
+          },
+        },
+        { $sort: { cases: -1 } },
+      ]),
     ]);
 
     if (skippedBarangays.length) {
@@ -154,6 +190,9 @@ export const getDistrictHeatmap = async (req, res) => {
       districtStats: [...districtStats.values()].sort(
         (a, b) => b.avgIncidentPerBarangay - a.avgIncidentPerBarangay,
       ),
+      diseaseStats: diseaseStats
+        .filter((d) => isLikelyDiseaseName(d?._id))
+        .map((d) => ({ name: String(d._id).trim(), cases: Number(d.cases || 0) })),
       skippedBarangays,
       filterOptions: filterOptions[0] || {
         years: [],

@@ -5,6 +5,9 @@ import {
   logout, 
   refreshToken, 
   requestAccess,
+  forgotPassword,
+  verifyResetOtp,
+  completePasswordReset,
 } from '../controllers/authController.js';
 import {
   registerCitizen,
@@ -26,6 +29,9 @@ router.post('/login', login);
 router.post('/logout', logout);
 router.get('/refresh', refreshToken);
 router.post("/request-access", requestAccessLimiter, requestAccess);
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password/verify-otp", verifyResetOtp);
+router.post("/reset-password/complete", completePasswordReset);
 
 // Citizen mobile auth (same /api/auth prefix as web)
 router.post('/register', registerCitizen);

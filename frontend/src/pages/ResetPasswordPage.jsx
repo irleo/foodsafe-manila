@@ -3,11 +3,12 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Activity, Eye, EyeOff, Lock } from "lucide-react";
 import { notify } from "../utils/toast";
 
-const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 export default function ResetPassword() {
   const [params] = useSearchParams();
-  const token = useMemo(() => params.get("token") || "", [params]);
+  const initialEmail = useMemo(() => params.get("email") || "", [params]);
+  const initialOtp = useMemo(() => params.get("otp") || "", [params]);
 
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
@@ -16,7 +17,12 @@ export default function ResetPassword() {
   const [show1, setShow1] = useState(false);
   const [show2, setShow2] = useState(false);
 
-  const [form, setForm] = useState({ password: "", confirm: "" });
+  const [form, setForm] = useState({
+    email: initialEmail,
+    otp: initialOtp,
+    password: "",
+    confirm: "",
+  });
 
   const passwordsMatch =
     !form.password || !form.confirm ? true : form.password === form.confirm;
@@ -29,37 +35,60 @@ export default function ResetPassword() {
       setError("Passwords do not match.");
       return;
     }
-    if (form.password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (form.password.length < 8) {
+      setError("Password must be at least 8 characters.");
       return;
     }
 
+    const payload = {
+      email: form.email.trim(),
+      otp: form.otp.trim(),
+      password: form.password,
+    };
+
     try {
       setLoading(true);
-
-      // MOCK ONLY (ready for real implementation later)
-      // Later replace with:
-      // await axios.post("/api/auth/reset-password", { token, password: form.password }, { withCredentials: true });
-
-      await notify.promise(delay(900), {
-        loading: "Resetting password…",
-        success: "Password updated (mock).",
+      const resetPromise = fetch(`${API_BASE}/api/auth/reset-password/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).then(async (res) => {
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(j?.message || "Failed to reset password.");
+        return j;
+      });
+      notify.promise(resetPromise, {
+        loading: "Resetting password...",
+        success: "Password updated.",
         error: "Failed to reset password.",
       });
+      await resetPromise;
 
       setDone(true);
     } catch (err) {
-      setError(err?.response?.data?.message || "Something went wrong.");
+      setError(err?.message || "Something went wrong.");
     } finally {
       setLoading(false);
     }
   };
+
+  const hasInProgress =
+    form.password.length > 0 || form.confirm.length > 0 || done;
+
+  const confirmCancel = () =>
+    !hasInProgress ||
+    window.confirm(
+      "This password reset transaction will be cancelled. Do you want to continue?",
+    );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <Link
           to="/forgot-password"
+          onClick={(e) => {
+            if (!confirmCancel()) e.preventDefault();
+          }}
           className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-4"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -80,12 +109,11 @@ export default function ResetPassword() {
             Enter your new password below.
           </p>
 
-          {token && (
-            <div className="mb-4 rounded-lg bg-gray-50 border border-gray-200 text-gray-700 px-4 py-3 text-xs">
-              Token detected (for later backend):{" "}
-              <span className="font-mono break-all">{token}</span>
+          {!form.email.trim() || !form.otp.trim() ? (
+            <div className="mb-4 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 text-sm">
+              Reset session is missing. Please request and verify a code first.
             </div>
-          )}
+          ) : null}
 
           {error && (
             <div className="mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm">
@@ -107,9 +135,15 @@ export default function ResetPassword() {
                 Go to Login
               </Link>
             </div>
+          ) : !form.email.trim() || !form.otp.trim() ? (
+            <Link
+              to="/forgot-password"
+              className="block w-full text-center bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Back to Forgot Password
+            </Link>
           ) : (
             <form className="space-y-6" onSubmit={handleReset} autoComplete="off">
-              {/* New password */}
               <div>
                 <label className="block mb-2 text-sm text-gray-700" htmlFor="password">
                   New Password
@@ -126,7 +160,7 @@ export default function ResetPassword() {
                     onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
                     disabled={loading}
                     required
-                    minLength={6}
+                    minLength={8}
                   />
                   <button
                     type="button"
@@ -140,7 +174,6 @@ export default function ResetPassword() {
                 </div>
               </div>
 
-              {/* Confirm */}
               <div>
                 <label className="block mb-2 text-sm text-gray-700" htmlFor="confirm">
                   Confirm Password
@@ -159,7 +192,7 @@ export default function ResetPassword() {
                     onChange={(e) => setForm((p) => ({ ...p, confirm: e.target.value }))}
                     disabled={loading}
                     required
-                    minLength={6}
+                    minLength={8}
                   />
                   <button
                     type="button"

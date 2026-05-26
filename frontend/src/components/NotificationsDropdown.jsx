@@ -6,7 +6,7 @@ export default function NotificationsDropdown({
   return (
     <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
       <div className="p-4 border-b border-gray-200 flex items-center justify-between gap-2">
-        <h3 className="font-semibold text-[18px]">Notifications</h3>
+        <h3 className="font-semibold text-black text-[18px]">Notifications</h3>
         <button
           type="button"
           onClick={onMarkAllRead}
