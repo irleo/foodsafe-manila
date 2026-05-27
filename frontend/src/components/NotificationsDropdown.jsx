@@ -41,7 +41,7 @@ export default function NotificationsDropdown({
                 ].join(" ")}
               />
               <div className="flex-1">
-                <p className="text-sm">{n.title}</p>
+                <p className="text-sm text-black">{n.title}</p>
                 <p className="text-xs text-gray-600 mt-1">{n.message}</p>
                 <p className="text-xs text-gray-400 mt-1">{n.time}</p>
                 <button
