@@ -41,6 +41,7 @@ class MapScreenState extends State<MapScreen> {
     'Critical': 0,
   };
   List<Map<String, dynamic>> topDistricts = [];
+  List<Map<String, dynamic>> topDiseases = [];
 
   String selectedYear = 'All';
   String selectedMonth = 'All';
@@ -140,6 +141,7 @@ class MapScreenState extends State<MapScreen> {
           errorMsg = 'No validated dataset available.';
           districtPoints = [];
           districtStats = [];
+          topDiseases = [];
           heatmapPolygons = [];
         });
         return;
@@ -160,6 +162,8 @@ class MapScreenState extends State<MapScreen> {
       final stats = (data?['districtStats'] as List<dynamic>? ?? [])
           .cast<Map<String, dynamic>>();
       final options = data?['filterOptions'] as Map<String, dynamic>? ?? {};
+      final diseaseStats = (data?['diseaseStats'] as List<dynamic>? ?? [])
+          .cast<Map<String, dynamic>>();
 
       casesByBarangay = {
         for (final p in points)
@@ -174,6 +178,15 @@ class MapScreenState extends State<MapScreen> {
         stats,
         limit: 6,
       );
+      topDiseases = [...diseaseStats]
+        ..sort((a, b) {
+          final bCases = (b['cases'] as num?) ?? 0;
+          final aCases = (a['cases'] as num?) ?? 0;
+          return bCases.compareTo(aCases);
+        });
+      if (topDiseases.length > 6) {
+        topDiseases = topDiseases.sublist(0, 6);
+      }
 
       await _buildPolygons();
 
@@ -186,6 +199,7 @@ class MapScreenState extends State<MapScreen> {
         errorMsg = 'Failed to load heatmap data.';
         districtPoints = [];
         districtStats = [];
+        topDiseases = [];
         heatmapPolygons = [];
       });
     }
@@ -633,7 +647,23 @@ class MapScreenState extends State<MapScreen> {
                     final item = entry.value;
                     final name = item['name']?.toString() ?? '';
                     final cases = item['cases'] ?? 0;
-                    return _districtItem(name, cases, index);
+                    return _rankItem(name, cases, index);
+                  }),
+                const SizedBox(height: 12),
+                _sectionTitle('Top Diseases'),
+                const SizedBox(height: 12),
+                if (topDiseases.isEmpty)
+                  Text(
+                    'No data available.',
+                    style: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
+                  )
+                else
+                  ...topDiseases.asMap().entries.map((entry) {
+                    final index = entry.key + 1;
+                    final item = entry.value;
+                    final name = item['name']?.toString() ?? '';
+                    final cases = item['cases'] ?? 0;
+                    return _rankItem(name, cases, index);
                   }),
               ],
             ),
@@ -847,7 +877,7 @@ class MapScreenState extends State<MapScreen> {
     );
   }
 
-  Widget _districtItem(String district, num cases, int rank) {
+  Widget _rankItem(String item, num cases, int rank) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -869,7 +899,7 @@ class MapScreenState extends State<MapScreen> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              district,
+              item,
               style: GoogleFonts.inter(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
