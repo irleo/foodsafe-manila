@@ -1,7 +1,12 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Activity, Eye, EyeOff, Lock } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Lock } from "lucide-react";
 import { notify } from "../utils/toast";
+import logo from "../../../mobile/assets/foodsafe_logo.png";
+import {
+  getPasswordValidationResults,
+  validatePassword,
+} from "../utils/passwordValidation";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
@@ -26,6 +31,14 @@ export default function ResetPassword() {
 
   const passwordsMatch =
     !form.password || !form.confirm ? true : form.password === form.confirm;
+  const passwordValidation = useMemo(
+    () => validatePassword(form.password),
+    [form.password],
+  );
+  const passwordRules = useMemo(
+    () => getPasswordValidationResults(form.password),
+    [form.password],
+  );
 
   const handleReset = async (e) => {
     e.preventDefault();
@@ -35,8 +48,10 @@ export default function ResetPassword() {
       setError("Passwords do not match.");
       return;
     }
-    if (form.password.length < 8) {
-      setError("Password must be at least 8 characters.");
+    if (!passwordValidation.isValid) {
+      setError(
+        `Password must include: ${passwordValidation.errors.join(", ")}.`,
+      );
       return;
     }
 
@@ -48,11 +63,14 @@ export default function ResetPassword() {
 
     try {
       setLoading(true);
-      const resetPromise = fetch(`${API_BASE}/api/auth/reset-password/complete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }).then(async (res) => {
+      const resetPromise = fetch(
+        `${API_BASE}/api/auth/reset-password/complete`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      ).then(async (res) => {
         const j = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(j?.message || "Failed to reset password.");
         return j;
@@ -95,12 +113,19 @@ export default function ResetPassword() {
           <span className="text-sm">Back</span>
         </Link>
 
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <div className="flex items-center justify-center mb-8">
-            <div className="bg-blue-600 p-3 rounded-xl">
-              <Activity className="w-8 h-8 text-white" />
+        <div className="bg-blue-600 rounded-2xl shadow-2xl">
+          <div className="flex items-center justify-center">
+            <div className="p-8">
+              <img
+                src={logo}
+                className="h-14 sm:h-16 w-auto object-contain mx-auto select-none"
+                alt="FoodSafe Manila"
+                draggable="false"
+                decoding="async"
+              />
             </div>
           </div>
+          <div className="bg-white rounded-2xl p-8">
 
           <h1 className="text-center mb-2 text-xl font-semibold">
             Set a New Password
@@ -125,7 +150,9 @@ export default function ResetPassword() {
             <div className="space-y-6">
               <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
                 <p className="font-semibold">Password updated</p>
-                <p className="mt-1">You can now log in with your new password.</p>
+                <p className="mt-1">
+                  You can now log in with your new password.
+                </p>
               </div>
 
               <Link
@@ -143,9 +170,16 @@ export default function ResetPassword() {
               Back to Forgot Password
             </Link>
           ) : (
-            <form className="space-y-6" onSubmit={handleReset} autoComplete="off">
+            <form
+              className="space-y-6"
+              onSubmit={handleReset}
+              autoComplete="off"
+            >
               <div>
-                <label className="block mb-2 text-sm text-gray-700" htmlFor="password">
+                <label
+                  className="block mb-2 text-sm text-gray-700"
+                  htmlFor="password"
+                >
                   New Password
                 </label>
 
@@ -154,13 +188,20 @@ export default function ResetPassword() {
                   <input
                     id="password"
                     type={show1 ? "text" : "password"}
-                    className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                      form.password && !passwordValidation.isValid
+                        ? "border-red-300"
+                        : "border-gray-300"
+                    }`}
                     placeholder="Enter a new password"
                     value={form.password}
-                    onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, password: e.target.value }))
+                    }
                     disabled={loading}
                     required
                     minLength={8}
+                    autoComplete="new-password"
                   />
                   <button
                     type="button"
@@ -169,13 +210,34 @@ export default function ResetPassword() {
                     disabled={loading}
                     aria-label={show1 ? "Hide password" : "Show password"}
                   >
-                    {show1 ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {show1 ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
                   </button>
                 </div>
               </div>
 
+               {/* Password Rules */}
+              <p className="text-xs text-gray-500 -mt-4">
+                Password must have{" "}
+                {passwordRules.map((rule, index) => (
+                  <span
+                    key={rule.id}
+                    className={rule.isMet ? "text-green-700" : "text-gray-500"}
+                  >
+                    {rule.label.toLowerCase()}
+                    {index < passwordRules.length - 1 ? ", " : "."}
+                  </span>
+                ))}
+              </p>
+
               <div>
-                <label className="block mb-2 text-sm text-gray-700" htmlFor="confirm">
+                <label
+                  className="block mb-2 text-sm text-gray-700 "
+                  htmlFor="confirm"
+                >
                   Confirm Password
                 </label>
 
@@ -189,10 +251,13 @@ export default function ResetPassword() {
                     }`}
                     placeholder="Confirm new password"
                     value={form.confirm}
-                    onChange={(e) => setForm((p) => ({ ...p, confirm: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, confirm: e.target.value }))
+                    }
                     disabled={loading}
                     required
                     minLength={8}
+                    autoComplete="new-password"
                   />
                   <button
                     type="button"
@@ -201,18 +266,26 @@ export default function ResetPassword() {
                     disabled={loading}
                     aria-label={show2 ? "Hide password" : "Show password"}
                   >
-                    {show2 ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {show2 ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
                   </button>
                 </div>
 
                 {!passwordsMatch && (
-                  <p className="mt-2 text-xs text-red-600">Passwords do not match.</p>
+                  <p className="mt-2 text-xs text-red-600">
+                    Passwords do not match.
+                  </p>
                 )}
               </div>
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={
+                  loading || !passwordValidation.isValid || !passwordsMatch
+                }
                 className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading && (
@@ -228,6 +301,7 @@ export default function ResetPassword() {
               </div>
             </form>
           )}
+          </div>
         </div>
       </div>
     </div>

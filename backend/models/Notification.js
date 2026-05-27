@@ -10,6 +10,7 @@ const notificationSchema = new mongoose.Schema(
         "dataset_validated",
         "dataset_failed",
         "user_access_request",
+        "password_reset",
         "prediction_generated",
       ],
       required: true,

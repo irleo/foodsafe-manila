@@ -1,13 +1,22 @@
 import User from "../models/User.js";
+import EmailOtp from "../models/EmailOtp.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { createNotification } from "../services/notificationService.js";
-import { sendResetOtpEmail } from "../services/emailService.js";
+import {
+  sendAccessRequestOtpEmail,
+  sendResetOtpEmail,
+} from "../services/emailService.js";
+import { logActivity } from "../utils/logActivity.js";
+import { validatePassword } from "../utils/passwordValidation.js";
 
 const RESET_OTP_TTL_MINUTES = 10;
 const RESET_OTP_LENGTH = 6;
 const RESET_OTP_MAX_ATTEMPTS = 5;
+const ACCESS_OTP_TTL_MINUTES = 10;
+const ACCESS_OTP_MAX_ATTEMPTS = 5;
+const ACCESS_OTP_PURPOSE = "request_access";
 
 function generateOtp(length = RESET_OTP_LENGTH) {
   const min = 10 ** (length - 1);
@@ -19,11 +28,47 @@ function hashOtp(otp) {
   return crypto.createHash("sha256").update(String(otp)).digest("hex");
 }
 
-// POST /api/auth/request-access
-export const requestAccess = async (req, res) => {
-  const { username, email, password, organization, position, reason } =
-    req.body;
+async function findRequestAccessConflict(email) {
+  const existingUser = await User.findOne({ email });
 
+  if (!existingUser) return { existingUser: null, response: null };
+
+  if (existingUser.status === "pending") {
+    return {
+      existingUser,
+      response: {
+        status: 409,
+        body: {
+          message:
+            "An access request for this email is already pending approval.",
+        },
+      },
+    };
+  }
+
+  if (existingUser.status === "approved") {
+    return {
+      existingUser,
+      response: {
+        status: 409,
+        body: {
+          message: "An account with this email already exists. Please sign in.",
+        },
+      },
+    };
+  }
+
+  return { existingUser, response: null };
+}
+
+function validateAccessRequestFields({
+  username,
+  email,
+  password,
+  organization,
+  position,
+  reason,
+}) {
   if (
     !username ||
     !email ||
@@ -32,36 +77,221 @@ export const requestAccess = async (req, res) => {
     !position ||
     !reason
   ) {
-    return res.status(400).json({ message: "All fields are required" });
+    return "All fields are required";
   }
 
-  if (typeof password !== "string" || password.length < 8) 
-    return res.status(400).json({ message: "Password must be at least 8 characters", });
-  
-  if (typeof reason !== "string" || reason.trim().length > 300) 
-    return res.status(400).json({ message: "Reason must be 300 characters or less" });
-  
+  const passwordValidation = validatePassword(password);
+  if (!passwordValidation.isValid) return passwordValidation.message;
+
+  if (typeof reason !== "string" || reason.trim().length > 300) {
+    return "Reason must be 300 characters or less";
+  }
+
+  return "";
+}
+
+async function verifyAccessOtpOrResponse(email, otp) {
+  if (!otp) {
+    return {
+      ok: false,
+      response: {
+        status: 400,
+        body: { message: "Email verification code is required." },
+      },
+    };
+  }
+
+  const record = await EmailOtp.findOne({
+    email,
+    purpose: ACCESS_OTP_PURPOSE,
+  }).select("+otpHash +attempts");
+
+  if (!record || !record.otpHash || record.expiresAt.getTime() < Date.now()) {
+    return {
+      ok: false,
+      response: {
+        status: 400,
+        body: { message: "Invalid or expired email verification code." },
+      },
+    };
+  }
+
+  if ((record.attempts || 0) >= ACCESS_OTP_MAX_ATTEMPTS) {
+    return {
+      ok: false,
+      response: {
+        status: 429,
+        body: { message: "Too many invalid OTP attempts." },
+      },
+    };
+  }
+
+  if (record.otpHash !== hashOtp(otp)) {
+    record.attempts = (record.attempts || 0) + 1;
+    await record.save();
+    return {
+      ok: false,
+      response: {
+        status: 400,
+        body: { message: "Invalid or expired email verification code." },
+      },
+    };
+  }
+
+  return { ok: true, record };
+}
+
+// POST /api/auth/request-access/send-otp
+export const sendRequestAccessOtp = async (req, res) => {
+  const { username, email, password, organization, position, reason } =
+    req.body;
+  const normalizedEmail = String(email || "")
+    .trim()
+    .toLowerCase();
+
+  const validationMessage = validateAccessRequestFields({
+    username,
+    email: normalizedEmail,
+    password,
+    organization,
+    position,
+    reason,
+  });
+  if (validationMessage) {
+    return res.status(400).json({ message: validationMessage });
+  }
+
   try {
-    const normalizedEmail = email.toLowerCase().trim();
-    const normalizedUsername = username.trim();
+    const { response } = await findRequestAccessConflict(normalizedEmail);
+    if (response) return res.status(response.status).json(response.body);
 
-    const existingUser = await User.findOne({ email: normalizedEmail });
+    const existingOtp = await EmailOtp.findOne({
+      email: normalizedEmail,
+      purpose: ACCESS_OTP_PURPOSE,
+    });
 
+    const now = Date.now();
+    const lastRequestedAt = existingOtp?.requestedAt
+      ? new Date(existingOtp.requestedAt).getTime()
+      : 0;
+    const minGapMs = 60 * 1000;
+    if (lastRequestedAt && now - lastRequestedAt < minGapMs) {
+      return res.status(429).json({
+        message: "Please wait before requesting another code.",
+      });
+    }
+
+    const otp = generateOtp();
+    await EmailOtp.findOneAndUpdate(
+      { email: normalizedEmail, purpose: ACCESS_OTP_PURPOSE },
+      {
+        $set: {
+          otpHash: hashOtp(otp),
+          expiresAt: new Date(now + ACCESS_OTP_TTL_MINUTES * 60 * 1000),
+          requestedAt: new Date(now),
+          attempts: 0,
+        },
+      },
+      { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
+    );
+
+    const isProd = process.env.NODE_ENV === "production";
+    let usedDevFallback = false;
+
+    try {
+      await sendAccessRequestOtpEmail({
+        toEmail: normalizedEmail,
+        otp,
+        expiresMinutes: ACCESS_OTP_TTL_MINUTES,
+      });
+
+      console.log("OTP email sent through Brevo to:", normalizedEmail);
+    } catch (mailError) {
+      console.error("Brevo SMTP failed:", {
+        message: mailError.message,
+        code: mailError.code,
+        command: mailError.command,
+        response: mailError.response,
+        responseCode: mailError.responseCode,
+      });
+
+      if (isProd) throw mailError;
+
+      usedDevFallback = true;
+      console.warn(
+        "SMTP unavailable in development. Using access OTP fallback for:",
+        normalizedEmail,
+      );
+    }
+
+    return res.json({
+      success: true,
+      message: "Verification code sent.",
+      ...(usedDevFallback
+        ? {
+            devFallback: true,
+            debugOtp: otp,
+            debugExpiresMinutes: ACCESS_OTP_TTL_MINUTES,
+          }
+        : {}),
+    });
+  } catch (error) {
+    console.error("Error sending access request OTP:", {
+      message: error.message,
+      code: error.code,
+      stack: error.stack,
+    });
+
+    return res
+      .status(500)
+      .json({ message: "Failed to send verification code." });
+  }
+};
+
+// POST /api/auth/request-access
+export const requestAccess = async (req, res) => {
+  const {
+    username,
+    email,
+    password,
+    organization,
+    position,
+    reason,
+    accessOtp,
+  } = req.body;
+  const normalizedEmail = String(email || "")
+    .trim()
+    .toLowerCase();
+  const normalizedUsername = String(username || "").trim();
+
+  const validationMessage = validateAccessRequestFields({
+    username: normalizedUsername,
+    email: normalizedEmail,
+    password,
+    organization,
+    position,
+    reason,
+  });
+  if (validationMessage) {
+    return res.status(400).json({ message: validationMessage });
+  }
+
+  try {
+    const otpResult = await verifyAccessOtpOrResponse(
+      normalizedEmail,
+      String(accessOtp || "").trim(),
+    );
+    if (!otpResult.ok) {
+      return res
+        .status(otpResult.response.status)
+        .json(otpResult.response.body);
+    }
+
+    const { existingUser, response } =
+      await findRequestAccessConflict(normalizedEmail);
+    if (response) return res.status(response.status).json(response.body);
     if (existingUser) {
       // conflict handling
-      if (existingUser.status === "pending") {
-        return res.status(409).json({
-          message:
-            "An access request for this email is already pending approval.",
-        });
-      }
-
-      if (existingUser.status === "approved") {
-        return res.status(409).json({
-          message: "An account with this email already exists. Please sign in.",
-        });
-      }
-
       if (existingUser.status === "rejected") {
         // Allow re-apply by updating the existing record
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -76,12 +306,19 @@ export const requestAccess = async (req, res) => {
         existingUser.approvedBy = undefined;
 
         await existingUser.save();
+        await EmailOtp.deleteOne({
+          email: normalizedEmail,
+          purpose: ACCESS_OTP_PURPOSE,
+        });
         await createNotification({
           type: "user_access_request",
           title: "New User Request",
           message: `${existingUser.username || "A user"} requested access.`,
           dotColor: "blue",
-          metadata: { userId: String(existingUser._id), email: existingUser.email },
+          metadata: {
+            userId: String(existingUser._id),
+            email: existingUser.email,
+          },
         });
 
         return res.status(200).json({
@@ -111,6 +348,10 @@ export const requestAccess = async (req, res) => {
     });
 
     await user.save();
+    await EmailOtp.deleteOne({
+      email: normalizedEmail,
+      purpose: ACCESS_OTP_PURPOSE,
+    });
     await createNotification({
       type: "user_access_request",
       title: "New User Request",
@@ -297,8 +538,7 @@ export const forgotPassword = async (req, res) => {
     if (!user) {
       return res.json({
         success: true,
-        message:
-          "If the email exists, a reset code has been sent.",
+        message: "If the email exists, a reset code has been sent.",
       });
     }
 
@@ -381,7 +621,9 @@ export const verifyResetOtp = async (req, res) => {
     }
 
     if ((user.resetOtpAttempts || 0) >= RESET_OTP_MAX_ATTEMPTS) {
-      return res.status(429).json({ message: "Too many invalid OTP attempts." });
+      return res
+        .status(429)
+        .json({ message: "Too many invalid OTP attempts." });
     }
 
     const matches = user.resetOtpHash === hashOtp(otp);
@@ -411,15 +653,14 @@ export const completePasswordReset = async (req, res) => {
       .status(400)
       .json({ message: "Email, OTP, and new password are required." });
   }
-  if (password.length < 8) {
-    return res
-      .status(400)
-      .json({ message: "Password must be at least 8 characters." });
+  const passwordValidation = validatePassword(password);
+  if (!passwordValidation.isValid) {
+    return res.status(400).json({ message: passwordValidation.message });
   }
 
   try {
     const user = await User.findOne({ email }).select(
-      "_id password resetOtpHash resetOtpExpiresAt resetOtpAttempts",
+      "_id username email password resetOtpHash resetOtpExpiresAt resetOtpAttempts",
     );
     if (!user || !user.resetOtpHash || !user.resetOtpExpiresAt) {
       return res.status(400).json({ message: "Invalid or expired OTP." });
@@ -430,7 +671,9 @@ export const completePasswordReset = async (req, res) => {
     }
 
     if ((user.resetOtpAttempts || 0) >= RESET_OTP_MAX_ATTEMPTS) {
-      return res.status(429).json({ message: "Too many invalid OTP attempts." });
+      return res
+        .status(429)
+        .json({ message: "Too many invalid OTP attempts." });
     }
 
     const matches = user.resetOtpHash === hashOtp(otp);
@@ -446,6 +689,22 @@ export const completePasswordReset = async (req, res) => {
     user.resetOtpRequestedAt = null;
     user.resetOtpAttempts = 0;
     await user.save();
+
+    const displayName = user.username || user.email || "A user";
+    await createNotification({
+      type: "password_reset",
+      title: "Password Reset",
+      message: `${displayName} reset their password.`,
+      dotColor: "green",
+      metadata: { userId: String(user._id), email: user.email },
+    });
+    await logActivity({
+      actor: user._id,
+      actionType: "password_reset",
+      title: "Password reset",
+      subtitle: `${displayName} reset their password.`,
+      metadata: { userId: user._id, email: user.email },
+    });
 
     return res.json({ success: true, message: "Password has been reset." });
   } catch (error) {

@@ -22,6 +22,7 @@ const typeDotClass = (type) => {
   if (type === "prediction_generated") return "bg-purple-500";
   if (type === "user_approved") return "bg-green-500";
   if (type === "user_rejected") return "bg-red-500";
+  if (type === "password_reset") return "bg-green-500";
   if (type === "report_reviewed") return "bg-yellow-500";
   if (type === "alert_acknowledged") return "bg-orange-500";
   if (type === "analytics_exported") return "bg-indigo-500";

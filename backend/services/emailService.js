@@ -36,3 +36,25 @@ export async function sendResetOtpEmail({ toEmail, otp, expiresMinutes = 10 }) {
     text,
   });
 }
+
+export async function sendAccessRequestOtpEmail({
+  toEmail,
+  otp,
+  expiresMinutes = 10,
+}) {
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const transporter = await createTransporter();
+
+  const subject = "FoodSafe Manila Access Request OTP";
+  const text =
+    `Your FoodSafe Manila access request OTP is: ${otp}\n\n` +
+    `This code expires in ${expiresMinutes} minutes.\n` +
+    "If you did not request access to FoodSafe Manila, please ignore this email.";
+
+  await transporter.sendMail({
+    from,
+    to: toEmail,
+    subject,
+    text,
+  });
+}

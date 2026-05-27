@@ -16,7 +16,7 @@ const ALLOWED_SYMPTOMS = new Set([
 ]);
 
 
-const MAX_REPORTS_PER_24H = 3;
+const MAX_REPORTS_PER_24H = Infinity;
 const DUPLICATE_WINDOW_HOURS = 6;
 const UNUSUAL_REPORT_THRESHOLD_24H = 10;
 
@@ -153,7 +153,7 @@ export const createReport = async (req, res) => {
       source: "citizen_app",
     });
 
-    if (reportsLast24h >= MAX_REPORTS_PER_24H) {
+    if (Number.isFinite(MAX_REPORTS_PER_24H) && reportsLast24h >= MAX_REPORTS_PER_24H) {
       return res.status(429).json({
         message: "Report limit reached. Please try again later.",
       });

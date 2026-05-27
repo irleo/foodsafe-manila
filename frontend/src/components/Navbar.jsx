@@ -6,8 +6,9 @@ import {
 } from "@heroicons/react/24/outline";
 import NotificationsDropdown from "./NotificationsDropdown";
 import Spinner from "./Spinner";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import logo from "../../../mobile/assets/foodsafe_logo.png";
+import { notify } from "../utils/toast";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
@@ -15,6 +16,8 @@ export default function Navbar() {
   const { auth, loading } = useAuth();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const unusualSeenRef = useRef(new Set());
+  const unusualBootstrappedRef = useRef(false);
   const token = auth?.accessToken;
   const hasUnread = notifications.some((n) => n?.unread);
 
@@ -28,6 +31,37 @@ export default function Navbar() {
     const data = await res.json();
     setNotifications(Array.isArray(data) ? data : []);
   };
+
+  useEffect(() => {
+    if (!token) {
+      setNotifications([]);
+      return;
+    }
+
+    let isMounted = true;
+    const runFetch = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/notifications?limit=20`, {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error("Failed to fetch notifications");
+        const data = await res.json();
+        if (!isMounted) return;
+        setNotifications(Array.isArray(data) ? data : []);
+      } catch {
+        if (!isMounted) return;
+      }
+    };
+
+    runFetch();
+    const timer = setInterval(runFetch, 15000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+  }, [token]);
 
   useEffect(() => {
     if (!open || !token) return;
@@ -54,6 +88,23 @@ export default function Navbar() {
       isMounted = false;
     };
   }, [open, token]);
+
+  useEffect(() => {
+    const unusual = notifications.filter((n) => n?.type === "report_unusual");
+
+    if (!unusualBootstrappedRef.current) {
+      unusual.forEach((n) => unusualSeenRef.current.add(n.id));
+      unusualBootstrappedRef.current = true;
+      return;
+    }
+
+    for (const n of unusual) {
+      if (!n?.unread) continue;
+      if (unusualSeenRef.current.has(n.id)) continue;
+      unusualSeenRef.current.add(n.id);
+      notify.info(`${n.title}: ${n.message}`);
+    }
+  }, [notifications]);
 
   const toggleUnread = async (notification) => {
     if (!token || !notification?.id) return;
@@ -113,7 +164,11 @@ export default function Navbar() {
             <div className="relative">
               <button
                 onClick={() => setOpen((o) => !o)}
-                className="p-2 rounded-lg hover:bg-blue-600 transition"
+                className={`p-2 rounded-lg transition ${
+                  hasUnread
+                    ? "bg-blue-500/30 ring-1 ring-blue-300 hover:bg-blue-500/40"
+                    : "hover:bg-blue-600"
+                }`}
               >
                 <BellIcon className="h-6 w-6 text-white" />
 

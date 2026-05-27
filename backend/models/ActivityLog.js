@@ -15,6 +15,7 @@ const activityLogSchema = new mongoose.Schema(
         "dataset_validated",
         "user_approved",
         "user_rejected",
+        "password_reset",
         "prediction_generated",
         "report_reviewed",
         "alert_acknowledged",

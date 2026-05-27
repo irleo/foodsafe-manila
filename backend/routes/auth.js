@@ -5,6 +5,7 @@ import {
   logout, 
   refreshToken, 
   requestAccess,
+  sendRequestAccessOtp,
   forgotPassword,
   verifyResetOtp,
   completePasswordReset,
@@ -28,6 +29,7 @@ const router = express.Router();
 router.post('/login', login);
 router.post('/logout', logout);
 router.get('/refresh', refreshToken);
+router.post("/request-access/send-otp", requestAccessLimiter, sendRequestAccessOtp);
 router.post("/request-access", requestAccessLimiter, requestAccess);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password/verify-otp", verifyResetOtp);

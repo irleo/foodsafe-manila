@@ -2,6 +2,7 @@ import Notification from "../models/Notification.js";
 
 function toNotification({
   id,
+  type,
   title,
   message,
   createdAt,
@@ -10,6 +11,7 @@ function toNotification({
 }) {
   return {
     id,
+    type,
     title,
     message,
     time: new Date(createdAt).toLocaleString(),
@@ -25,12 +27,13 @@ export const getNotifications = async (req, res) => {
     const notifications = await Notification.find({})
       .sort({ createdAt: -1 })
       .limit(limit)
-      .select("title message createdAt dotColor unread");
+      .select("type title message createdAt dotColor unread");
 
     return res.json(
       notifications.map((n) =>
         toNotification({
           id: String(n._id),
+          type: n.type,
           title: n.title,
           message: n.message,
           createdAt: n.createdAt,

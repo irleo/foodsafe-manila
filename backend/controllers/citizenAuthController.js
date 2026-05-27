@@ -6,6 +6,7 @@ import {
   sanitizeCitizenUser,
   signCitizenTokens,
 } from "../utils/citizenAuth.js";
+import { validatePassword } from "../utils/passwordValidation.js";
 
 // POST /api/auth/register
 export const registerCitizen = async (req, res) => {
@@ -15,8 +16,9 @@ export const registerCitizen = async (req, res) => {
     return res.status(400).json({ message: "Missing required fields" });
   }
 
-  if (typeof password !== "string" || password.length < 8) {
-    return res.status(400).json({ message: "Password must be at least 8 characters" });
+  const passwordValidation = validatePassword(password);
+  if (!passwordValidation.isValid) {
+    return res.status(400).json({ message: passwordValidation.message });
   }
 
   try {
@@ -104,8 +106,9 @@ export const resetCitizenPassword = async (req, res) => {
     return res.status(400).json({ message: "Missing required fields" });
   }
 
-  if (typeof newPassword !== "string" || newPassword.length < 8) {
-    return res.status(400).json({ message: "Password must be at least 8 characters" });
+  const passwordValidation = validatePassword(newPassword);
+  if (!passwordValidation.isValid) {
+    return res.status(400).json({ message: passwordValidation.message });
   }
 
   try {
