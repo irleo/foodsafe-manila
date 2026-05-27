@@ -16,35 +16,42 @@ export default function AnalyticsGrid({
   colors,
 }) {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className="lg:col-span-2">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 analytics-print-grid">
+      <div className="lg:col-span-2 analytics-print-block">
         <SwitchableYearlyChart
           title="Cases Over Time"
           data={yearlyTimelineData}
         />
       </div>
 
-      <DistrictBarChart 
-      data={districtData} title="Top Cases (by district)" />
+      <div className="analytics-print-block">
+        <DistrictBarChart data={districtData} title="Top Cases (by district)" />
+      </div>
 
-      <DiseasePieChart
-        data={diseaseData}
-        colors={colors}
-        title="Disease Distribution"
-      />
+      <div className="analytics-print-block">
+        <DiseasePieChart
+          data={diseaseData}
+          colors={colors}
+          title="Disease Distribution"
+        />
+      </div>
 
-      <RiskLevelDonutChart
-        data={riskLevelData}
-        colors={colors}
-        title="Risk Level Analysis"
-      />
+      <div className="analytics-print-block">
+        <RiskLevelDonutChart
+          data={riskLevelData}
+          colors={colors}
+          title="Risk Level Analysis"
+        />
+      </div>
 
-      <DiseaseTrendStackedAreaChart
-        data={diseaseTrendData}
-        keys={diseaseTrendKeys}
-        title="Disease Trends Over Time"
-      />
-      <div className="lg:col-span-2">
+      <div className="analytics-print-block">
+        <DiseaseTrendStackedAreaChart
+          data={diseaseTrendData}
+          keys={diseaseTrendKeys}
+          title="Disease Trends Over Time"
+        />
+      </div>
+      <div className="lg:col-span-2 analytics-print-block">
         <DistrictStatisticsTable data={districtStats} />
       </div>
     </div>

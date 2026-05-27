@@ -14,8 +14,8 @@ export default function AnalyticsStats({
 {
   const hasYoY = Number.isFinite(yoyPct);
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 analytics-print-grid analytics-stats-print-grid">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 analytics-print-block">
         <div className="flex items-center justify-between mb-2">
           <p className="text-sm text-gray-600">Total Cases This Year</p>
           <ArrowTrendingUpIcon height={20} width={20} />
@@ -41,7 +41,7 @@ export default function AnalyticsStats({
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 analytics-print-block">
         <p className="text-sm text-gray-600 mb-2">Top District</p>
         <p className="text-2xl font-semibold">{topDistrict}</p>
         <p className="text-sm text-gray-600 mt-2">
@@ -49,13 +49,13 @@ export default function AnalyticsStats({
         </p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 analytics-print-block">
         <p className="text-sm text-gray-600 mb-2">Top Diseases</p>
         <p className="text-2xl font-semibold">{topDisease}</p>
         <p className="text-sm text-gray-600 mt-2">Most frequent diagnosis</p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 analytics-print-block">
         <p className="text-sm text-gray-600 mb-2">Districts Covered</p>
         <p className="text-3xl">{districtsCovered}</p>
         <p className="text-sm text-gray-600 mt-2">

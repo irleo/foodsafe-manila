@@ -50,18 +50,26 @@ export default function Analytics() {
 
   const vm = useMemo(() => buildAnalyticsCasesViewModel(caseRows), [caseRows]);
 
+  const handleExportPdf = () => {
+    window.print();
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 analytics-print-root">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Analytics</h1>
-          <p className="text-gray-600 mt-1">
+          <p className="mt-1 text-gray-600">
             Analysis of historical foodborne disease trends and patterns
           </p>
         </div>
         {/* EXPORT */}
 
-        <button className="flex items-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+        <button
+          type="button"
+          onClick={handleExportPdf}
+          className="no-print flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-white hover:bg-blue-700"
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="24"
@@ -69,16 +77,16 @@ export default function Analytics() {
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            className="lucide lucide-download w-4 h-4"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="lucide lucide-download h-4 w-4"
           >
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="7 10 12 15 17 10"></polyline>
             <line x1="12" x2="12" y1="15" y2="3"></line>
           </svg>
-          Export
+          Export as PDF
         </button>
       </div>
 
@@ -89,8 +97,8 @@ export default function Analytics() {
       )}
 
       {loading ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <p className="text-sm text-gray-600">Loading analytics…</p>
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <p className="text-sm text-gray-600">Loading analytics...</p>
         </div>
       ) : (
         <>
@@ -115,6 +123,7 @@ export default function Analytics() {
           />
         </>
       )}
+
     </div>
   );
 }

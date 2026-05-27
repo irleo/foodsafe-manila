@@ -5,3 +5,48 @@
 .leaflet-bottom {
   z-index: 0 !important;
 }
+
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .analytics-print-root {
+    break-inside: auto;
+  }
+
+  .analytics-print-grid {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .analytics-print-grid.analytics-stats-print-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .analytics-print-block,
+  .bg-white.rounded-xl,
+  .recharts-wrapper,
+  .recharts-responsive-container,
+  .recharts-surface,
+  table,
+  tr,
+  td,
+  th,
+  svg {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}
