@@ -254,28 +254,7 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
                                 ),
                               ),
                             ),
-
-                            const SizedBox(height: 18),
-
-                            // info box
-                            Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEBF4FF),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: const Color(0xFFBFDBFE),
-                                ),
-                              ),
-                              child: Text(
-                                "Your phone number is used to send critical alerts and cannot be changed here. Contact DOH support if needed.",
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: Colors.blue[800],
-                                ),
-                              ),
-                            ),
-
+                            
                             const SizedBox(height: 24),
 
                             SizedBox(

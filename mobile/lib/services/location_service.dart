@@ -103,11 +103,16 @@ class LocationService {
       if (placemarks.isNotEmpty) {
         final place = placemarks.first;
 
-        final city = place.locality ?? place.subAdministrativeArea ?? 'Unknown City';
-        final area = place.subLocality ?? place.thoroughfare ?? 'Unknown Area';
+        String city = place.locality ?? "";
+        String district = place.subLocality ?? "";
+        String country = place.country ?? "";
 
-        // Fake a barangay-like label for consistency
-        return '$city, $area';
+        String result = "";
+        if (district.isNotEmpty) result += "$district, ";
+        if (city.isNotEmpty) result += city;
+        if (result.isEmpty) result = country;
+
+        return result;
       }
 
       return 'Unknown location';
