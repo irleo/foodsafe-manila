@@ -19,17 +19,43 @@ class _HeaderState extends State<Header> {
   late String locationText;
   String dateText = "";
 
+  String _normalizeDistrictLabel(String value) {
+    final cleaned = value
+        .trim()
+        .replaceAll(RegExp(r'[_-]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ');
+    final match = RegExp(r'^district\s*(\d+)$', caseSensitive: false)
+        .firstMatch(cleaned);
+    if (match != null) return 'District ${match.group(1)}';
+    return cleaned;
+  }
+
+  String _composeHeaderLocation(String fallback) {
+    final manila = LocationService.cachedManilaLocation;
+    if (manila != null) {
+      final district = _normalizeDistrictLabel(manila.district);
+      final barangayNo = manila.barangayNo;
+      if (barangayNo > 0) return '$district, Barangay $barangayNo';
+      final barangay = manila.barangay.trim();
+      if (barangay.isNotEmpty) return '$district, $barangay';
+      return district;
+    }
+    return fallback;
+  }
+
   @override
   void initState() {
     super.initState();
     _loadHeader();
-    locationText = LocationService.cachedAddress ?? "Fetching...";
+    locationText = _composeHeaderLocation(
+      LocationService.cachedAddress ?? "Fetching...",
+    );
 
     // Optionally, refresh in background
     LocationService.getUserAddress(forceRefresh: true).then((updated) {
       if (mounted) {
         setState(() {
-          locationText = updated;
+          locationText = _composeHeaderLocation(updated);
         });
       }
     });
@@ -40,7 +66,7 @@ class _HeaderState extends State<Header> {
 
     LocationService.getUserAddress().then((address) {
       setState(() {
-        locationText = address;
+        locationText = _composeHeaderLocation(address);
       });
     });
   }
