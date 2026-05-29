@@ -125,6 +125,24 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
     return '$hour:${dateTime.minute.toString().padLeft(2, '0')} $period';
   }
 
+  String _normalizeDistrictLabel(String? value) {
+    final raw = (value ?? '').trim();
+    if (raw.isEmpty) return 'Unknown';
+    final cleaned = raw.replaceAll(RegExp(r'[_-]+'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final match = RegExp(r'^district\s*(\d+)$', caseSensitive: false).firstMatch(cleaned);
+    if (match != null) return 'District ${match.group(1)}';
+    return cleaned
+        .split(' ')
+        .map((part) => part.isEmpty ? part : '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}')
+        .join(' ');
+  }
+
+  String _withBarangay(String base, String? barangay) {
+    final b = (barangay ?? '').trim();
+    if (b.isEmpty) return base;
+    return '$base, $b';
+  }
+
   Future<void> _fetchReports() async {
     if (Session.currentUser == null) {
       setState(() => _isLoading = false);
@@ -361,20 +379,24 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
 
                                 final location =
                                     report['location'] as Map<String, dynamic>?;
-                                final reportLocation =
-                                    report['report_location'].split(',').first.trim() as String? ??
-                                    location?['district'] as String? ??
-                                    location?['name'].split(',').first.trim() as String? ??
+                                final rawReportLocation = (report['report_location'] as String?) ??
+                                    (location?['district'] as String?) ??
+                                    (location?['name'] as String?) ??
                                     'Unknown';
+                                final reportLocationBase = _normalizeDistrictLabel(
+                                  rawReportLocation.split(',').first.trim(),
+                                );
 
                                 final reportBarangay =
                                     location?['barangay'] as String?;
 
-                                final exposureSite =
-                                    (report['food_location'].split(',').first.trim() as String?) ??
-                                    report['exposureDistrict'] as String? ??
-                                    location?['name'].split(',').first.trim() as String? ??
+                                final rawExposureSite = (report['food_location'] as String?) ??
+                                    (report['exposureDistrict'] as String?) ??
+                                    (location?['name'] as String?) ??
                                     'Unknown';
+                                final exposureSiteBase = _normalizeDistrictLabel(
+                                  rawExposureSite.split(',').first.trim(),
+                                );
 
                                 final exposureBarangay =
                                     report['exposureBarangay'] as String? ??
@@ -396,9 +418,15 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                                         ? _formatTime(reportedAt)
                                         : 'Unknown',
                                     symptoms: symptomsList,
-                                    reportLocation: reportLocation,
+                                    reportLocation: _withBarangay(
+                                      reportLocationBase,
+                                      reportBarangay,
+                                    ),
                                     reportBarangay: reportBarangay,
-                                    exposureSite: exposureSite,
+                                    exposureSite: _withBarangay(
+                                      exposureSiteBase,
+                                      exposureBarangay,
+                                    ),
                                     exposureBarangay: exposureBarangay,
                                     foodSource: foodSource,
                                   ),
