@@ -1,3 +1,5 @@
+import 'package:intl/intl.dart';
+
 import '../services/api_service.dart';
 import '../services/risk_alert_service.dart';
 import '../utils/format_helpers.dart';
@@ -12,8 +14,9 @@ class AlertsRepository {
 
   static RiskLevel levelFromString(String? level) {
     switch (level) {
-      case 'high':
       case 'critical':
+        return RiskLevel.critical;
+      case 'high':
         return RiskLevel.high;
       case 'moderate':
       case 'medium':
@@ -26,6 +29,7 @@ class AlertsRepository {
   static RiskLevel levelFromHeatmapBand(String? band) {
     switch (band) {
       case 'Critical':
+        return RiskLevel.critical;
       case 'High':
         return RiskLevel.high;
       case 'Medium':
@@ -37,6 +41,8 @@ class AlertsRepository {
 
   static String riskLabel(RiskLevel level) {
     switch (level) {
+      case RiskLevel.critical:
+        return 'Critical';
       case RiskLevel.high:
         return 'High Risk';
       case RiskLevel.moderate:
@@ -46,12 +52,40 @@ class AlertsRepository {
     }
   }
 
+  static String? _formatDatasetCoverage(Map<String, dynamic>? dataset) {
+    if (dataset == null) return null;
+    final start = dataset['coverageStart'];
+    final end = dataset['coverageEnd'];
+    if (start == null && end == null) return null;
+
+    String fmt(dynamic value) {
+      if (value == null) return '';
+      if (value is DateTime) {
+        return DateFormat('MMM yyyy').format(value);
+      }
+      final parsed = DateTime.tryParse(value.toString());
+      if (parsed != null) return DateFormat('MMM yyyy').format(parsed);
+      return value.toString();
+    }
+
+    final startLabel = fmt(start);
+    final endLabel = fmt(end);
+    if (startLabel.isNotEmpty && endLabel.isNotEmpty) {
+      return '$startLabel – $endLabel';
+    }
+    return startLabel.isNotEmpty ? startLabel : endLabel;
+  }
+
   Future<List<AlertItem>> fetchAlerts({
     int? limit,
     bool includeLiveGpsAlert = true,
   }) async {
-    final datasetId = await ApiService.fetchLatestValidatedDatasetId();
+    final dataset = await ApiService.fetchLatestValidatedDataset();
+    final datasetId = dataset?['id']?.toString();
     if (datasetId == null) return [];
+
+    final dataCoverage = _formatDatasetCoverage(dataset);
+    final generatedAt = DateTime.now();
 
     final heatmapData = await ApiService.fetchDistrictHeatmap(
       datasetId: datasetId,
@@ -74,7 +108,15 @@ class AlertsRepository {
         return ((b['cases'] as num?) ?? 0).compareTo((a['cases'] as num?) ?? 0);
       });
 
-    final built = withCases.map(_alertFromHeatmapPoint).toList();
+    final built = withCases
+        .map(
+          (point) => _alertFromHeatmapPoint(
+            point,
+            generatedAt: generatedAt,
+            dataCoverage: dataCoverage,
+          ),
+        )
+        .toList();
 
     if (includeLiveGpsAlert) {
       final live = RiskAlertService.instance.latestMessage.value;
@@ -85,11 +127,13 @@ class AlertsRepository {
             id: 'live_gps',
             title: 'You are in a high-risk area',
             risk: RiskLevel.high,
+            riskBand: 'High',
             message: live,
             location: 'Current GPS location',
+            district: 'Current location',
             cases: 'Active alert',
             distance: 'Immediate',
-            areaData: null,
+            generatedAt: generatedAt,
           ),
         );
       }
@@ -101,13 +145,18 @@ class AlertsRepository {
     return built;
   }
 
-  AlertItem _alertFromHeatmapPoint(Map<String, dynamic> point) {
+  AlertItem _alertFromHeatmapPoint(
+    Map<String, dynamic> point, {
+    required DateTime generatedAt,
+    String? dataCoverage,
+  }) {
     final district = FormatHelpers.normalizeDistrict(point['district']?.toString());
     final barangayNo = (point['barangayNo'] as num?)?.toInt() ?? 0;
+    final barangayName = point['barangay']?.toString();
     final location = FormatHelpers.formatLocationDisplay(
       district: district,
       barangayNo: barangayNo,
-      barangayName: point['barangay']?.toString(),
+      barangayName: barangayName,
     );
 
     final cases = (point['cases'] as num?) ?? 0;
@@ -119,15 +168,21 @@ class AlertsRepository {
 
     return AlertItem(
       id: 'heatmap_$barangayNo',
-      title: '$riskBand risk in $location',
+      title: '$riskBand Risk Area Alert',
       risk: level,
+      riskBand: riskBand,
       message:
           'Foodborne illness activity detected in this barangay based on the '
-          'latest validated dataset. Average district incident rate: '
-          '${avgIncident.toStringAsFixed(1)}.',
+          'latest validated dataset.',
       location: location,
+      district: district,
+      barangayNo: barangayNo > 0 ? barangayNo : null,
+      barangayName: barangayName,
       cases: '$cases case${cases == 1 ? '' : 's'} here',
       distance: '$districtTotal district total',
+      avgIncidentRate: avgIncident,
+      generatedAt: generatedAt,
+      dataCoverage: dataCoverage,
       areaData: point,
     );
   }

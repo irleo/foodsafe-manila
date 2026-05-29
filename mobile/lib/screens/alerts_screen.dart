@@ -105,12 +105,15 @@ class AlertsScreenState extends State<AlertsScreen> {
           ),
         ),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(36),
-          child: Padding(
+          preferredSize: const Size.fromHeight(44),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Row(
               children: [
                 _filterChip('All', null),
+                const SizedBox(width: 8),
+                _filterChip('Critical', RiskLevel.critical),
                 const SizedBox(width: 8),
                 _filterChip('High', RiskLevel.high),
                 const SizedBox(width: 8),
