@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 
+import '../utils/format_helpers.dart';
+
 class ManilaLocation {
   final String district;
   final String barangay;
@@ -14,19 +16,16 @@ class ManilaLocation {
     required this.formatted,
   });
 
-  Map<String, dynamic> toPayload({String? localityName}) {
-    final middle = localityName?.trim().isNotEmpty == true
-        ? localityName!.trim()
+  Map<String, dynamic> toPayload() {
+    final districtLabel = FormatHelpers.normalizeDistrict(district);
+    final barangayLabel = barangayNo > 0
+        ? 'Barangay $barangayNo'
         : ManilaGeoService._displayBarangayName(barangay);
     return {
-      'district': district,
-      'barangay': middle,
+      'district': districtLabel,
+      'barangay': barangayLabel,
       'barangayNo': barangayNo,
-      'name': ManilaGeoService.formatLocation(
-        district: district,
-        locality: middle,
-        barangayNo: barangayNo,
-      ),
+      'name': formatted,
     };
   }
 }
@@ -45,10 +44,14 @@ class ManilaGeoService {
 
   static String formatLocation({
     required String district,
-    required String locality,
+    String? locality,
     required int barangayNo,
   }) {
-    return '$district, $locality';
+    return FormatHelpers.formatLocationDisplay(
+      district: district,
+      barangayNo: barangayNo,
+      barangayName: locality,
+    );
   }
 
   static String _displayBarangayName(String barangay) {
@@ -123,17 +126,12 @@ class ManilaGeoService {
       final barangayNo = (props['barangayNo'] as num?)?.toInt() ?? 0;
       if (barangayNo <= 0) continue;
 
-      final middle = localityName?.trim().isNotEmpty == true
-          ? localityName!.trim()
-          : _displayBarangayName(barangay);
-
       return ManilaLocation(
-        district: district,
+        district: FormatHelpers.normalizeDistrict(district),
         barangay: barangay,
         barangayNo: barangayNo,
         formatted: formatLocation(
           district: district,
-          locality: middle,
           barangayNo: barangayNo,
         ),
       );
@@ -166,6 +164,83 @@ class ManilaGeoService {
     if (value == 'all') return 'all';
     final match = RegExp(r'(\d+)').firstMatch(value);
     if (match != null) return 'District ${match.group(1)}';
-    return value;
+    return FormatHelpers.normalizeDistrict(value);
+  }
+
+  /// Resolves a barangay by number (used for debug location simulation).
+  static ManilaLocation? locationForBarangay({
+    required String district,
+    required int barangayNo,
+  }) {
+    if (_features == null || barangayNo <= 0) return null;
+
+    for (final feature in _features!) {
+      final props = feature['properties'] as Map<String, dynamic>;
+      final featureNo = (props['barangayNo'] as num?)?.toInt();
+      if (featureNo != barangayNo) continue;
+
+      final featureDistrict =
+          FormatHelpers.normalizeDistrict(props['district']?.toString());
+      final normalizedDistrict = FormatHelpers.normalizeDistrict(district);
+      if (featureDistrict != normalizedDistrict) continue;
+
+      final barangay = props['barangay']?.toString() ?? 'Unknown';
+      return ManilaLocation(
+        district: normalizedDistrict,
+        barangay: barangay,
+        barangayNo: barangayNo,
+        formatted: formatLocation(
+          district: normalizedDistrict,
+          barangayNo: barangayNo,
+        ),
+      );
+    }
+    return null;
+  }
+
+  static Map<String, double>? centroidForBarangay(int barangayNo) {
+    if (_features == null || barangayNo <= 0) return null;
+
+    for (final feature in _features!) {
+      final props = feature['properties'] as Map<String, dynamic>;
+      if ((props['barangayNo'] as num?)?.toInt() != barangayNo) continue;
+
+      final geometry = feature['geometry'] as Map<String, dynamic>?;
+      if (geometry == null) return null;
+
+      final points = <List<double>>[];
+      final type = geometry['type'];
+      final coordinates = geometry['coordinates'];
+
+      void collectRing(List ring) {
+        for (final point in ring) {
+          points.add([
+            (point[0] as num).toDouble(),
+            (point[1] as num).toDouble(),
+          ]);
+        }
+      }
+
+      if (type == 'Polygon') {
+        collectRing((coordinates as List).first as List);
+      } else if (type == 'MultiPolygon') {
+        collectRing(
+          ((coordinates as List).first as List).first as List,
+        );
+      }
+
+      if (points.isEmpty) return null;
+      var sumLng = 0.0;
+      var sumLat = 0.0;
+      for (final p in points) {
+        sumLng += p[0];
+        sumLat += p[1];
+      }
+      return {
+        'lng': sumLng / points.length,
+        'lat': sumLat / points.length,
+      };
+    }
+    return null;
   }
 }

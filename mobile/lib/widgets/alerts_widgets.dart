@@ -5,21 +5,21 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 enum RiskLevel { high, moderate, low }
 
 class AlertItem {
+  final String id;
   final String title;
   final RiskLevel risk;
   final String message;
   final String location;
-  final String timeAgo;
   final String cases;
   final String distance;
   final Map<String, dynamic>? areaData;
 
   const AlertItem({
+    required this.id,
     required this.title,
     required this.risk,
     required this.message,
     required this.location,
-    required this.timeAgo,
     required this.cases,
     required this.distance,
     this.areaData,
@@ -49,16 +49,16 @@ class AlertCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isUnread ? Colors.white : const Color(0xFFF9FAFB),
         borderRadius: BorderRadius.circular(14),
         border: isUnread
             ? Border(
-                left: BorderSide(color: colors.border, width: 4),
-                top: BorderSide(color: colors.border),
-                right: BorderSide(color: colors.border),
-                bottom: BorderSide(color: colors.border),
+                left: BorderSide(color: colors.secondary, width: 4),
+                top: BorderSide(color: colors.secondary),
+                right: BorderSide(color: colors.secondary),
+                bottom: BorderSide(color: colors.secondary),
               )
-            : null,
+            : Border.all(color: const Color(0xFFE5E7EB)),
         boxShadow: const [
           BoxShadow(
             blurRadius: 10,
@@ -75,12 +75,12 @@ class AlertCard extends StatelessWidget {
           Container(
             width: 48,
             height: 48,
-            decoration: BoxDecoration(color: colors.bg, shape: BoxShape.circle),
+            decoration: BoxDecoration(color: colors.secondary, shape: BoxShape.circle),
             child: Icon(
               item.risk == RiskLevel.low
                   ? LucideIcons.bell
                   : LucideIcons.triangleAlert,
-              color: colors.icon,
+              color: colors.primary,
               size: 26,
             ),
           ),
@@ -106,6 +106,16 @@ class AlertCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (isUnread) ...[
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF2563EB),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
                     const SizedBox(width: 8),
                     _RiskPill(level: item.risk),
                   ],
@@ -128,12 +138,6 @@ class AlertCard extends StatelessWidget {
                       child: _MetaRow(
                         icon: LucideIcons.mapPin,
                         text: item.location,
-                      ),
-                    ),
-                    Expanded(
-                      child: _MetaRow(
-                        icon: LucideIcons.clock,
-                        text: item.timeAgo,
                       ),
                     ),
                   ],
@@ -199,6 +203,7 @@ class AlertDetailSheet extends StatelessWidget {
     final colors = _riskColors(item.risk);
     final area = item.areaData;
     final official = area?['officialCases'];
+    final probable = area?['probableCases'];
     final suspected = area?['suspectedCases'];
     final total = area?['totalCases'];
     final score = area?['riskScore'];
@@ -238,14 +243,14 @@ class AlertDetailSheet extends StatelessWidget {
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            color: colors.bg,
+                            color: colors.secondary,
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
                             item.risk == RiskLevel.low
                                 ? LucideIcons.bell
                                 : LucideIcons.triangleAlert,
-                            color: colors.icon,
+                            color: colors.primary,
                             size: 26,
                           ),
                         ),
@@ -286,11 +291,10 @@ class AlertDetailSheet extends StatelessWidget {
                         color: const Color(0xFF374151),
                         height: 1.45,
                       ),
+
                     ),
                     const SizedBox(height: 20),
                     _detailRow(LucideIcons.mapPin, 'Location', item.location),
-                    const SizedBox(height: 12),
-                    _detailRow(LucideIcons.clock, 'Reported', item.timeAgo),
                     if (riskLabelText != null && riskLabelText.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       _detailRow(
@@ -323,6 +327,10 @@ class AlertDetailSheet extends StatelessWidget {
                       if (official != null) ...[
                         const SizedBox(height: 8),
                         _detailChip('Official cases', official.toString()),
+                      ],
+                      if (probable != null) ...[
+                        const SizedBox(height: 8),
+                        _detailChip('Probable cases', probable.toString()),
                       ],
                       if (suspected != null) ...[
                         const SizedBox(height: 8),
@@ -528,14 +536,12 @@ class _RiskPill extends StatelessWidget {
 }
 
 class _RiskColors {
-  final Color border;
-  final Color bg;
-  final Color icon;
+  final Color primary;
+  final Color secondary;
 
   const _RiskColors({
-    required this.border,
-    required this.bg,
-    required this.icon,
+    required this.primary,
+    required this.secondary,
   });
 }
 
@@ -543,21 +549,18 @@ _RiskColors _riskColors(RiskLevel level) {
   switch (level) {
     case RiskLevel.high:
       return const _RiskColors(
-        border: Color(0xFFFECACA),
-        bg: Color(0xFFFEE2E2),
-        icon: Color(0xFFDC2626),
+        primary: Color(0xFFFEE2E2),
+        secondary: Color(0xFFDC2626),
       );
     case RiskLevel.moderate:
       return const _RiskColors(
-        border: Color(0xFFFDE68A),
-        bg: Color(0xFFFEF3C7),
-        icon: Color(0xFFD97706),
+        secondary: Color(0xFFFEF3C7),
+        primary: Color(0xFFD97706),
       );
     case RiskLevel.low:
       return const _RiskColors(
-        border: Color(0xFFF3F4F6),
-        bg: Color(0xFFDCFCE7),
-        icon: Color(0xFF16A34A),
+        secondary: Color(0xFFDCFCE7),
+        primary: Color(0xFF16A34A),
       );
   }
 }

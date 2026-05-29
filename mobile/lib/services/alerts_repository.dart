@@ -1,20 +1,34 @@
 import '../services/api_service.dart';
-import '../services/manila_geo_service.dart';
 import '../services/risk_alert_service.dart';
+import '../utils/format_helpers.dart';
+import '../utils/heatmap_case_builders.dart';
 import '../widgets/alerts_widgets.dart';
 
 /// Shared alert data used by Home and Alerts screens.
+/// Uses the same validated-dataset district heatmap as [MapScreen].
 class AlertsRepository {
   AlertsRepository._();
   static final AlertsRepository instance = AlertsRepository._();
 
-  static const String defaultHeatmapMonths = '6';
-
   static RiskLevel levelFromString(String? level) {
     switch (level) {
       case 'high':
+      case 'critical':
         return RiskLevel.high;
       case 'moderate':
+      case 'medium':
+        return RiskLevel.moderate;
+      default:
+        return RiskLevel.low;
+    }
+  }
+
+  static RiskLevel levelFromHeatmapBand(String? band) {
+    switch (band) {
+      case 'Critical':
+      case 'High':
+        return RiskLevel.high;
+      case 'Medium':
         return RiskLevel.moderate;
       default:
         return RiskLevel.low;
@@ -32,25 +46,35 @@ class AlertsRepository {
     }
   }
 
-  /// Builds alert items from the risk heatmap API (same source as Alerts page).
   Future<List<AlertItem>> fetchAlerts({
-    String months = defaultHeatmapMonths,
     int? limit,
     bool includeLiveGpsAlert = true,
   }) async {
-    final heatmap = await ApiService.getRiskHeatmap(months: months);
-    final areas =
-        (heatmap?['areas'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+    final datasetId = await ApiService.fetchLatestValidatedDatasetId();
+    if (datasetId == null) return [];
 
-    final highAreas = areas
-        .where((a) => a['riskLevel'] == 'high')
+    final heatmapData = await ApiService.fetchDistrictHeatmap(
+      datasetId: datasetId,
+      selectedYear: 'All',
+      selectedMonth: 'All',
+      selectedDisease: 'All',
+      selectedCaseClassification: 'All',
+    );
+
+    final points = (heatmapData?['points'] as List<dynamic>? ?? [])
+        .cast<Map<String, dynamic>>();
+
+    final withCases = points
+        .where((p) => ((p['cases'] as num?) ?? 0) > 0)
         .toList()
-      ..sort(
-        (a, b) => ((b['riskScore'] as num?) ?? 0)
-            .compareTo((a['riskScore'] as num?) ?? 0),
-      );
+      ..sort((a, b) {
+        final bAvg = (b['districtAvgIncident'] as num?) ?? 0;
+        final aAvg = (a['districtAvgIncident'] as num?) ?? 0;
+        if (bAvg != aAvg) return bAvg.compareTo(aAvg);
+        return ((b['cases'] as num?) ?? 0).compareTo((a['cases'] as num?) ?? 0);
+      });
 
-    final built = highAreas.map((area) => _alertFromArea(area)).toList();
+    final built = withCases.map(_alertFromHeatmapPoint).toList();
 
     if (includeLiveGpsAlert) {
       final live = RiskAlertService.instance.latestMessage.value;
@@ -58,11 +82,11 @@ class AlertsRepository {
         built.insert(
           0,
           AlertItem(
+            id: 'live_gps',
             title: 'You are in a high-risk area',
             risk: RiskLevel.high,
             message: live,
             location: 'Current GPS location',
-            timeAgo: 'Now',
             cases: 'Active alert',
             distance: 'Immediate',
             areaData: null,
@@ -77,32 +101,34 @@ class AlertsRepository {
     return built;
   }
 
-  AlertItem _alertFromArea(Map<String, dynamic> area) {
-    final district = area['district']?.toString() ?? '';
-    final barangay = area['barangay']?.toString() ?? '';
-    final barangayNo = (area['barangayNo'] as num?)?.toInt() ?? 0;
-    final location = ManilaGeoService.formatLocation(
+  AlertItem _alertFromHeatmapPoint(Map<String, dynamic> point) {
+    final district = FormatHelpers.normalizeDistrict(point['district']?.toString());
+    final barangayNo = (point['barangayNo'] as num?)?.toInt() ?? 0;
+    final location = FormatHelpers.formatLocationDisplay(
       district: district,
-      locality: barangay,
       barangayNo: barangayNo,
+      barangayName: point['barangay']?.toString(),
     );
-    final level = levelFromString(area['riskLevel']?.toString());
-    final official = area['officialCases'] ?? 0;
-    final suspected = area['suspectedCases'] ?? 0;
-    final total = area['totalCases'] ?? 0;
-    final score = area['riskScore'] ?? 0;
+
+    final cases = (point['cases'] as num?) ?? 0;
+    final avgIncident = (point['districtAvgIncident'] as num?)?.toDouble() ?? 0;
+    final riskBand = point['risk']?.toString() ??
+        HeatmapCaseBuilders.getRiskBand(avgIncident);
+    final level = levelFromHeatmapBand(riskBand);
+    final districtTotal = point['districtTotalCases'] ?? 0;
 
     return AlertItem(
-      title: area['riskLabel']?.toString() ?? 'Area Risk Alert',
+      id: 'heatmap_$barangayNo',
+      title: '$riskBand risk in $location',
       risk: level,
       message:
-          'Elevated foodborne illness risk detected in this area. '
-          'Official cases: $official, suspected reports: $suspected.',
+          'Foodborne illness activity detected in this barangay based on the '
+          'latest validated dataset. Average district incident rate: '
+          '${avgIncident.toStringAsFixed(1)}.',
       location: location,
-      timeAgo: 'Live',
-      cases: '$total total cases',
-      distance: 'Risk score $score',
-      areaData: area,
+      cases: '$cases case${cases == 1 ? '' : 's'} here',
+      distance: '$districtTotal district total',
+      areaData: point,
     );
   }
 }

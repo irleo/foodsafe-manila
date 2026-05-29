@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../services/alerts_read_store.dart';
 import '../services/alerts_repository.dart';
 import '../services/risk_alert_service.dart';
 import '../widgets/alerts_widgets.dart';
@@ -14,11 +15,14 @@ class AlertsScreen extends StatefulWidget {
 }
 
 class AlertsScreenState extends State<AlertsScreen> {
-  int unreadCount = 0;
+  Set<String> readIds = {};
   RiskLevel? selectedFilter;
   bool isLoading = true;
   String? errorMessage;
   List<AlertItem> alerts = [];
+
+  int get unreadCount =>
+      alerts.where((a) => !readIds.contains(a.id)).length;
 
   @override
   void initState() {
@@ -47,21 +51,38 @@ class AlertsScreenState extends State<AlertsScreen> {
 
     try {
       final built = await AlertsRepository.instance.fetchAlerts();
+      final stored = await AlertsReadStore.loadReadIds();
       if (!mounted) return;
       setState(() {
         alerts = built;
-        unreadCount = built.length;
+        readIds = stored;
         isLoading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         alerts = [];
-        unreadCount = 0;
+        readIds = {};
         isLoading = false;
         errorMessage = 'Failed to load alerts. Pull to refresh.';
       });
     }
+  }
+
+  Future<void> _markAllRead() async {
+    final ids = alerts.map((a) => a.id).toList();
+    await AlertsReadStore.markAllRead(ids);
+    if (!mounted) return;
+    setState(() {
+      readIds = {...readIds, ...ids};
+    });
+  }
+
+  Future<void> _markRead(AlertItem item) async {
+    if (readIds.contains(item.id)) return;
+    await AlertsReadStore.markRead(item.id);
+    if (!mounted) return;
+    setState(() => readIds = {...readIds, item.id});
   }
 
   List<AlertItem> get filteredAlerts {
@@ -127,11 +148,23 @@ class AlertsScreenState extends State<AlertsScreen> {
                                       ),
                                       itemCount: filteredAlerts.length,
                                       itemBuilder: (context, index) {
+                                        final item = filteredAlerts[index];
+                                        final isUnread =
+                                            !readIds.contains(item.id);
                                         return Padding(
                                           padding:
                                               const EdgeInsets.only(bottom: 16),
                                           child: AlertCard(
-                                            item: filteredAlerts[index],
+                                            item: item,
+                                            isUnread: isUnread,
+                                            onTap: () async {
+                                              await _markRead(item);
+                                              if (!context.mounted) return;
+                                              showAlertDetailSheet(
+                                                context,
+                                                item,
+                                              );
+                                            },
                                           ),
                                         );
                                       },
@@ -157,9 +190,9 @@ class AlertsScreenState extends State<AlertsScreen> {
                                     shape: const StadiumBorder(),
                                     elevation: 6,
                                   ),
-                                  onPressed: () => setState(() => unreadCount = 0),
+                                  onPressed: _markAllRead,
                                   child: Text(
-                                    "Mark All as Read ($unreadCount)",
+                                    'Mark All as Read ($unreadCount)',
                                     style: GoogleFonts.inter(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
@@ -196,7 +229,8 @@ class AlertsScreenState extends State<AlertsScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Risk alerts will appear here when areas are elevated',
+            'Risk alerts from the heatmap will appear here when cases are reported',
+            textAlign: TextAlign.center,
             style: GoogleFonts.inter(
               fontSize: 14,
               color: Colors.grey.shade400,

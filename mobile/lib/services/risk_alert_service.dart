@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'api_service.dart';
+import 'debug_location_service.dart';
+import 'location_service.dart';
 import 'manila_geo_service.dart';
 import 'notification_service.dart';
 
@@ -40,10 +42,13 @@ class RiskAlertService {
       );
 
       await ManilaGeoService.ensureLoaded();
-      final location = ManilaGeoService.lookup(
-        position.latitude,
-        position.longitude,
-      );
+      final simulated = await DebugLocationService.getSimulatedLocation();
+      final location = simulated ??
+          await LocationService.resolveManilaLocation() ??
+          ManilaGeoService.lookup(
+            position.latitude,
+            position.longitude,
+          );
       if (location == null) return;
 
       final nearby = await ApiService.getNearbyRisk(

@@ -1000,13 +1000,6 @@ class _NearbyAlertCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        Text(
-                          item.timeAgo,
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: const Color(0xFF9CA3AF),
-                          ),
-                        ),
                       ],
                     ),
                   ],
