@@ -506,10 +506,12 @@ export const refreshToken = async (req, res) => {
 // POST /api/auth/logout
 export const logout = (req, res) => {
   try {
+    const isProd = process.env.NODE_ENV === "production";
+
     res.clearCookie("refreshToken", {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
     });
 
     return res.status(200).json({ message: "Logged out successfully" });
