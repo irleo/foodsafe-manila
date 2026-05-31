@@ -2,6 +2,7 @@ services:
   - type: web
     name: food-safe-backend
     runtime: node
+    plan: free
     rootDir: backend
     buildCommand: npm ci && pip install -r services/prophet/requirements.txt
     startCommand: npm start

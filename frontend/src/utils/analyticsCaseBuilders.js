@@ -1,17 +1,71 @@
-export function buildYearlyTimelineData(casesRows = []) {
+export function buildYearlyTimelineData(casesRows = [], reportRows = []) {
   const map = {};
+
+  const ensureMonthBucket = (year, month) => {
+    const key = `${year}-${String(month).padStart(2, "0")}`;
+    if (!map[key]) {
+      map[key] = {
+        year,
+        month,
+        officialCases: 0,
+        citizenReports: 0,
+      };
+    }
+    return key;
+  };
+
   for (const r of casesRows) {
     const year = Number(r?.year);
+    const month = Number(r?.month);
     const cases = Number(r?.cases ?? 0);
     if (!Number.isFinite(year) || year <= 0) continue;
+    if (!Number.isFinite(month) || month < 1 || month > 12) continue;
     if (!Number.isFinite(cases) || cases < 0) continue;
-    map[year] = (map[year] || 0) + cases;
+    const key = ensureMonthBucket(year, month);
+    map[key].officialCases += cases;
   }
 
-  // Use `date` so you can reuse your line chart component if needed
-  return Object.entries(map)
-    .map(([year, total]) => ({ date: `${year}-01-01`, cases: total }))
-    .sort((a, b) => (a.date > b.date ? 1 : -1));
+  for (const r of reportRows) {
+    const rawDate = r?.reportedAt ?? r?.reported_at ?? r?.createdAt;
+    const date = rawDate ? new Date(rawDate) : null;
+    const year = date && !Number.isNaN(date.getTime()) ? date.getFullYear() : null;
+    const month = date && !Number.isNaN(date.getTime()) ? date.getMonth() + 1 : null;
+    const cases = Number(r?.caseCount ?? 1);
+
+    if (!Number.isFinite(year) || year <= 0) continue;
+    if (!Number.isFinite(month) || month < 1 || month > 12) continue;
+    if (!Number.isFinite(cases) || cases < 0) continue;
+
+    const key = ensureMonthBucket(year, month);
+    map[key].citizenReports += cases;
+  }
+
+  const buckets = Object.values(map);
+  if (!buckets.length) return [];
+
+  const monthIndices = buckets
+    .map((b) => b.year * 12 + b.month - 1)
+    .filter((v) => Number.isFinite(v))
+    .sort((a, b) => a - b);
+  if (!monthIndices.length) return [];
+
+  const start = monthIndices[0];
+  const end = monthIndices[monthIndices.length - 1];
+  const byMonthKey = new Map(buckets.map((b) => [`${b.year}-${b.month}`, b]));
+  const rows = [];
+  for (let idx = start; idx <= end; idx += 1) {
+    const year = Math.floor(idx / 12);
+    const month = (idx % 12) + 1;
+    const key = `${year}-${month}`;
+    const totals = byMonthKey.get(key) || { officialCases: 0, citizenReports: 0 };
+    rows.push({
+      date: `${year}-${String(month).padStart(2, "0")}-01`,
+      officialCases: totals.officialCases,
+      citizenReports: totals.citizenReports,
+      cases: totals.officialCases,
+    });
+  }
+  return rows;
 }
 
 export function buildDiseaseData(caseRows = []) {

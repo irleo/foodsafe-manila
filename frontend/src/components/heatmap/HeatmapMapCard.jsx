@@ -89,6 +89,13 @@ export default function HeatmapMapCard({
               const avgIncident = point?.districtAvgIncident ?? 0;
               const districtTotalCases = point?.districtTotalCases ?? 0;
               const color = getRiskColor(avgIncident);
+              const baseStyle = {
+                color: "#334166",
+                weight: 0.5,
+                opacity: 0.7,
+                fillColor: color,
+                fillOpacity: 0.75,
+              };
 
               layer.bindPopup(`
                 <div class="text-sm">
@@ -101,6 +108,20 @@ export default function HeatmapMapCard({
                   <p>Risk: <strong style="color:${color}">${risk}</strong></p>
                 </div>
               `);
+
+              layer.on({
+                mouseover: () => {
+                  layer.setStyle({
+                    weight: 1.2,
+                    opacity: 1,
+                    fillOpacity: 0.9,
+                  });
+                },
+                mouseout: () => {
+                  layer.setStyle(baseStyle);
+                },
+                popupclose: () => layer.setStyle(baseStyle),
+              });
             }}
           />
         </MapContainer>

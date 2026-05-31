@@ -11,8 +11,8 @@ import {
   buildRiskLevelDonutDataFromDistrictStats,
 } from "./statisticsCaseBuilders";
 
-export function buildAnalyticsCasesViewModel(caseRows = []) {
-  const yearlyTimelineData = buildYearlyTimelineData(caseRows);
+export function buildAnalyticsCasesViewModel(caseRows = [], reportRows = []) {
+  const yearlyTimelineData = buildYearlyTimelineData(caseRows, reportRows);
   const diseaseData = buildDiseaseData(caseRows);
   const districtData = buildDistrictDataFromCases(caseRows);
   const districtStats = buildDistrictStatisticsFromCases(caseRows);

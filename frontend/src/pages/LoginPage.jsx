@@ -206,11 +206,11 @@ const Login = () => {
               </Link>
             </div>
 
-            <div className="mt-6 text-center text-sm text-gray-600">
+            {/* <div className="mt-6 text-center text-sm text-gray-600">
               <p>Demo Credentials:</p>
               <p className="mt-2">Admin: admin@sample.com / @Password1</p>
               <p>User: user@sample.com / @Password2</p>
-            </div>
+            </div> */}
           </div>
         </div>
       </div>

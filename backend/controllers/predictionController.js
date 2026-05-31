@@ -83,8 +83,23 @@ export const refreshPredictions = async (req, res) => {
       trigger: "manual",
       datasetId,
       horizonMonths: Number.isFinite(horizonMonths) ? horizonMonths : 1,
-      force: true,
+      force: false,
     });
+
+    if (saved?.alreadyUpToDate) {
+      return res.status(200).json({
+        success: true,
+        upToDate: true,
+        message:
+          "Latest prediction already available. Upload a new validated dataset to update forecasts.",
+        predictionRunId: saved?._id ? String(saved._id) : null,
+        granularity: "monthly_district_cases",
+        basisYear: saved?.basisYear ?? null,
+        basisMonth: saved?.basisMonth ?? null,
+        forecastTargetYear: saved?.forecastTargetYear ?? null,
+        forecastTargetMonth: saved?.forecastTargetMonth ?? null,
+      });
+    }
 
     if (saved?.status === "failed") {
       const msg = saved?.errorMessage || "Refresh failed";
@@ -95,6 +110,8 @@ export const refreshPredictions = async (req, res) => {
     }
 
     return res.json({
+      success: true,
+      upToDate: false,
       predictionRunId: saved?._id ? String(saved._id) : null,
       granularity: saved?.granularity,
       basisDatasetId: saved?.basisDatasetId ? String(saved.basisDatasetId) : null,

@@ -47,6 +47,13 @@ export default function YearlyLineChart({
     return [...safe].sort((a, b) => (a.date > b.date ? 1 : -1));
   }, [data]);
 
+  const hasOfficialSeries = chartData.some((row) =>
+    Number.isFinite(Number(row?.officialCases)),
+  );
+  const hasReportsSeries = chartData.some((row) =>
+    Number.isFinite(Number(row?.citizenReports)),
+  );
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <h2 className="font-semibold mb-4">{title}</h2>
@@ -66,16 +73,47 @@ export default function YearlyLineChart({
               <YAxis allowDecimals={false} />
               <Tooltip
                 labelFormatter={(label) => formatYearLabel(label)}
-                formatter={(value) => [`${value}`, "Cases"]}
+                formatter={(value, name) => {
+                  const labels = {
+                    officialCases: "Official Cases",
+                    citizenReports: "Citizen Reports",
+                    cases: "Cases",
+                  };
+                  return [`${value}`, labels[name] || name];
+                }}
               />
-              <Line
-                type="monotone"
-                dataKey="cases"
-                stroke="#2563eb"
-                strokeWidth={2}
-                dot={<HollowDot stroke="#2563eb" />}
-                activeDot={{r : 5}}
-              />
+              {hasOfficialSeries || hasReportsSeries ? (
+                <>
+                  <Line
+                    type="monotone"
+                    dataKey="officialCases"
+                    stroke="#2563eb"
+                    strokeWidth={2}
+                    dot={<HollowDot stroke="#2563eb" />}
+                    activeDot={{ r: 5 }}
+                    name="Official Cases"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="citizenReports"
+                    stroke="#16a34a"
+                    strokeWidth={2}
+                    dot={<HollowDot stroke="#16a34a" />}
+                    activeDot={{ r: 5 }}
+                    name="Citizen Reports"
+                  />
+                </>
+              ) : (
+                <Line
+                  type="monotone"
+                  dataKey="cases"
+                  stroke="#2563eb"
+                  strokeWidth={2}
+                  dot={<HollowDot stroke="#2563eb" />}
+                  activeDot={{ r: 5 }}
+                  name="Cases"
+                />
+              )}
               <Legend />
             </LineChart>
           </ResponsiveContainer>

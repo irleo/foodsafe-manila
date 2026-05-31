@@ -126,25 +126,6 @@ export async function refreshMonthlyDistrictPredictions({
 
   const now = new Date();
 
-  const running = await PredictionRun.create({
-    model: "prophet",
-    granularity: "monthly_district_cases",
-    datasetScope,
-    trigger,
-    status: "running",
-    startedAt: now,
-    finishedAt: null,
-    errorMessage: null,
-    generatedAt: now,
-    payload: null,
-    basisDatasetId: datasetScope === "all" ? null : datasetScope,
-    basisYear: null,
-    basisMonth: null,
-    forecastTargetYear: null,
-    forecastTargetMonth: null,
-    forecastHorizonMonths: horizonMonths,
-  });
-
   try {
     const byDistrict = await aggregateMonthlyByDistrict(match);
     const rawDistricts = [...byDistrict.entries()]
@@ -159,6 +140,55 @@ export async function refreshMonthlyDistrictPredictions({
     const maxYm = Math.max(...allRawPoints.map((p) => ymToInt(p.year, p.month)));
     const basis = intToYm(maxYm);
     const target = addMonths(basis.year, basis.month, 1);
+
+    const existingSuccess = await PredictionRun.findOne({
+      model: "prophet",
+      granularity: "monthly_district_cases",
+      datasetScope,
+      status: "success",
+    })
+      .select(
+        "_id basisYear basisMonth forecastTargetYear forecastTargetMonth forecastHorizonMonths payload",
+      )
+      .lean();
+
+    const isUpToDate =
+      existingSuccess &&
+      existingSuccess.basisYear === basis.year &&
+      existingSuccess.basisMonth === basis.month &&
+      existingSuccess.forecastTargetYear === target.year &&
+      existingSuccess.forecastTargetMonth === target.month &&
+      Number(existingSuccess.forecastHorizonMonths || 1) === Number(horizonMonths || 1);
+
+    if (!force && isUpToDate) {
+      return { ...existingSuccess, alreadyUpToDate: true };
+    }
+
+    if (trigger === "manual" && isUpToDate) {
+      return { ...existingSuccess, alreadyUpToDate: true };
+    }
+
+    const running = await PredictionRun.findOneAndUpdate(
+      { model: "prophet", granularity: "monthly_district_cases", datasetScope },
+      {
+        $set: {
+          trigger,
+          status: "running",
+          startedAt: now,
+          finishedAt: null,
+          errorMessage: null,
+          generatedAt: now,
+          payload: null,
+          basisDatasetId: datasetScope === "all" ? null : datasetScope,
+          basisYear: null,
+          basisMonth: null,
+          forecastTargetYear: null,
+          forecastTargetMonth: null,
+          forecastHorizonMonths: horizonMonths,
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
 
     const districtsSeries = [...byDistrict.entries()]
       .map(([district, series]) => ({
@@ -282,6 +312,19 @@ export async function refreshMonthlyDistrictPredictions({
 
     return saved;
   } catch (err) {
+    const running = await PredictionRun.findOne({
+      model: "prophet",
+      granularity: "monthly_district_cases",
+      datasetScope,
+    })
+      .sort({ updatedAt: -1 })
+      .select("_id")
+      .lean();
+
+    if (!running?._id) {
+      throw err;
+    }
+
     const finishedAt = new Date();
     const msg = err?.message || "forecast_failed";
     const saved = await PredictionRun.findByIdAndUpdate(

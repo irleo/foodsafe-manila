@@ -55,7 +55,7 @@ export default function UploadDropzone({
           />
 
           <p className="text-xs text-gray-500 mt-4">
-            Supported formats: CSV, Excel (.xlsx, .xls)
+            Supported formats: Excel (.xlsx, .xls)
           </p>
         </>
       ) : (

@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 
 import { useLatestDatasetId } from "../hooks/useLatestDatasetId";
 import { useOfficialCases } from "../hooks/useOfficialCases";
+import { useReports } from "../hooks/useReports";
 // import { casesByYear, casesByDistrict, casesByDisease } from "../utils/caseAggregations";
 import {
   buildYearlyTimelineData,
@@ -28,6 +29,7 @@ export default function Dashboard() {
 
   const { datasetId } = useLatestDatasetId(token);
   const { items: officialItems } = useOfficialCases({ token, datasetId, limit: 5000 });
+  const { reports } = useReports(token);
 
   const caseRows = useMemo(() => {
     const safe = Array.isArray(officialItems) ? officialItems : [];
@@ -56,8 +58,8 @@ export default function Dashboard() {
   }, [caseRows, selectedYear]);
 
   const yearlyData = useMemo(
-    () => buildYearlyTimelineData(caseRows, 5),
-    [caseRows],
+    () => buildYearlyTimelineData(caseRows, 5, reports),
+    [caseRows, reports],
   );
 
   const districtData = useMemo(

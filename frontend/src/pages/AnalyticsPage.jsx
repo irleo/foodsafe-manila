@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useLatestDatasetId } from "../hooks/useLatestDatasetId";
 import { useOfficialCases } from "../hooks/useOfficialCases";
+import { useReports } from "../hooks/useReports";
 import { buildAnalyticsCasesViewModel } from "../utils/analyticsCasesViewModel";
 
 // import { useReports } from "../hooks/useReports";
@@ -28,6 +29,7 @@ export default function Analytics() {
     datasetId,
     limit: 5000,
   });
+  const { reports } = useReports(token);
 
   // // Reports Version
   // const { reports, loading, errorMsg } = useReports(token);
@@ -44,11 +46,15 @@ export default function Analytics() {
       district: r.district,
       disease: r.disease,
       year: Number(r.year),
+      month: Number(r.month),
       cases: Number(r.cases),
     }));
   }, [officialItems]);
 
-  const vm = useMemo(() => buildAnalyticsCasesViewModel(caseRows), [caseRows]);
+  const vm = useMemo(
+    () => buildAnalyticsCasesViewModel(caseRows, reports),
+    [caseRows, reports],
+  );
 
   const handleExportPdf = () => {
     window.print();

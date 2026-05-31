@@ -225,6 +225,7 @@ export default function Predictions() {
   const [selectedErrorDistrict, setSelectedErrorDistrict] = useState("manila");
   const [selectedHistoryDistrict, setSelectedHistoryDistrict] =
     useState("manila");
+  const [historyPage, setHistoryPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [emptyMsg, setEmptyMsg] = useState("");
 
@@ -414,6 +415,25 @@ export default function Predictions() {
       historyRows.filter((row) => !row.isForecast && hasPredictionResult(row)),
     [historyRows],
   );
+  const HISTORY_ROWS_PER_PAGE = 12;
+  const historyTotalPages = Math.max(
+    1,
+    Math.ceil(predictionHistoryRows.length / HISTORY_ROWS_PER_PAGE),
+  );
+  const pagedPredictionHistoryRows = useMemo(() => {
+    const start = (historyPage - 1) * HISTORY_ROWS_PER_PAGE;
+    return predictionHistoryRows.slice(start, start + HISTORY_ROWS_PER_PAGE);
+  }, [predictionHistoryRows, historyPage]);
+
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [selectedHistoryDistrict]);
+
+  useEffect(() => {
+    if (historyPage > historyTotalPages) {
+      setHistoryPage(historyTotalPages);
+    }
+  }, [historyPage, historyTotalPages]);
 
   const metrics = useMemo(
     () => calculateMetrics(cityChartRows),
@@ -842,7 +862,7 @@ export default function Predictions() {
                   </td>
                 </tr>
               ) : (
-                predictionHistoryRows.map((row, index) => {
+                pagedPredictionHistoryRows.map((row, index) => {
                   const actual = Number(row.actual);
                   const predicted = Number(row.predicted);
 
@@ -875,6 +895,33 @@ export default function Predictions() {
             </tbody>
           </table>
         </div>
+        {predictionHistoryRows.length > 0 && (
+          <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
+            <span>
+              Page {historyPage} of {historyTotalPages}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                disabled={historyPage <= 1}
+                className="px-3 py-1.5 border border-gray-300 rounded-lg bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setHistoryPage((p) => Math.min(historyTotalPages, p + 1))
+                }
+                disabled={historyPage >= historyTotalPages}
+                className="px-3 py-1.5 border border-gray-300 rounded-lg bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
