@@ -380,6 +380,11 @@ export const getReports = async (req, res) => {
     const reports = await Report.find(query)
       .sort({ reportedAt: -1 })
       .limit(limit);
+    // include reporter details for admin Data page "Submitted by"
+    await Report.populate(reports, {
+      path: "reportedBy",
+      select: "username email",
+    });
 
     // Back-compat: ensure caseClassification exists for old docs
     return res.json(

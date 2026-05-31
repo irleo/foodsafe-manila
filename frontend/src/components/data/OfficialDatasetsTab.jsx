@@ -188,6 +188,9 @@ export default function OfficialDatasetsTab() {
               <li>
                 <span className="font-medium">OfficialCaseTemplate XLSX</span>: one sheet (prefer “processed data”) with standardized columns.
               </li>
+              <li>
+                <span className="font-medium">OfficialCaseTemplate CSV</span>: columns should match the OfficialCaseTemplate XLSX (city, district, barangay, disease, year, month, case_classification, cases; source optional).
+              </li>
             </ul>
           </div>
 

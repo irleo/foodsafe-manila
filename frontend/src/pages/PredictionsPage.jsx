@@ -277,7 +277,7 @@ export default function Predictions() {
       setIsGenerating(true);
 
       try {
-        await refreshPredictions(token);
+        const refreshResult = await refreshPredictions(token);
         const data = await fetchLatestPredictions(token);
         if (data?.hasPrediction === false)
           throw new Error(data?.message || "No prediction run created.");
@@ -288,7 +288,11 @@ export default function Predictions() {
 
         setEmptyMsg("");
 
-        return data;
+        return {
+          ...data,
+          upToDate: Boolean(refreshResult?.upToDate),
+          refreshMessage: refreshResult?.message || "",
+        };
       } finally {
         setIsGenerating(false);
       }
@@ -296,7 +300,11 @@ export default function Predictions() {
 
     notify.promise(doRefresh(), {
       loading: "Refreshing saved forecast…",
-      success: "Forecast refreshed",
+      success: (result) =>
+        result?.upToDate
+          ? result?.refreshMessage ||
+            "Latest prediction already available. Upload a new validated dataset to update forecasts."
+          : "Forecast refreshed",
       error: (e) => e?.message || "Failed to refresh forecast",
     });
   };
@@ -474,7 +482,7 @@ export default function Predictions() {
       return null;
     }
 
-    return `Official data through ${formatYearMonth(
+    return `Official baseline through ${formatYearMonth(
       basisY,
       basisM,
     )}. Forecast target month: ${formatYearMonth(
@@ -489,11 +497,12 @@ export default function Predictions() {
         <div>
           <h1 className="text-2xl font-bold space-y-6">Predictions</h1>
           <p className="text-gray-600 mt-1 max-w-3xl">
-            Monthly case-count forecasts using{" "}
-            <span className="font-medium">Facebook Prophet</span> on official
-            data. Each district uses one monthly time series based on official
-            case counts. The forecast shows the next target month based on the
-            latest available official data.
+            Monthly district forecasts use{" "}
+            <span className="font-medium">Facebook Prophet</span> with official
+            case counts as the baseline target, plus suspected citizen-report
+            features (lag1, lag2, and 3-month average) as supporting signals.
+            Report signals are clipped and aligned to the latest available
+            official month to avoid future-data leakage.
           </p>
         </div>
 
@@ -658,7 +667,7 @@ export default function Predictions() {
       </div>
 
       <YearlyActualVsPredictedLineChart
-        title={`Actual vs predicted (${selectedChartLabel}, monthly)`}
+        title={`Actual vs Predicted (${selectedChartLabel})`}
         data={chartRows}
         controls={
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center">
@@ -714,9 +723,10 @@ export default function Predictions() {
         <div className="flex items-center justify-between mb-6">
           <h2 className="font-semibold text-lg">District next-month outlook</h2>
           <p className="text-sm text-gray-500 max-w-md text-right">
-            Each card uses the same Prophet setup for that district’s monthly
-            case total. Risk score reflects relative share of the predicted
-            next-month total across districts, not a clinical score.
+            Each card uses the same district-level hybrid model (official
+            baseline + suspected-report regressors). Risk score reflects
+            relative share of predicted next-month district cases, not a
+            clinical diagnosis.
           </p>
         </div>
 

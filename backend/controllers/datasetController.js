@@ -5,7 +5,10 @@ import xlsx from "xlsx";
 import Dataset from "../models/Dataset.js";
 import OfficialCase from "../models/OfficialCase.js";
 import { logActivity } from "../utils/logActivity.js";
-import { importOfficialCasesXlsx } from "../services/officialCaseImportService.js";
+import {
+  importOfficialCasesCsv,
+  importOfficialCasesXlsx,
+} from "../services/officialCaseImportService.js";
 import { refreshMonthlyDistrictPredictions } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
 import { createNotification } from "../services/notificationService.js";
 
@@ -302,9 +305,12 @@ export const uploadDataset = async (req, res) => {
     const filePath = req.file.path;
     const ext = path.extname(filePath).toLowerCase();
 
-    // Official-case XLSX import (raw health office OR OfficialCaseTemplate)
-    if (ext === ".xlsx" || ext === ".xls") {
-      const result = await importOfficialCasesXlsx({
+    // Official-case import (XLSX raw/template or CSV template)
+    if (ext === ".xlsx" || ext === ".xls" || ext === ".csv") {
+      const importer =
+        ext === ".csv" ? importOfficialCasesCsv : importOfficialCasesXlsx;
+
+      const result = await importer({
         filePath,
         name,
         originalFileName: req.file.originalname,
@@ -363,16 +369,6 @@ export const uploadDataset = async (req, res) => {
         });
 
       return res.status(201).json(result);
-    }
-
-    // CSV uploads are no longer supported for official cases (monthly + classification required)
-    if (ext === ".csv") {
-      cleanupUploadedFile(req);
-      return res.status(400).json({
-        success: false,
-        reason:
-          "CSV uploads are not supported for official cases. Upload a raw health office XLSX or an OfficialCaseTemplate XLSX instead.",
-      });
     }
 
     // Create dataset record early (keeps audit trail even for failures)

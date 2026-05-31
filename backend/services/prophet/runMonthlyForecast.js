@@ -12,9 +12,12 @@ function pythonBinary() {
 
 /**
  * @param {{ year:number, month:number, y:number }[]} series
- * @param {{ horizonMonths:number }} opts
+ * @param {{ horizonMonths:number, futureRegressors?: {lag1:number,lag2:number,avg3:number}[] }} opts
  */
-export function runProphetMonthlyForecast(series, { horizonMonths = 1 } = {}) {
+export function runProphetMonthlyForecast(
+  series,
+  { horizonMonths = 1, futureRegressors = [] } = {},
+) {
   const py = pythonBinary();
   return new Promise((resolve, reject) => {
     const child = spawn(py, [SCRIPT], { stdio: ["pipe", "pipe", "pipe"] });
@@ -68,7 +71,9 @@ export function runProphetMonthlyForecast(series, { horizonMonths = 1 } = {}) {
       resolve(parsed);
     });
 
-    child.stdin.write(JSON.stringify({ series, horizonMonths }));
+    child.stdin.write(
+      JSON.stringify({ series, horizonMonths, futureRegressors }),
+    );
     child.stdin.end();
   });
 }

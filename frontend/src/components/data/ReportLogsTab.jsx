@@ -25,11 +25,12 @@ const DISTRICT_OPTIONS = [
 export default function ReportLogsTab() {
   const { auth } = useAuth();
   const token = auth?.accessToken;
+  const viewerRole = auth?.role || "user";
 
   const [reportDistrict, setReportDistrict] = useState("");
   const { reports, loading, errorMsg, fetchReports } = useReports(token);
 
-  const [onlyCounted, setOnlyCounted] = useState(false);
+  const [onlyCounted] = useState(false);
 
   const loadReports = async ({
     district = reportDistrict,
@@ -127,7 +128,12 @@ export default function ReportLogsTab() {
         </div>
       ) : null}
 
-      <ReportsLogList reports={reports} loading={loading} onRefresh={loadReports} />
+      <ReportsLogList
+        reports={reports}
+        loading={loading}
+        onRefresh={loadReports}
+        viewerRole={viewerRole}
+      />
     </div>
   );
 }

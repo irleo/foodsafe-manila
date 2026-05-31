@@ -3,8 +3,22 @@ Prophet monthly forecast for case counts.
 
 stdin JSON:
 {
-  "series": [ { "year": 2025, "month": 1, "y": 12 }, ... ],
-  "horizonMonths": 3
+  "series": [
+    {
+      "year": 2025,
+      "month": 1,
+      "y": 12,
+      "lag1": 5,
+      "lag2": 4,
+      "avg3": 4.33
+    },
+    ...
+  ],
+  "horizonMonths": 3,
+  "futureRegressors": [
+    { "lag1": 8, "lag2": 7, "avg3": 7.0 },
+    ...
+  ]
 }
 
 stdout JSON:
@@ -52,28 +66,58 @@ def _to_ds(year: int, month: int) -> pd.Timestamp:
 
 def _make_model() -> Prophet:
     # Monthly buckets can have public-health seasonality, but not daily/weekly cycles.
-    return Prophet(
+    model = Prophet(
         yearly_seasonality=True,
         weekly_seasonality=False,
         daily_seasonality=False,
         seasonality_mode="additive",
     )
+    model.add_regressor("lag1", standardize=False)
+    model.add_regressor("lag2", standardize=False)
+    model.add_regressor("avg3", standardize=False)
+    return model
 
 
-def _fit_predict(train_df: pd.DataFrame, periods: int) -> pd.DataFrame:
+def _fit_predict(
+    train_df: pd.DataFrame, periods: int, future_regressors: list | None = None
+) -> pd.DataFrame:
     model = _make_model()
     model.fit(train_df)
     future = model.make_future_dataframe(periods=int(periods), freq="MS", include_history=False)
+    rows = future_regressors or []
+    if len(rows) < len(future):
+        last = rows[-1] if rows else {"lag1": 0, "lag2": 0, "avg3": 0}
+        rows = rows + [last for _ in range(len(future) - len(rows))]
+    rows = rows[: len(future)]
+    future["lag1"] = [float(r.get("lag1", 0) or 0) for r in rows]
+    future["lag2"] = [float(r.get("lag2", 0) or 0) for r in rows]
+    future["avg3"] = [float(r.get("avg3", 0) or 0) for r in rows]
     return model.predict(future)
 
 
-def run_forecast(series: list, horizon_months: int) -> dict:
+def _norm(v) -> float:
+    try:
+        return float(v)
+    except Exception:
+        return 0.0
+
+
+def run_forecast(series: list, horizon_months: int, future_regressors: list | None = None) -> dict:
     rows = []
     for r in series or []:
         y = int(r.get("year"))
         m = int(r.get("month"))
         v = float(r.get("y", 0))
-        rows.append({"year": y, "month": m, "y": v})
+        rows.append(
+            {
+                "year": y,
+                "month": m,
+                "y": v,
+                "lag1": _norm(r.get("lag1", 0)),
+                "lag2": _norm(r.get("lag2", 0)),
+                "avg3": _norm(r.get("avg3", 0)),
+            }
+        )
     rows.sort(key=lambda x: (x["year"], x["month"]))
 
     if len(rows) < 3:
@@ -85,6 +129,9 @@ def run_forecast(series: list, horizon_months: int) -> dict:
         {
             "ds": [_to_ds(int(r["year"]), int(r["month"])) for r in rows],
             "y": [float(r["y"]) for r in rows],
+            "lag1": [float(r["lag1"]) for r in rows],
+            "lag2": [float(r["lag2"]) for r in rows],
+            "avg3": [float(r["avg3"]) for r in rows],
         }
     )
 
@@ -95,9 +142,19 @@ def run_forecast(series: list, horizon_months: int) -> dict:
             {
                 "ds": [_to_ds(int(r["year"]), int(r["month"])) for r in rows[:i]],
                 "y": [float(r["y"]) for r in rows[:i]],
+                "lag1": [float(r["lag1"]) for r in rows[:i]],
+                "lag2": [float(r["lag2"]) for r in rows[:i]],
+                "avg3": [float(r["avg3"]) for r in rows[:i]],
             }
         )
-        one_step = _fit_predict(rolling_train_df, 1)
+        one_step_reg = [
+            {
+                "lag1": float(rows[i]["lag1"]),
+                "lag2": float(rows[i]["lag2"]),
+                "avg3": float(rows[i]["avg3"]),
+            }
+        ]
+        one_step = _fit_predict(rolling_train_df, 1, one_step_reg)
         target = rows[i]
         backtest.append(
             {
@@ -110,7 +167,7 @@ def run_forecast(series: list, horizon_months: int) -> dict:
             }
         )
 
-    fcst = _fit_predict(train_df, horizon_months)
+    fcst = _fit_predict(train_df, horizon_months, future_regressors)
 
     out = []
     for i in range(len(fcst)):
@@ -135,7 +192,8 @@ def main() -> None:
         payload = json.loads(raw) if raw.strip() else {}
         series = payload.get("series") or []
         horizon = int(payload.get("horizonMonths") or 1)
-        out = run_forecast(series, horizon)
+        future_regressors = payload.get("futureRegressors") or []
+        out = run_forecast(series, horizon, future_regressors)
         print(json.dumps(out), flush=True)
     except Exception as e:
         print(

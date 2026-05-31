@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import OfficialCase from "../../models/OfficialCase.js";
+import Report from "../../models/Report.js";
 import PredictionRun from "../../models/PredictionRun.js";
 import { runProphetMonthlyForecast } from "../prophet/runMonthlyForecast.js";
 import Dataset from "../../models/Dataset.js";
@@ -60,6 +61,90 @@ async function aggregateMonthlyByDistrict(match) {
     byDistrict.get(d).push({ year: r._id.year, month: r._id.month, y: r.y });
   }
   return byDistrict;
+}
+
+async function aggregateMonthlySuspectedReportsByDistrict() {
+  const rows = await Report.aggregate([
+    {
+      $match: {
+        source: "citizen_app",
+        isCounted: true,
+      },
+    },
+    {
+      $project: {
+        district: { $ifNull: ["$exposureDistrict", "$location.district"] },
+        year: { $year: "$reportedAt" },
+        month: { $month: "$reportedAt" },
+        count: { $ifNull: ["$caseCount", 1] },
+      },
+    },
+    {
+      $group: {
+        _id: { district: "$district", year: "$year", month: "$month" },
+        y: { $sum: "$count" },
+      },
+    },
+    { $sort: { "_id.district": 1, "_id.year": 1, "_id.month": 1 } },
+  ]);
+
+  const byDistrict = new Map();
+  for (const r of rows) {
+    const d = String(r?._id?.district || "").trim();
+    if (!d) continue;
+    if (!byDistrict.has(d)) byDistrict.set(d, []);
+    byDistrict.get(d).push({ year: r._id.year, month: r._id.month, y: r.y });
+  }
+  return byDistrict;
+}
+
+function buildReportFeatures(reportSeries = []) {
+  const safe = Array.isArray(reportSeries) ? reportSeries : [];
+  return safe.map((point, idx) => {
+    const prev1 = idx - 1 >= 0 ? Number(safe[idx - 1]?.y || 0) : 0;
+    const prev2 = idx - 2 >= 0 ? Number(safe[idx - 2]?.y || 0) : 0;
+    const prev3 = idx - 3 >= 0 ? Number(safe[idx - 3]?.y || 0) : 0;
+    const avg3 = (prev1 + prev2 + prev3) / 3;
+    return {
+      year: point.year,
+      month: point.month,
+      lag1: prev1,
+      lag2: prev2,
+      avg3,
+    };
+  });
+}
+
+function alignSuspectedToOfficialSeries(officialSeries = [], suspectedSeries = [], maxYm) {
+  const clipped = (Array.isArray(suspectedSeries) ? suspectedSeries : []).filter(
+    (p) => ymToInt(p.year, p.month) <= maxYm,
+  );
+  const byYm = new Map(
+    clipped.map((p) => [`${p.year}-${p.month}`, Number(p.y || 0)]),
+  );
+  return (Array.isArray(officialSeries) ? officialSeries : []).map((p) => ({
+    year: p.year,
+    month: p.month,
+    y: byYm.get(`${p.year}-${p.month}`) || 0,
+  }));
+}
+
+function buildFutureReportRegressors(reportSeries = [], horizonMonths = 1) {
+  const safe = Array.isArray(reportSeries) ? reportSeries : [];
+  const rows = [];
+  let a = Number(safe[safe.length - 1]?.y || 0);
+  let b = Number(safe[safe.length - 2]?.y || 0);
+  let c = Number(safe[safe.length - 3]?.y || 0);
+
+  for (let i = 0; i < horizonMonths; i += 1) {
+    const avg3 = (a + b + c) / 3;
+    rows.push({ lag1: a, lag2: b, avg3 });
+    // Persistence fallback for unknown future report counts.
+    c = b;
+    b = a;
+    a = a;
+  }
+  return rows;
 }
 
 function riskLevelFromScore(score) {
@@ -128,6 +213,7 @@ export async function refreshMonthlyDistrictPredictions({
 
   try {
     const byDistrict = await aggregateMonthlyByDistrict(match);
+    const suspectedByDistrict = await aggregateMonthlySuspectedReportsByDistrict();
     const rawDistricts = [...byDistrict.entries()]
       .map(([district, series]) => ({ district, series }))
       .sort((a, b) => a.district.localeCompare(b.district));
@@ -194,15 +280,35 @@ export async function refreshMonthlyDistrictPredictions({
       .map(([district, series]) => ({
         district,
         series: fillMonthlyGaps(series, maxYm),
+        suspectedSeries: alignSuspectedToOfficialSeries(
+          fillMonthlyGaps(series, maxYm),
+          suspectedByDistrict.get(district) || [],
+          maxYm,
+        ),
       }))
       .sort((a, b) => a.district.localeCompare(b.district));
 
     const districtForecasts = await Promise.all(
-      districtsSeries.map(async ({ district, series }) => {
-        const historicalSeries = series.map((p) => ({
+      districtsSeries.map(async ({ district, series, suspectedSeries }) => {
+        const reportFeatures = buildReportFeatures(suspectedSeries);
+        const mergedSeries = series.map((p, idx) => ({
           year: p.year,
           month: p.month,
           cases: p.y,
+          lag1: Number(reportFeatures[idx]?.lag1 || 0),
+          lag2: Number(reportFeatures[idx]?.lag2 || 0),
+          avg3: Number(reportFeatures[idx]?.avg3 || 0),
+          suspectedReports: Number(suspectedSeries[idx]?.y || 0),
+        }));
+
+        const historicalSeries = mergedSeries.map((p) => ({
+          year: p.year,
+          month: p.month,
+          cases: p.cases,
+          suspectedReports: p.suspectedReports,
+          lag1: p.lag1,
+          lag2: p.lag2,
+          avg3: p.avg3,
         }));
 
         if (series.length < 3) {
@@ -218,7 +324,22 @@ export async function refreshMonthlyDistrictPredictions({
         }
 
         try {
-          const r = await runProphetMonthlyForecast(series, { horizonMonths });
+          const prophetSeries = mergedSeries.map((p) => ({
+            year: p.year,
+            month: p.month,
+            y: p.cases,
+            lag1: p.lag1,
+            lag2: p.lag2,
+            avg3: p.avg3,
+          }));
+          const futureRegressors = buildFutureReportRegressors(
+            suspectedSeries,
+            horizonMonths,
+          );
+          const r = await runProphetMonthlyForecast(prophetSeries, {
+            horizonMonths,
+            futureRegressors,
+          });
           const forecast = (r.forecast || []).map((f) => ({
             year: f.year,
             month: f.month,
@@ -237,6 +358,12 @@ export async function refreshMonthlyDistrictPredictions({
             status: hitsTarget ? "success" : "insufficient_data",
             message: hitsTarget ? null : "No sufficient data",
             historicalSeries,
+            suspectedReportSeries: suspectedSeries.map((p) => ({
+              year: p.year,
+              month: p.month,
+              suspectedReports: p.y,
+            })),
+            futureRegressors,
             backtestSeries: (r.backtest || []).map((b) => ({
               year: b.year,
               month: b.month,
@@ -274,6 +401,11 @@ export async function refreshMonthlyDistrictPredictions({
       forecastTargetYear: target.year,
       forecastTargetMonth: target.month,
       forecastHorizonMonths: horizonMonths,
+      exogenous: {
+        source: "suspected_reports",
+        features: ["lag1", "lag2", "avg3"],
+        note: "Official cases remain target; suspected report features are regressors.",
+      },
       districts: withRisk,
     };
 

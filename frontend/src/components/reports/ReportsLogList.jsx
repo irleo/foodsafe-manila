@@ -65,7 +65,7 @@ function classificationBadge(caseClassification) {
   );
 }
 
-export default function ReportsLogList({ reports, loading, onRefresh }) {
+export default function ReportsLogList({ reports, loading, onRefresh, viewerRole }) {
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState(null);
 
@@ -135,7 +135,7 @@ export default function ReportsLogList({ reports, loading, onRefresh }) {
           <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
             Source
           </p>
-          <p className="text-sm text-gray-800">{report.source || "citizen_app"}</p>
+          <p className="text-sm text-gray-800">{formatSourceLabel(report.source)}</p>
         </div>
 
         <div>
@@ -143,10 +143,7 @@ export default function ReportsLogList({ reports, loading, onRefresh }) {
             Submitted by
           </p>
           <p className="text-sm text-gray-800">
-            {report.reportedBy?.username ||
-              report.reportedBy?.email ||
-              report.reportedBy?._id ||
-              "—"}
+            {formatSubmittedBy(report.reportedBy, viewerRole)}
           </p>
         </div>
       </div>
@@ -447,3 +444,22 @@ export default function ReportsLogList({ reports, loading, onRefresh }) {
     </div>
   );
 }
+
+function formatSourceLabel(value) {
+  const v = String(value || "").trim().toLowerCase();
+  if (!v) return "Citizen App";
+  if (v === "citizen_app") return "Citizen App";
+  if (v === "health_official") return "Health Official";
+  return v
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatSubmittedBy(reportedBy, viewerRole) {
+  if (viewerRole !== "admin") return "Citizen User";
+  if (!reportedBy) return "Citizen User";
+  if (typeof reportedBy === "string") return "Citizen User";
+  return reportedBy.username || reportedBy.email || reportedBy._id || "Citizen User";
+}
+

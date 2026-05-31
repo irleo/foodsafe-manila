@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import XLSX from "xlsx";
+import csv from "csv-parser";
 
 import Dataset from "../models/Dataset.js";
 import OfficialCase from "../models/OfficialCase.js";
@@ -142,6 +143,30 @@ function minMaxYearMonth(records) {
     coverageStart: new Date(Date.UTC(minY, minM - 1, 1)),
     coverageEnd: new Date(Date.UTC(maxY, maxM - 1, 1)),
   };
+}
+
+async function parseCsvRows(filePath) {
+  const rows = [];
+  await new Promise((resolve, reject) => {
+    fs.createReadStream(filePath)
+      .pipe(csv())
+      .on("data", (row) => rows.push(row))
+      .on("end", resolve)
+      .on("error", reject);
+  });
+  return rows;
+}
+
+function normalizeTemplateCsvRowKeys(row = {}) {
+  const normalized = {};
+  for (const [key, value] of Object.entries(row || {})) {
+    const k = String(key || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "_");
+    normalized[k] = value;
+  }
+  return normalized;
 }
 
 /**
@@ -420,4 +445,161 @@ export async function importOfficialCasesXlsx({
   }
 
   return { success: false, reason: "Unsupported format type." };
+}
+
+/**
+ * Imports official case CSV that matches OfficialCaseTemplate columns.
+ */
+export async function importOfficialCasesCsv({
+  filePath,
+  name,
+  originalFileName,
+  storedFileName,
+  mimeType,
+  userId,
+} = {}) {
+  if (!filePath) throw new Error("filePath is required");
+
+  const rows = await parseCsvRows(filePath);
+  const requiredColumns = [
+    "city",
+    "district",
+    "barangay",
+    "disease",
+    "year",
+    "month",
+    "case_classification",
+    "cases",
+  ];
+
+  if (!rows.length) {
+    return {
+      success: false,
+      formatType: "processed_template_csv",
+      reason: "CSV file is empty.",
+      validationErrors: [],
+    };
+  }
+
+  const normalizedRows = rows.map(normalizeTemplateCsvRowKeys);
+  const headerSet = new Set(Object.keys(normalizedRows[0] || {}));
+  const missingColumns = requiredColumns.filter((c) => !headerSet.has(c));
+  if (missingColumns.length) {
+    return {
+      success: false,
+      formatType: "processed_template_csv",
+      reason: `Missing required columns: ${missingColumns.join(", ")}`,
+      validationErrors: [
+        {
+          sheet: "csv",
+          row: 1,
+          field: "headers",
+          message: `CSV must match OfficialCaseTemplate columns. Missing: ${missingColumns.join(", ")}`,
+        },
+      ],
+    };
+  }
+
+  const normalized = [];
+  const validationErrors = [];
+  const diseases = new Set();
+  const districts = new Set();
+
+  for (let i = 0; i < normalizedRows.length; i++) {
+    const rowNum = i + 2; // header row is 1
+    const n = normalizeTemplateRow(normalizedRows[i]);
+    if (!n.ok) {
+      validationErrors.push({
+        sheet: "csv",
+        row: rowNum,
+        field: n.field,
+        message: n.message,
+      });
+      continue;
+    }
+    diseases.add(n.value.disease);
+    districts.add(n.value.district);
+    normalized.push(n.value);
+  }
+
+  if (!normalized.length) {
+    return {
+      success: false,
+      formatType: "processed_template_csv",
+      reason: "No valid rows could be imported.",
+      validationErrors,
+    };
+  }
+
+  const { coverageStart, coverageEnd } = minMaxYearMonth(normalized);
+
+  const dataset = await Dataset.create({
+    name:
+      name?.trim() ||
+      path.basename(
+        originalFileName || storedFileName || "cleaned_official_cases.csv",
+      ),
+    dataSource: "official_csv",
+    coverageStart,
+    coverageEnd,
+    originalFileName: originalFileName || "cleaned_official_cases.csv",
+    storedFileName: storedFileName || path.basename(filePath),
+    filePath,
+    mimeType: mimeType || "text/csv",
+    status: "pending",
+    uploadedBy: userId || null,
+    formatType: "processed_template_csv",
+    diseases: Array.from(diseases),
+    districts: Array.from(districts),
+    totalRows: normalizedRows.length,
+    insertedRows: 0,
+    skippedRows: validationErrors.length,
+    validationErrors: validationErrors.length ? validationErrors : null,
+  });
+
+  const byKey = new Map();
+  for (const r of normalized) {
+    const key = [
+      r.city,
+      r.district,
+      r.barangayNo,
+      r.disease,
+      r.year,
+      r.month,
+      r.caseClassification,
+      r.source,
+    ].join("|");
+    const prev = byKey.get(key);
+    byKey.set(key, {
+      ...r,
+      cases: (prev?.cases || 0) + Number(r.cases || 0),
+    });
+  }
+  const docs = Array.from(byKey.values()).map((r) => ({
+    ...r,
+    datasetId: dataset._id,
+  }));
+
+  await OfficialCase.deleteMany({ datasetId: dataset._id });
+  await OfficialCase.insertMany(docs, { ordered: false });
+
+  dataset.insertedRows = docs.length;
+  dataset.recordsCount = docs.length;
+  dataset.totalRows = normalizedRows.length;
+  dataset.skippedRows = validationErrors.length;
+  dataset.status = "validated";
+  await dataset.save();
+
+  return {
+    success: true,
+    formatType: "processed_template_csv",
+    datasetId: String(dataset._id),
+    insertedRows: docs.length,
+    skippedRows: validationErrors.length,
+    coverageStart: dataset.coverageStart.toISOString(),
+    coverageEnd: dataset.coverageEnd.toISOString(),
+    diseases: dataset.diseases,
+    districts: dataset.districts,
+    validationErrors: dataset.validationErrors,
+  };
 }

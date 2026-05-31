@@ -69,7 +69,7 @@ export default function SwitchableYearlyChart({
 }) {
   const [chartType, setChartType] = useState("line");
   const [rangeMonths, setRangeMonths] = useState(12);
-  const [showMa3, setShowMa3] = useState(true);
+  const [showMa3, setShowMa3] = useState(false);
   const [showMa6, setShowMa6] = useState(false);
 
   const chartData = useMemo(() => {
