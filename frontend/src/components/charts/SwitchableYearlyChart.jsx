@@ -68,7 +68,7 @@ export default function SwitchableYearlyChart({
   height = 380,
 }) {
   const [chartType, setChartType] = useState("line");
-  const [rangeMonths, setRangeMonths] = useState(12);
+  const [rangeMonths, setRangeMonths] = useState(6);
   const [showMa3, setShowMa3] = useState(false);
   const [showMa6, setShowMa6] = useState(false);
 

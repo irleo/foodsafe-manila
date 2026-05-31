@@ -83,7 +83,7 @@ export const refreshPredictions = async (req, res) => {
       trigger: "manual",
       datasetId,
       horizonMonths: Number.isFinite(horizonMonths) ? horizonMonths : 1,
-      force: false,
+      force: true,
     });
 
     if (saved?.alreadyUpToDate) {

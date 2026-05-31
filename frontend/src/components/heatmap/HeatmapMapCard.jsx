@@ -112,8 +112,10 @@ export default function HeatmapMapCard({
               layer.on({
                 mouseover: () => {
                   layer.setStyle({
+                    color: baseStyle.color,
                     weight: 1.2,
                     opacity: 1,
+                    fillColor: baseStyle.fillColor,
                     fillOpacity: 0.9,
                   });
                 },

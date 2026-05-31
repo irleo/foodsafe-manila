@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import OfficialCase from "../models/OfficialCase.js";
+import Report from "../models/Report.js";
 import { normalizeDistrictKey } from "../constants/manilaDistrictCoords.js";
 
 function riskBand(cases) {
@@ -89,10 +90,62 @@ export const getDistrictHeatmap = async (req, res) => {
       { $sort: { totalCases: -1 } },
     ]);
 
+    const reportMatch = { isCounted: true, source: "citizen_app" };
+    if (year !== undefined && year !== "") {
+      const y = Number(year);
+      reportMatch.reportedAt = {
+        ...(reportMatch.reportedAt || {}),
+        $gte: new Date(Date.UTC(y, 0, 1)),
+        $lte: new Date(Date.UTC(y, 11, 31, 23, 59, 59, 999)),
+      };
+    }
+    if (month !== undefined && month !== "") {
+      const m = Number(month);
+      const y =
+        year !== undefined && year !== "" ? Number(year) : new Date().getUTCFullYear();
+      reportMatch.reportedAt = {
+        ...(reportMatch.reportedAt || {}),
+        $gte: new Date(Date.UTC(y, m - 1, 1)),
+        $lte: new Date(Date.UTC(y, m, 0, 23, 59, 59, 999)),
+      };
+    }
+    if (caseClassification) {
+      reportMatch.caseClassification = String(caseClassification).trim().toLowerCase();
+    }
+
+    // Reports have no disease field. To avoid misleading disease-filtered views,
+    // we include report counts only when disease is not filtered.
+    const reportRows = disease
+      ? []
+      : await Report.aggregate([
+          { $match: reportMatch },
+          {
+            $project: {
+              barangayNo: { $ifNull: ["$exposureBarangayNo", "$location.barangayNo"] },
+              barangay: { $ifNull: ["$exposureBarangay", "$location.barangay"] },
+              district: { $ifNull: ["$exposureDistrict", "$location.district"] },
+              totalCases: { $ifNull: ["$caseCount", 1] },
+            },
+          },
+          {
+            $group: {
+              _id: {
+                barangayNo: "$barangayNo",
+                barangay: "$barangay",
+                district: "$district",
+              },
+              totalCases: { $sum: "$totalCases" },
+            },
+          },
+          { $sort: { totalCases: -1 } },
+        ]);
+
+    const mergedRows = [...rows, ...reportRows];
+
     const districtTotals = new Map();
     const skippedBarangays = [];
 
-    for (const r of rows) {
+    for (const r of mergedRows) {
       const district = String(r._id?.district || "").trim();
       const districtKey = normalizeDistrictKey(district);
       const barangayNo = getBarangayNo(r._id?.barangayNo, r._id?.barangay);
@@ -134,7 +187,7 @@ export const getDistrictHeatmap = async (req, res) => {
       }),
     );
 
-    const points = rows
+    const points = mergedRows
       .map((r) => {
         const district = String(r._id?.district || "").trim();
         const districtKey = normalizeDistrictKey(district);

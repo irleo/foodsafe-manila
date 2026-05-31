@@ -26,9 +26,14 @@ function addMonths(year, month, delta) {
 function fillMonthlyGaps(series, endYm = null) {
   const safe = Array.isArray(series) ? series : [];
   if (!safe.length) return [];
-  const sorted = [...safe].sort((a, b) => ymToInt(a.year, a.month) - ymToInt(b.year, b.month));
+  const sorted = [...safe].sort(
+    (a, b) => ymToInt(a.year, a.month) - ymToInt(b.year, b.month),
+  );
   const min = ymToInt(sorted[0].year, sorted[0].month);
-  const ownMax = ymToInt(sorted[sorted.length - 1].year, sorted[sorted.length - 1].month);
+  const ownMax = ymToInt(
+    sorted[sorted.length - 1].year,
+    sorted[sorted.length - 1].month,
+  );
   const max = endYm == null ? ownMax : Math.max(ownMax, endYm);
   const by = new Map(sorted.map((r) => [ymToInt(r.year, r.month), r.y]));
   const out = [];
@@ -57,8 +62,16 @@ async function aggregateMonthlyByDistrict(match) {
   for (const r of rows) {
     const d = String(r?._id?.district || "").trim();
     if (!d) continue;
-    if (!byDistrict.has(d)) byDistrict.set(d, []);
-    byDistrict.get(d).push({ year: r._id.year, month: r._id.month, y: r.y });
+    const districtKey = normalizeDistrictKey(d);
+    if (!byDistrict.has(districtKey)) {
+      byDistrict.set(districtKey, {
+        district: d,
+        series: [],
+      });
+    }
+    byDistrict
+      .get(districtKey)
+      .series.push({ year: r._id.year, month: r._id.month, y: r.y });
   }
   return byDistrict;
 }
@@ -92,8 +105,11 @@ async function aggregateMonthlySuspectedReportsByDistrict() {
   for (const r of rows) {
     const d = String(r?._id?.district || "").trim();
     if (!d) continue;
-    if (!byDistrict.has(d)) byDistrict.set(d, []);
-    byDistrict.get(d).push({ year: r._id.year, month: r._id.month, y: r.y });
+    const districtKey = normalizeDistrictKey(d);
+    if (!byDistrict.has(districtKey)) byDistrict.set(districtKey, []);
+    byDistrict
+      .get(districtKey)
+      .push({ year: r._id.year, month: r._id.month, y: r.y });
   }
   return byDistrict;
 }
@@ -115,10 +131,14 @@ function buildReportFeatures(reportSeries = []) {
   });
 }
 
-function alignSuspectedToOfficialSeries(officialSeries = [], suspectedSeries = [], maxYm) {
-  const clipped = (Array.isArray(suspectedSeries) ? suspectedSeries : []).filter(
-    (p) => ymToInt(p.year, p.month) <= maxYm,
-  );
+function alignSuspectedToOfficialSeries(
+  officialSeries = [],
+  suspectedSeries = [],
+  maxYm,
+) {
+  const clipped = (
+    Array.isArray(suspectedSeries) ? suspectedSeries : []
+  ).filter((p) => ymToInt(p.year, p.month) <= maxYm);
   const byYm = new Map(
     clipped.map((p) => [`${p.year}-${p.month}`, Number(p.y || 0)]),
   );
@@ -156,7 +176,9 @@ function riskLevelFromScore(score) {
 function attachRiskScores(districtPayloads) {
   const preds = districtPayloads
     .filter((d) => d.forecast?.length)
-    .map((d) => d.forecast.find((x) => x.isPrimaryTarget)?.predictedCases ?? null)
+    .map(
+      (d) => d.forecast.find((x) => x.isPrimaryTarget)?.predictedCases ?? null,
+    )
     .filter((v) => Number.isFinite(Number(v)));
   const maxPred = preds.length ? Math.max(...preds, 1) : 1;
   return districtPayloads.map((d) => {
@@ -173,10 +195,11 @@ function attachRiskScores(districtPayloads) {
             predictedCases: primary.predictedCases,
             lowerBound: primary.lowerBound,
             upperBound: primary.upperBound,
-        }
+          }
         : null,
       riskScore,
-      riskLevel: riskScore == null ? "insufficient" : riskLevelFromScore(riskScore),
+      riskLevel:
+        riskScore == null ? "insufficient" : riskLevelFromScore(riskScore),
     };
   });
 }
@@ -213,9 +236,10 @@ export async function refreshMonthlyDistrictPredictions({
 
   try {
     const byDistrict = await aggregateMonthlyByDistrict(match);
-    const suspectedByDistrict = await aggregateMonthlySuspectedReportsByDistrict();
-    const rawDistricts = [...byDistrict.entries()]
-      .map(([district, series]) => ({ district, series }))
+    const suspectedByDistrict =
+      await aggregateMonthlySuspectedReportsByDistrict();
+    const rawDistricts = [...byDistrict.values()]
+      .map(({ district, series }) => ({ district, series }))
       .sort((a, b) => a.district.localeCompare(b.district));
 
     if (!rawDistricts.length) {
@@ -223,7 +247,9 @@ export async function refreshMonthlyDistrictPredictions({
     }
 
     const allRawPoints = rawDistricts.flatMap((d) => d.series);
-    const maxYm = Math.max(...allRawPoints.map((p) => ymToInt(p.year, p.month)));
+    const maxYm = Math.max(
+      ...allRawPoints.map((p) => ymToInt(p.year, p.month)),
+    );
     const basis = intToYm(maxYm);
     const target = addMonths(basis.year, basis.month, 1);
 
@@ -244,13 +270,10 @@ export async function refreshMonthlyDistrictPredictions({
       existingSuccess.basisMonth === basis.month &&
       existingSuccess.forecastTargetYear === target.year &&
       existingSuccess.forecastTargetMonth === target.month &&
-      Number(existingSuccess.forecastHorizonMonths || 1) === Number(horizonMonths || 1);
+      Number(existingSuccess.forecastHorizonMonths || 1) ===
+        Number(horizonMonths || 1);
 
     if (!force && isUpToDate) {
-      return { ...existingSuccess, alreadyUpToDate: true };
-    }
-
-    if (trigger === "manual" && isUpToDate) {
       return { ...existingSuccess, alreadyUpToDate: true };
     }
 
@@ -273,16 +296,20 @@ export async function refreshMonthlyDistrictPredictions({
           forecastHorizonMonths: horizonMonths,
         },
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
+      {
+        upsert: true,
+        returnDocument: "after",
+        setDefaultsOnInsert: true,
+      },
     );
 
-    const districtsSeries = [...byDistrict.entries()]
-      .map(([district, series]) => ({
+    const districtsSeries = [...byDistrict.values()]
+      .map(({ district, series }) => ({
         district,
         series: fillMonthlyGaps(series, maxYm),
         suspectedSeries: alignSuspectedToOfficialSeries(
           fillMonthlyGaps(series, maxYm),
-          suspectedByDistrict.get(district) || [],
+          suspectedByDistrict.get(normalizeDistrictKey(district)) || [],
           maxYm,
         ),
       }))
@@ -386,7 +413,7 @@ export async function refreshMonthlyDistrictPredictions({
             forecast: [],
           };
         }
-      })
+      }),
     );
 
     const withRisk = attachRiskScores(districtForecasts);
@@ -425,7 +452,7 @@ export async function refreshMonthlyDistrictPredictions({
           forecastHorizonMonths: horizonMonths,
         },
       },
-      { new: true }
+      { returnDocument: "after" },
     ).lean();
 
     const targetMonth = `${target.year}-${String(target.month).padStart(2, "0")}`;
@@ -461,8 +488,15 @@ export async function refreshMonthlyDistrictPredictions({
     const msg = err?.message || "forecast_failed";
     const saved = await PredictionRun.findByIdAndUpdate(
       running._id,
-      { $set: { status: "failed", finishedAt, errorMessage: msg, payload: null } },
-      { new: true }
+      {
+        $set: {
+          status: "failed",
+          finishedAt,
+          errorMessage: msg,
+          payload: null,
+        },
+      },
+      { returnDocument: "after" },
     ).lean();
     return saved;
   }
