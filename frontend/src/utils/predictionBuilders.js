@@ -1,13 +1,3 @@
-function clamp(n, min, max) {
-  return Math.max(min, Math.min(max, n));
-}
-
-// Deterministic noise per year so it doesn't "randomly change" on reload
-function pseudoNoiseFromYear(year) {
-  const x = Math.sin(year * 999) * 10000;
-  return x - Math.floor(x); // 0..1
-}
-
 /**
  * Builds {year, actual, predicted} rows.
  *

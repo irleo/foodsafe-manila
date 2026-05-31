@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     rootDir: backend
-    buildCommand: npm ci && pip install -r services/prophet/requirements.txt
+    buildCommand: npm ci && python3 -m pip install -r services/prophet/requirements.txt
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
@@ -22,9 +22,9 @@ services:
         value: python3
       - key: BREVO_API_KEY
         sync: false
-      - key: BREVO_SENDER_EMAIL
+      - key: BREVO_FROM_EMAIL
         sync: false
-      - key: BREVO_SENDER_NAME
+      - key: BREVO_FROM_NAME
         value: FoodSafe-Manila
 
   - type: web

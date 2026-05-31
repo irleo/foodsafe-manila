@@ -343,7 +343,6 @@ export default function ForgotPassword() {
                       ? Number(result.debugExpiresMinutes)
                       : null,
                   );
-                  setAccessOtpDigits?.([]);
                   setResendCooldown(OTP_RESEND_COOLDOWN_SECONDS);
                   setOtp(["", "", "", "", "", ""]);
                 } catch (err) {

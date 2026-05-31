@@ -1,9 +1,3 @@
-// Percentage computations
-const percentChange = (current, previous) => {
-  if (!previous) return null;
-  return ((current - previous) / previous) * 100;
-};
-
 function percentile(sortedValues, p) {
   // p in [0,1], sortedValues ascending
   if (!sortedValues.length) return 0;

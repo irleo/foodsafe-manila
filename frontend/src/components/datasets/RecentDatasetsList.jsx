@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ArrowDownTrayIcon,
   CalendarIcon,
@@ -22,15 +22,12 @@ export default function RecentDatasetsList({
     return Math.max(1, Math.ceil((recent?.length || 0) / PAGE_SIZE));
   }, [recent?.length]);
 
-  // Keep page valid when list changes (e.g. after refresh/upload)
-  useEffect(() => {
-    setPage((p) => Math.min(p, totalPages - 1));
-  }, [totalPages]);
+  const safePage = Math.min(page, totalPages - 1);
 
   const pageItems = useMemo(() => {
-    const start = page * PAGE_SIZE;
+    const start = safePage * PAGE_SIZE;
     return (recent || []).slice(start, start + PAGE_SIZE);
-  }, [recent, page]);
+  }, [recent, safePage]);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -141,7 +138,7 @@ export default function RecentDatasetsList({
                 type="button"
                 className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
-                disabled={page === 0}
+                disabled={safePage === 0}
               >
                 Prev
               </button>
@@ -155,7 +152,7 @@ export default function RecentDatasetsList({
                     aria-label={`Go to page ${i + 1}`}
                     className={[
                       "h-2.5 w-2.5 rounded-full transition",
-                      i === page
+                      i === safePage
                         ? "bg-blue-600"
                         : "bg-gray-300 hover:bg-gray-400",
                     ].join(" ")}
@@ -167,7 +164,7 @@ export default function RecentDatasetsList({
                 type="button"
                 className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
                 onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                disabled={page === totalPages - 1}
+                disabled={safePage === totalPages - 1}
               >
                 Next
               </button>

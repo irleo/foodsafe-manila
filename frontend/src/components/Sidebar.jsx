@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   MapIcon,
@@ -86,7 +87,7 @@ export default function Sidebar({ isOpen }) {
     >
       <div className="flex flex-col h-full">
         <nav className="p-4 space-y-1">
-          {links.map(({ name, path, icon: Icon, end }) => (
+          {links.map(({ name, path, icon, end }) => (
             <NavLink
               key={path}
               to={path}
@@ -102,12 +103,12 @@ export default function Sidebar({ isOpen }) {
             >
               {({ isActive }) => (
                 <>
-                  <Icon
-                    className={[
+                  {createElement(icon, {
+                    className: [
                       "h-5 w-5",
                       isActive ? "text-blue-700" : "text-gray-500",
-                    ].join(" ")}
-                  />
+                    ].join(" "),
+                  })}
                   <span className="flex-1">{name}</span>
                 </>
               )}
