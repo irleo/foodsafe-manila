@@ -320,13 +320,47 @@ export const uploadDataset = async (req, res) => {
       });
 
       if (!result.success) {
+        dataset = await Dataset.create({
+          name,
+          dataSource: ext === ".csv" ? "official_csv" : "official_xlsx",
+          coverageStart: new Date(),
+          coverageEnd: new Date(),
+          originalFileName: req.file.originalname,
+          storedFileName: req.file.filename,
+          filePath: req.file.path,
+          mimeType: req.file.mimetype,
+          status: "failed",
+          uploadedBy: req.user?._id || req.user?.id,
+          errorMessage: result?.reason || "Validation failed.",
+          formatType: result?.formatType || "csv_generic",
+          validationErrors: result?.validationErrors || null,
+          insertedRows: 0,
+          skippedRows: 0,
+          totalRows: 0,
+        });
+
         cleanupUploadedFile(req);
         await createNotification({
           type: "dataset_failed",
           title: "Dataset Validation Failed",
           message: `${name}: ${result?.reason || "Validation failed."}`,
           dotColor: "red",
-          metadata: { name, reason: result?.reason || null },
+          metadata: {
+            datasetId: String(dataset._id),
+            name,
+            reason: result?.reason || null,
+          },
+        });
+        await logActivity({
+          actor: req.user?.id,
+          actionType: "dataset_failed",
+          title: "Dataset validation failed",
+          subtitle: `${name} failed validation.`,
+          metadata: {
+            datasetId: String(dataset._id),
+            name,
+            reason: result?.reason || "Validation failed.",
+          },
         });
         return res.status(400).json(result);
       }
@@ -437,6 +471,17 @@ export const uploadDataset = async (req, res) => {
         dotColor: "red",
         metadata: { datasetId: String(dataset._id), name: dataset.name },
       });
+      await logActivity({
+        actor: req.user?.id,
+        actionType: "dataset_failed",
+        title: "Dataset validation failed",
+        subtitle: `${dataset.name} failed validation.`,
+        metadata: {
+          datasetId: String(dataset._id),
+          name: dataset.name,
+          reason: dataset.errorMessage,
+        },
+      });
 
       cleanupUploadedFile(req);
 
@@ -499,9 +544,77 @@ export const uploadDataset = async (req, res) => {
         dotColor: "red",
         metadata: { datasetId: String(dataset._id), name: dataset.name },
       });
+      await logActivity({
+        actor: req.user?.id,
+        actionType: "dataset_failed",
+        title: "Dataset upload failed",
+        subtitle: `${dataset.name} upload failed.`,
+        metadata: {
+          datasetId: String(dataset._id),
+          name: dataset.name,
+          reason: dataset.errorMessage,
+        },
+      });
     }
     return res.status(500).json({ message: error.message });
   }
+};
+
+export const handleDatasetUploadError = async (err, req, res, next) => {
+  if (!err) return next();
+
+  try {
+    const name = String(req.body?.name || "").trim() || "Unnamed upload";
+    const originalFileName =
+      req.file?.originalname || String(req.body?.originalFileName || "unknown");
+    const storedFileName = req.file?.filename || "upload_rejected";
+    const filePath = req.file?.path || "upload_rejected";
+    const mimeType = req.file?.mimetype || String(req.body?.mimeType || "");
+    const reason = err?.message || "Upload rejected.";
+
+    const failed = await Dataset.create({
+      name,
+      dataSource: "official_upload",
+      coverageStart: new Date(),
+      coverageEnd: new Date(),
+      originalFileName,
+      storedFileName,
+      filePath,
+      mimeType,
+      status: "failed",
+      uploadedBy: req.user?._id || req.user?.id || null,
+      errorMessage: reason,
+      formatType: "csv_generic",
+      validationErrors: [{ field: "upload", message: reason }],
+      insertedRows: 0,
+      skippedRows: 0,
+      totalRows: 0,
+    });
+
+    await createNotification({
+      type: "dataset_failed",
+      title: "Dataset Upload Rejected",
+      message: `${name}: ${reason}`,
+      dotColor: "red",
+      metadata: { datasetId: String(failed._id), name, reason },
+    });
+
+    await logActivity({
+      actor: req.user?.id,
+      actionType: "dataset_failed",
+      title: "Dataset upload rejected",
+      subtitle: `${name} was rejected during upload.`,
+      metadata: {
+        datasetId: String(failed._id),
+        name,
+        reason,
+      },
+    });
+  } catch (saveErr) {
+    console.error("Failed to persist upload rejection:", saveErr?.message || saveErr);
+  }
+
+  return res.status(400).json({ message: err?.message || "Upload rejected." });
 };
 
 /**

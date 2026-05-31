@@ -13,6 +13,7 @@ const activityLogSchema = new mongoose.Schema(
       enum: [
         "dataset_uploaded",
         "dataset_validated",
+        "dataset_failed",
         "user_approved",
         "user_rejected",
         "password_reset",
