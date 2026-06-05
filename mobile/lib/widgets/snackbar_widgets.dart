@@ -193,7 +193,7 @@ class _TopNotificationCardState extends State<_TopNotificationCard>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "GCash",
+                      "Message Received",
                       style: GoogleFonts.inter(
                         fontWeight: FontWeight.w800,
                         fontSize: 13,
@@ -201,7 +201,7 @@ class _TopNotificationCardState extends State<_TopNotificationCard>
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      "You have received PHP ${widget.otp}.00 of GCash",
+                      "Your OTP code is ${widget.otp}",
                       style: GoogleFonts.inter(fontSize: 13),
                     ),
                   ],

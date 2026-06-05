@@ -10,6 +10,7 @@ import '../services/api_client.dart';
 import '../services/location_service.dart';
 import '../services/manila_geo_service.dart';
 import '../services/session.dart';
+import '../utils/format_helpers.dart';
 import '../widgets/app_loading.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
@@ -71,7 +72,8 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       final allowed = await _checkCooldown(userId);
       if (!allowed) return false;
 
-      final reportedSymptoms = selectedSymptoms.toList();
+      final reportedSymptoms =
+          FormatHelpers.formatSymptoms(selectedSymptoms).toList();
       final coordinates = await LocationService.getCurrentCoordinates();
 
       if (coordinates == null) {
@@ -85,7 +87,9 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       final lat = coordinates['lat'] ?? 0.0;
       final lng = coordinates['lng'] ?? 0.0;
 
-      final insideManila = await _isWithinManila(lat, lng);
+      final usingDebugLocation = await LocationService.isUsingDebugLocation();
+      final insideManila =
+          usingDebugLocation || await _isWithinManila(lat, lng);
 
       if (!insideManila) {
         if (mounted) {
@@ -111,10 +115,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       }
 
       final locationPayload = {
-        'name': resolved.formatted,
-        'district': resolved.district,
-        'barangay': resolved.barangay,
-        'barangayNo': resolved.barangayNo,
+        ...resolved.toPayload(),
         'coordinates': {'lat': lat, 'lng': lng},
       };
 
@@ -125,10 +126,13 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       if (selectedAteFoodLocation ==
           'Same as my current district location') {
         exposureDistrict = resolved.district;
-        exposureBarangay = resolved.barangay;
+        exposureBarangay = resolved.barangayNo > 0
+            ? 'Barangay ${resolved.barangayNo}'
+            : resolved.barangay;
         exposureBarangayNo = resolved.barangayNo;
       } else if (selectedAteFoodLocation == 'Choose a different district') {
-        exposureDistrict = selectedDistrict;
+        exposureDistrict =
+            FormatHelpers.normalizeDistrict(selectedDistrict);
         exposureBarangay = selectedExposureBarangay;
         exposureBarangayNo = selectedExposureBarangayNo;
       }
@@ -421,6 +425,16 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
         locationText = address;
       });
     });
+  }
+
+  String get _exposureLocationDisplay {
+    if (selectedAteFoodLocation == 'Choose a different district') {
+      return FormatHelpers.formatLocationDisplay(
+        district: selectedDistrict ?? '',
+        barangayNo: selectedExposureBarangayNo,
+      );
+    }
+    return locationText;
   }
 
   @override
@@ -1195,7 +1209,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                               border: Border.all(color: Colors.blue.shade200),
                             ),
                             child: Text(
-                              symptom,
+                              FormatHelpers.formatSymptom(symptom),
                               style: GoogleFonts.inter(
                                 fontSize: 13,
                                 color: Color(0xFF1D4ED8),
@@ -1268,7 +1282,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                           ),
                           SizedBox(width: 6),
                           Text(
-                            locationText.split(',').first.trim(),
+                            locationText,
                             style: GoogleFonts.inter(
                               fontWeight: FontWeight.w500,
                               fontSize: 14,
@@ -1304,11 +1318,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                           ),
                           SizedBox(width: 6),
                           Text(
-                            selectedAteFoodLocation == 'Same as my current district location'
-                                ? locationText.split(',').first.trim()
-                                : selectedAteFoodLocation == 'Choose a different district'
-                                    ? '$selectedDistrict, Barangay $selectedExposureBarangayNo'
-                                    : locationText.split(',').first.trim(),
+                            _exposureLocationDisplay,
                             style: GoogleFonts.inter(
                               fontWeight: FontWeight.w500,
                               fontSize: 14,
