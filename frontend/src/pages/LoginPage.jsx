@@ -3,9 +3,9 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { notify } from "../utils/toast";
+import AuthPageLayout from "../layouts/AuthPageLayout";
 
-import { ArrowLeft, Activity, Eye, EyeOff } from "lucide-react";
-import logo from "../../../mobile/assets/foodsafe_logo.png";
+import { Eye, EyeOff } from "lucide-react";
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const REMEMBER_EMAIL_KEY = "foodsafe.rememberedEmail";
@@ -55,7 +55,7 @@ const Login = () => {
         window.localStorage.removeItem(REMEMBER_EMAIL_KEY);
       }
 
-      navigate("/");
+      navigate("/dashboard");
     } catch (err) {
       const msg =
         err?.response?.data?.message ||
@@ -69,29 +69,14 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <Link
-          to="/welcome"
-          className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-4"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span className="text-sm">Back to Home</span>
-        </Link>
-
-        <div className="bg-blue-600 rounded-2xl shadow-2xl">
-          <div className="flex items-center justify-center">
-            <div className="p-8">
-              <img
-                src={logo}
-                className="h-14 sm:h-16 w-auto object-contain mx-auto select-none"
-                alt="FoodSafe Manila"
-                draggable="false"
-                decoding="async"
-              />
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl p-8">
+    <AuthPageLayout
+      title="Welcome back"
+      description="Sign in to continue to the FoodSafe dashboard."
+      backTo="/"
+      backLabel="Back to home"
+      contentWidth="comfortable"
+      centerContent
+    >
             {error && (
               <div className="mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm">
                 {error}
@@ -211,10 +196,7 @@ const Login = () => {
               <p className="mt-2">Admin: admin@sample.com / @Password1</p>
               <p>User: user@sample.com / @Password2</p>
             </div> */}
-          </div>
-        </div>
-      </div>
-    </div>
+    </AuthPageLayout>
   );
 };
 

@@ -10,10 +10,10 @@ function StatCard({ title, value }) {
 export default function HeatmapStatsRow({ stats }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <StatCard title="Low Risk Districts" value={stats?.Low ?? 0} />
-      <StatCard title="Medium Risk Districts" value={stats?.Medium ?? 0} />
-      <StatCard title="High Risk Districts" value={stats?.High ?? 0} />
-      <StatCard title="Critical Risk Districts" value={stats?.Critical ?? 0} />
+      <StatCard title="Forecasted Low Risk Districts" value={stats?.Low ?? 0} />
+      <StatCard title="Forecasted Medium Risk Districts" value={stats?.Medium ?? 0} />
+      <StatCard title="Forecasted High Risk Districts" value={stats?.High ?? 0} />
+      <StatCard title="Forecasted Critical Risk Districts" value={stats?.Critical ?? 0} />
     </div>
   );
 }

@@ -10,7 +10,7 @@ export default function PrivateRoute({ allowedRoles }) {
   }
 
   if (!auth || !auth.accessToken) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   if (allowedRoles && !allowedRoles.includes(auth.role)) {

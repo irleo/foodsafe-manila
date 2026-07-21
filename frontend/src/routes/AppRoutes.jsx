@@ -18,7 +18,7 @@ import Data from "../pages/DataPage";
 import UserManagement from "../pages/UserManagementPage";
 
 const protectedRoutes = [
-  { index: true, element: <Dashboard />, key: "dashboard" },
+  { path: "dashboard", element: <Dashboard />, key: "dashboard" },
   { path: "analytics", element: <Analytics />, key: "analytics" },
   { path: "heatmap", element: <Heatmap />, key: "heatmap" },
   { path: "predictions", element: <Predictions />, key: "predictions" },
@@ -36,7 +36,8 @@ const adminRoutes = [
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/welcome" element={<Welcome />} />
+      <Route path="/" element={<Welcome />} />
+      <Route path="/welcome" element={<Navigate to="/" replace />} />
 
       <Route element={<PublicRoute />}>
         <Route path="/login" element={<Login />} />

@@ -1,20 +1,34 @@
-export function computeRiskScore(officialCases, suspectedCases) {
-  const raw = officialCases * 1.0 + suspectedCases * 0.65;
-  if (raw <= 0) return 0;
-  const score = Math.min(100, Math.round((Math.log1p(raw) / Math.log1p(50)) * 100));
-  return score;
+export function computeRiskScore(caseCount) {
+  const cases = Math.max(0, Number(caseCount ?? 0));
+  if (cases <= 0) return 0;
+  return Math.min(100, Math.round((Math.min(cases, 31) / 31) * 100));
 }
 
-export function riskLevelFromScore(score) {
-  if (score >= 70) return "high";
-  if (score >= 35) return "moderate";
+export function riskLevelFromCases(caseCount) {
+  const cases = Math.max(0, Number(caseCount ?? 0));
+  if (cases >= 31) return "critical";
+  if (cases >= 16) return "high";
+  if (cases >= 6) return "medium";
   return "low";
 }
 
 export function riskLabel(level) {
+  if (level === "critical") return "Critical Risk";
   if (level === "high") return "High Risk";
-  if (level === "moderate") return "Moderate Risk";
+  if (level === "medium") return "Medium Risk";
   return "Low Risk";
+}
+
+export function computeRiskAnalysis(caseCount) {
+  const cases = Math.max(0, Number(caseCount ?? 0));
+  const level = riskLevelFromCases(cases);
+  return {
+    caseCount: cases,
+    riskScore: computeRiskScore(cases),
+    riskLevel: level,
+    risk: riskLabel(level).replace(" Risk", ""),
+    riskLabel: riskLabel(level),
+  };
 }
 
 export function monthsAgoDate(months) {

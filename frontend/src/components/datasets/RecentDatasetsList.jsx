@@ -3,6 +3,7 @@ import {
   ArrowDownTrayIcon,
   CalendarIcon,
   DocumentIcon,
+  UserCircleIcon,
 } from "@heroicons/react/24/outline";
 import { RefreshCw } from "lucide-react";
 import { formatDate } from "../../utils/formatDate";
@@ -32,7 +33,10 @@ export default function RecentDatasetsList({
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold">Recent Datasets</h2>
+        <div>
+          <h2 className="font-semibold">Recent Datasets</h2>
+          <p className="text-xs text-gray-500">Upload audit log</p>
+        </div>
         <button
           className="flex items-center gap-1 text-sm px-3 py-1 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
           onClick={() => {
@@ -91,6 +95,14 @@ export default function RecentDatasetsList({
                         <span className="flex items-center gap-1">
                           <CalendarIcon className="w-4 h-4" />
                           {formatDate(d.createdAt || d.uploadedAt)}
+                        </span>
+
+                        <span className="flex items-center gap-1">
+                          <UserCircleIcon className="w-4 h-4" />
+                          Uploaded by{" "}
+                          {d.uploadedBy?.username ||
+                            d.uploadedBy?.email ||
+                            "Unknown user"}
                         </span>
 
                         <span

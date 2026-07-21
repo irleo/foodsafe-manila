@@ -10,7 +10,7 @@ export default function PublicRoute() {
   }
 
   if (auth && auth.accessToken) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <Outlet />;

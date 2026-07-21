@@ -1,5 +1,14 @@
 import { MapContainer, TileLayer, GeoJSON } from "react-leaflet";
 import legislativeDistricts from "../../data/manila-barangays-with-legislative-districts.json";
+import { normalizeDistrictKey } from "../../constants/manilaDistrictCoords";
+
+function formatForecastMonth(forecast) {
+  if (!forecast?.year || !forecast?.month) return "next month";
+  return new Date(forecast.year, Number(forecast.month) - 1, 1).toLocaleString(
+    undefined,
+    { month: "long", year: "numeric" },
+  );
+}
 
 export default function HeatmapMapCard({
   controls,
@@ -13,9 +22,18 @@ export default function HeatmapMapCard({
   const casesByBarangay = Object.fromEntries(
     (districtPoints || []).map((p) => [Number(p.barangayNo), p]),
   );
+  const pointsByDistrict = Object.fromEntries(
+    (districtPoints || []).map((p) => [
+      p.districtKey || normalizeDistrictKey(p.district),
+      p,
+    ]),
+  );
 
   const heatmapLayerKey = districtPoints
-    .map((p) => `${p.barangayNo}:${p.cases}`)
+    .map(
+      (p) =>
+        `${p.barangayNo}:${p.cases}:${p.forecast?.predictedCases ?? ""}:${p.forecastRisk?.riskLevel ?? ""}`,
+    )
     .join("|");
 
   return (
@@ -36,7 +54,7 @@ export default function HeatmapMapCard({
             <b>Area</b> = barangay
           </div>
           <div>
-            <b>Color</b> = district avg incident risk
+            <b>Color</b> = forecasted district risk
           </div>
         </div>
 
@@ -60,19 +78,25 @@ export default function HeatmapMapCard({
             style={(feature) => {
               const barangayNo = Number(feature.properties.barangayNo);
               const point = casesByBarangay[barangayNo];
+              const districtKey = normalizeDistrictKey(feature.properties.district);
+              const districtPoint = pointsByDistrict[districtKey] || point;
 
-              const cases = point?.cases ?? 0;
-              const hasCases = cases > 0;
-              const color = hasCases
-                ? getRiskColor(point.districtAvgIncident ?? 0)
+              const hasRiskData = Boolean(districtPoint);
+              const color = hasRiskData
+                ? getRiskColor(
+                    districtPoint.forecastRisk?.riskLevel ??
+                      districtPoint.riskLevel ??
+                      districtPoint.districtTotalCases ??
+                      0,
+                  )
                 : "#cbd5e1";
 
               return {
                 color: "#334166", // border color
-                weight: hasCases ? 0.5 : 0.35,
-                opacity: hasCases ? 0.7 : 0.35,
+                weight: hasRiskData ? 0.5 : 0.35,
+                opacity: hasRiskData ? 0.7 : 0.35,
                 fillColor: color,
-                fillOpacity: hasCases ? 0.75 : 0.12,
+                fillOpacity: hasRiskData ? 0.75 : 0.12,
               };
             }}
             onEachFeature={(feature, layer) => {
@@ -81,14 +105,28 @@ export default function HeatmapMapCard({
                 feature.properties.barangay || `Barangay ${barangayNo}`;
               const district = feature.properties.district;
               const point = casesByBarangay[barangayNo];
+              const districtKey = normalizeDistrictKey(district);
+              const districtPoint = pointsByDistrict[districtKey] || point;
+
+              if (!districtPoint) return;
 
               const cases = point?.cases ?? 0;
-              if (cases <= 0) return;
-
-              const risk = point?.risk ?? "No data";
-              const avgIncident = point?.districtAvgIncident ?? 0;
-              const districtTotalCases = point?.districtTotalCases ?? 0;
-              const color = getRiskColor(avgIncident);
+              const actualRisk = districtPoint?.risk ?? "No data";
+              const forecastRisk = districtPoint?.forecastRisk;
+              const risk = forecastRisk?.risk ?? actualRisk;
+              const avgIncident = districtPoint?.districtAvgIncident ?? 0;
+              const districtTotalCases = districtPoint?.districtTotalCases ?? 0;
+              const forecast = districtPoint?.forecast;
+              const forecastMonth = formatForecastMonth(forecast);
+              const forecastCases =
+                forecast?.predictedCases == null
+                  ? "No forecast"
+                  : `${forecast.predictedCases} cases`;
+              const color = getRiskColor(
+                forecastRisk?.riskLevel ??
+                  districtPoint?.riskLevel ??
+                  districtTotalCases,
+              );
               const baseStyle = {
                 color: "#334166",
                 weight: 0.5,
@@ -105,7 +143,9 @@ export default function HeatmapMapCard({
                   <p>Barangay cases: <strong>${cases}</strong></p>
                   <p>District total cases: <strong>${districtTotalCases}</strong></p>
                   <p>District avg incident: <strong>${Number(avgIncident).toFixed(2)}</strong></p>
-                  <p>Risk: <strong style="color:${color}">${risk}</strong></p>
+                  <p>Forecasted month: <strong>${forecastMonth}</strong></p>
+                  <p>Forecasted cases: <strong>${forecastCases}</strong></p>
+                  <p>Forecasted risk: <strong style="color:${color}">${risk}</strong></p>
                 </div>
               `);
 
@@ -133,8 +173,9 @@ export default function HeatmapMapCard({
         <h3 className="font-semibold">Note</h3>
         <p className="text-sm text-gray-600">
           The map groups official case records into <b>barangay-number areas</b>
-          . Risk color reflects average incident per district for the selected
-          filters; popups show barangay number and cases.
+          . Risk color reflects the forecasted district risk when saved forecast
+          data is available; popups show the forecasted month, forecasted cases,
+          and current selected historical totals.
         </p>
       </div>
     </div>

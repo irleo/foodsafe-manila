@@ -1,9 +1,7 @@
 import OfficialCase from "../models/OfficialCase.js";
 import Report from "../models/Report.js";
 import {
-  computeRiskScore,
-  riskLevelFromScore,
-  riskLabel,
+  computeRiskAnalysis,
   monthsAgoDate,
 } from "../utils/riskUtils.js";
 
@@ -90,14 +88,15 @@ function mergeAreaRows(officialRows, reportRows) {
   }
 
   return [...map.values()].map((area) => {
-    const riskScore = computeRiskScore(area.officialCases, area.suspectedCases);
-    const riskLevel = riskLevelFromScore(riskScore);
+    const totalCases = area.officialCases + area.suspectedCases;
+    const risk = computeRiskAnalysis(totalCases);
     return {
       ...area,
-      totalCases: area.officialCases + area.suspectedCases,
-      riskScore,
-      riskLevel,
-      riskLabel: riskLabel(riskLevel),
+      totalCases,
+      riskScore: risk.riskScore,
+      riskLevel: risk.riskLevel,
+      risk: risk.risk,
+      riskLabel: risk.riskLabel,
       classification: {
         official: area.officialCases,
         suspected: area.suspectedCases,
@@ -181,14 +180,15 @@ export const getMobileDashboard = async (req, res) => {
     }
 
     let highRiskDistricts = 0;
-    let moderateRiskDistricts = 0;
+    let criticalRiskDistricts = 0;
+    let mediumRiskDistricts = 0;
     let lowRiskDistricts = 0;
 
     for (const entry of districtRisk.values()) {
-      const score = computeRiskScore(entry.official, entry.suspected);
-      const level = riskLevelFromScore(score);
-      if (level === "high") highRiskDistricts += 1;
-      else if (level === "moderate") moderateRiskDistricts += 1;
+      const level = computeRiskAnalysis(entry.official + entry.suspected).riskLevel;
+      if (level === "critical") criticalRiskDistricts += 1;
+      else if (level === "high") highRiskDistricts += 1;
+      else if (level === "medium") mediumRiskDistricts += 1;
       else lowRiskDistricts += 1;
     }
 
@@ -214,8 +214,10 @@ export const getMobileDashboard = async (req, res) => {
       topDistrict: topDistrictAgg[0]?._id || "N/A",
       topDisease: topDiseaseAgg[0]?._id || "N/A",
       growth: growth.toFixed(1),
+      criticalRiskDistricts,
       highRiskDistricts,
-      moderateRiskDistricts,
+      mediumRiskDistricts,
+      moderateRiskDistricts: mediumRiskDistricts,
       lowRiskDistricts,
       year,
     });
@@ -238,8 +240,10 @@ export const getMobileRiskHeatmap = async (req, res) => {
 
     const areas = mergeAreaRows(officialRows, reportRows);
     const summary = {
+      critical: areas.filter((a) => a.riskLevel === "critical").length,
       high: areas.filter((a) => a.riskLevel === "high").length,
-      moderate: areas.filter((a) => a.riskLevel === "moderate").length,
+      medium: areas.filter((a) => a.riskLevel === "medium").length,
+      moderate: areas.filter((a) => a.riskLevel === "medium").length,
       low: areas.filter((a) => a.riskLevel === "low").length,
     };
 
@@ -277,14 +281,14 @@ export const getMobileNearbyRisk = async (req, res) => {
     }
 
     const alerts = areas
-      .filter((a) => a.riskLevel === "high")
+      .filter((a) => a.riskLevel === "high" || a.riskLevel === "critical")
       .sort((a, b) => b.riskScore - a.riskScore)
       .slice(0, 10);
 
     return res.json({
       success: true,
       area,
-      isHighRisk: area?.riskLevel === "high",
+      isHighRisk: area?.riskLevel === "high" || area?.riskLevel === "critical",
       highRiskAreas: alerts,
     });
   } catch (error) {

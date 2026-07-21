@@ -649,8 +649,9 @@ export const listDatasets = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(50)
       .select(
-        "name originalFileName storedFileName recordsCount status coverageStart coverageEnd createdAt uploadedAt errorMessage",
-      );
+        "name originalFileName storedFileName recordsCount status coverageStart coverageEnd createdAt uploadedAt errorMessage uploadedBy",
+      )
+      .populate("uploadedBy", "username email role");
 
     res.json(datasets);
   } catch (error) {

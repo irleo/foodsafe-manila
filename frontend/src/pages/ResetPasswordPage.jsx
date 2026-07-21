@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Eye, EyeOff, Lock } from "lucide-react";
+import { Eye, EyeOff, Lock } from "lucide-react";
 import { notify } from "../utils/toast";
-import logo from "../../../mobile/assets/foodsafe_logo.png";
+import AuthPageLayout from "../layouts/AuthPageLayout";
 import {
   getPasswordValidationResults,
   validatePassword,
@@ -100,40 +100,15 @@ export default function ResetPassword() {
     );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <Link
-          to="/forgot-password"
-          onClick={(e) => {
-            if (!confirmCancel()) e.preventDefault();
-          }}
-          className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-4"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span className="text-sm">Back</span>
-        </Link>
-
-        <div className="bg-blue-600 rounded-2xl shadow-2xl">
-          <div className="flex items-center justify-center">
-            <div className="p-8">
-              <img
-                src={logo}
-                className="h-14 sm:h-16 w-auto object-contain mx-auto select-none"
-                alt="FoodSafe Manila"
-                draggable="false"
-                decoding="async"
-              />
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl p-8">
-
-          <h1 className="text-center mb-2 text-xl font-semibold">
-            Set a New Password
-          </h1>
-          <p className="text-center text-gray-600 mb-8">
-            Enter your new password below.
-          </p>
-
+    <AuthPageLayout
+      title="Set a new password"
+      description="Choose a strong password you haven't used for this account before."
+      backTo="/forgot-password"
+      backLabel="Back to reset request"
+      onBack={(e) => {
+        if (!confirmCancel()) e.preventDefault();
+      }}
+    >
           {!form.email.trim() || !form.otp.trim() ? (
             <div className="mb-4 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 text-sm">
               Reset session is missing. Please request and verify a code first.
@@ -301,9 +276,6 @@ export default function ResetPassword() {
               </div>
             </form>
           )}
-          </div>
-        </div>
-      </div>
-    </div>
+    </AuthPageLayout>
   );
 }
