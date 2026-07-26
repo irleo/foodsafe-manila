@@ -22,10 +22,10 @@ services:
         value: python3
       - key: BREVO_API_KEY
         sync: false
-      - key: BREVO_FROM_EMAIL
+      - key: BREVO_ACCESS_OTP_TEMPLATE_ID
         sync: false
-      - key: BREVO_FROM_NAME
-        value: FoodSafe-Manila
+      - key: BREVO_RESET_OTP_TEMPLATE_ID
+        sync: false
 
   - type: web
     name: food-safe-frontend
