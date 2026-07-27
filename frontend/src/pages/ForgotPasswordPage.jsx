@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Mail } from "lucide-react";
+import { Mail } from "lucide-react";
 import { notify } from "../utils/toast";
-import logo from "../../../mobile/assets/foodsafe_logo.png";
+import AuthPageLayout from "../layouts/AuthPageLayout";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const OTP_RESEND_COOLDOWN_SECONDS = 180;
@@ -144,40 +144,16 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <Link
-          to="/login"
-          onClick={(e) => {
-            if (!confirmCancel()) e.preventDefault();
-          }}
-          className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-4"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span className="text-sm">Back to Login</span>
-        </Link>
-
-        <div className="bg-blue-600 rounded-2xl shadow-2xl">
-          <div className="flex items-center justify-center">
-            <div className="p-8">
-              <img
-                src={logo}
-                className="h-14 sm:h-16 w-auto object-contain mx-auto select-none"
-                alt="FoodSafe Manila"
-                draggable="false"
-                decoding="async"
-              />
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl p-8">
-
-          <h1 className="text-center mb-2 text-xl font-semibold">
-            Reset Your Password
-          </h1>
-          <p className="text-center text-gray-600 mb-8">
-            Enter your email and we will send a reset code.
-          </p>
-
+    <>
+      <AuthPageLayout
+        title="Reset your password"
+        description="Enter your email address and we'll send you a one-time reset code."
+        backTo="/login"
+        backLabel="Back to login"
+        onBack={(e) => {
+          if (!confirmCancel()) e.preventDefault();
+        }}
+      >
           {error && (
             <div className="mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm">
               {error}
@@ -278,9 +254,7 @@ export default function ForgotPassword() {
               </div>
             </div>
           )}
-          </div>
-        </div>
-      </div>
+      </AuthPageLayout>
 
       {showOtpModal && (
         <div className="fixed inset-0 z-[1000] bg-black/40 flex items-center justify-center p-4">
@@ -397,6 +371,6 @@ export default function ForgotPassword() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

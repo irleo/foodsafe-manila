@@ -8,8 +8,10 @@ import YearlyActualVsPredictedLineChart from "../components/charts/YearlyActualV
 import YearlyPredictionErrorBarChart from "../components/charts/YearlyPredictionErrorBarChart";
 
 function riskCardClass(level) {
+  if (level === "critical")
+    return "border-2 rounded-xl p-6 bg-red-100 text-red-800 border-red-400";
   if (level === "high")
-    return "border-2 rounded-xl p-6 bg-red-100 text-red-700 border-red-300";
+    return "border-2 rounded-xl p-6 bg-orange-100 text-orange-700 border-orange-300";
   if (level === "medium")
     return "border-2 rounded-xl p-6 bg-yellow-100 text-yellow-700 border-yellow-300";
   if (level === "insufficient")
@@ -724,9 +726,8 @@ export default function Predictions() {
           <h2 className="font-semibold text-lg">District next-month outlook</h2>
           <p className="text-sm text-gray-500 max-w-md text-right">
             Each card uses the same district-level hybrid model (official
-            baseline + suspected-report regressors). Risk score reflects
-            relative share of predicted next-month district cases, not a
-            clinical diagnosis.
+            baseline + suspected-report regressors). Risk score uses the same
+            case-count bands shown on the heatmap.
           </p>
         </div>
 
@@ -744,7 +745,7 @@ export default function Predictions() {
                     <p className="font-medium">{d.district}</p>
                   </div>
 
-                  {d.riskLevel === "high" && (
+                  {(d.riskLevel === "high" || d.riskLevel === "critical") && (
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       width="24"
@@ -766,7 +767,7 @@ export default function Predictions() {
 
                 <div className="space-y-3">
                   <div>
-                    <p className="text-sm text-gray-600">Relative risk score</p>
+                    <p className="text-sm text-gray-600">Risk score</p>
 
                     <div className="flex items-center gap-2 mt-1">
                       <div className="flex-1 bg-white rounded-full h-2 overflow-hidden">
@@ -794,7 +795,7 @@ export default function Predictions() {
                   </div>
 
                   <div>
-                    <p className="text-sm text-gray-600">Risk band (UI)</p>
+                    <p className="text-sm text-gray-600">Risk band</p>
                     <p className="capitalize">
                       {d.riskLevel === "insufficient"
                         ? "No sufficient data"

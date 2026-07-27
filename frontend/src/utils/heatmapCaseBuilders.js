@@ -3,14 +3,18 @@ import { manilaDistrictCoords, normalizeDistrictKey } from "../constants/manilaD
 // ---------- Risk logic (shared with legend) ----------
 
 export function getRiskBand(cases) {
-  if (cases >= 31) return "Critical";
-  if (cases >= 16) return "High";
-  if (cases >= 6) return "Medium";
+  const n = Number(cases ?? 0);
+  if (n >= 31) return "Critical";
+  if (n >= 16) return "High";
+  if (n >= 6) return "Medium";
   return "Low";
 }
 
 export function getRiskColor(cases) {
-  const band = getRiskBand(cases);
+  const value = String(cases || "").toLowerCase();
+  const band = ["critical", "high", "medium", "low"].includes(value)
+    ? value[0].toUpperCase() + value.slice(1)
+    : getRiskBand(cases);
   if (band === "Critical") return "#ef4444";
   if (band === "High") return "#f97316";
   if (band === "Medium") return "#eab308";
@@ -115,7 +119,10 @@ export function buildDistrictHeatmapPointsFromCases(rows = []) {
 export function buildRiskStatsFromDistrictPoints(points = []) {
   const stats = { Low: 0, Medium: 0, High: 0, Critical: 0 };
   for (const p of Array.isArray(points) ? points : []) {
-    const risk = p?.risk || getRiskBand(p?.districtAvgIncident ?? p?.cases ?? 0);
+    const risk =
+      p?.forecastRisk?.risk ||
+      p?.risk ||
+      getRiskBand(p?.districtAvgIncident ?? p?.cases ?? 0);
     if (stats[risk] != null) stats[risk] += 1;
   }
   return stats;
@@ -132,6 +139,8 @@ export function buildTopDistrictsFromPoints(points = [], limit = 5) {
     .map((p) => ({
       name: p.district,
       cases: p.totalCases ?? p.districtTotalCases ?? p.cases ?? 0,
+      forecast: p.forecast ?? null,
+      forecastRisk: p.forecastRisk ?? null,
     }));
 }
 

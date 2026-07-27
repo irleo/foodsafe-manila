@@ -1,9 +1,9 @@
-/// Base URL for the shared Food Safe Manila backend API (port 5000).
-///
-/// - Android emulator: use `10.0.2.2`
-/// - iOS simulator: use `127.0.0.1`
-/// - Physical device: set [hostLanIp] to your machine's LAN address
 class ApiConfig {
+  static const String deployedBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: '',
+  );
+
   static const bool usePhysicalDevice = true;
   static const bool useHomeWifi = true;
 
@@ -19,5 +19,8 @@ class ApiConfig {
     return useHomeWifi ? hostLanIp : hostHotspotIp;
   }
 
-  static String get baseUrl => 'http://$host:$port/api';
+  static String get baseUrl {
+    if (deployedBaseUrl.isNotEmpty) return deployedBaseUrl;
+    return 'http://$host:$port/api';
+  }
 }

@@ -1,15 +1,9 @@
 import mongoose from "mongoose";
 import OfficialCase from "../models/OfficialCase.js";
 import Report from "../models/Report.js";
+import PredictionRun from "../models/PredictionRun.js";
 import { normalizeDistrictKey } from "../constants/manilaDistrictCoords.js";
-
-function riskBand(cases) {
-  const n = Number(cases ?? 0);
-  if (n >= 31) return "Critical";
-  if (n >= 16) return "High";
-  if (n >= 6) return "Medium";
-  return "Low";
-}
+import { computeRiskAnalysis } from "../utils/riskUtils.js";
 
 function getBarangayNo(value, fallback) {
   const direct = Number(value);
@@ -167,12 +161,43 @@ export const getDistrictHeatmap = async (req, res) => {
       entry.barangays.add(barangayNo);
     }
 
+    const predictionRun = await PredictionRun.findOne({
+      model: "prophet",
+      granularity: "monthly_district_cases",
+      datasetScope: new mongoose.Types.ObjectId(datasetId),
+      status: "success",
+    })
+      .sort({ generatedAt: -1, createdAt: -1 })
+      .select("forecastTargetYear forecastTargetMonth payload")
+      .lean();
+
+    const forecastsByDistrict = new Map();
+    for (const district of predictionRun?.payload?.districts || []) {
+      const forecast =
+        (Array.isArray(district.forecast)
+          ? district.forecast.find((f) => f.isPrimaryTarget) || district.forecast[0]
+          : null) || district.nextForecast;
+      if (!forecast) continue;
+      forecastsByDistrict.set(district.districtKey || normalizeDistrictKey(district.district), {
+        year: forecast.year,
+        month: forecast.month,
+        predictedCases: Number(forecast.predictedCases ?? 0),
+        lowerBound: forecast.lowerBound,
+        upperBound: forecast.upperBound,
+      });
+    }
+
     const districtStats = new Map(
       [...districtTotals.entries()].map(([districtKey, entry]) => {
         const barangayCount = Math.max(1, entry.barangays.size);
         const avgIncidentPerBarangay = Number(
           (entry.totalCases / barangayCount).toFixed(2),
         );
+        const risk = computeRiskAnalysis(entry.totalCases);
+        const forecast = forecastsByDistrict.get(districtKey) || null;
+        const forecastRisk = forecast
+          ? computeRiskAnalysis(forecast.predictedCases)
+          : null;
         return [
           districtKey,
           {
@@ -181,7 +206,9 @@ export const getDistrictHeatmap = async (req, res) => {
             totalCases: entry.totalCases,
             barangayCount,
             avgIncidentPerBarangay,
-            risk: riskBand(avgIncidentPerBarangay),
+            ...risk,
+            forecast,
+            forecastRisk,
           },
         ];
       }),
@@ -204,7 +231,11 @@ export const getDistrictHeatmap = async (req, res) => {
           weight: cases,
           districtAvgIncident: districtStat?.avgIncidentPerBarangay ?? 0,
           districtTotalCases: districtStat?.totalCases ?? cases,
-          risk: districtStat?.risk ?? riskBand(0),
+          risk: districtStat?.risk ?? computeRiskAnalysis(0).risk,
+          riskLevel: districtStat?.riskLevel ?? "low",
+          riskScore: districtStat?.riskScore ?? 0,
+          forecast: districtStat?.forecast ?? null,
+          forecastRisk: districtStat?.forecastRisk ?? null,
         };
       })
       .filter(Boolean);

@@ -6,6 +6,7 @@ import { runProphetMonthlyForecast } from "../prophet/runMonthlyForecast.js";
 import Dataset from "../../models/Dataset.js";
 import { normalizeDistrictKey } from "../../constants/manilaDistrictCoords.js";
 import { createNotification } from "../notificationService.js";
+import { computeRiskAnalysis } from "../../utils/riskUtils.js";
 
 function ymToInt(year, month) {
   return year * 100 + month;
@@ -167,25 +168,11 @@ function buildFutureReportRegressors(reportSeries = [], horizonMonths = 1) {
   return rows;
 }
 
-function riskLevelFromScore(score) {
-  if (score >= 67) return "high";
-  if (score >= 34) return "medium";
-  return "low";
-}
-
 function attachRiskScores(districtPayloads) {
-  const preds = districtPayloads
-    .filter((d) => d.forecast?.length)
-    .map(
-      (d) => d.forecast.find((x) => x.isPrimaryTarget)?.predictedCases ?? null,
-    )
-    .filter((v) => Number.isFinite(Number(v)));
-  const maxPred = preds.length ? Math.max(...preds, 1) : 1;
   return districtPayloads.map((d) => {
     const primary = d.forecast?.find((x) => x.isPrimaryTarget);
     const pred = primary ? Number(primary.predictedCases ?? 0) : null;
-    const riskScore =
-      pred == null ? null : Math.min(100, Math.round((pred / maxPred) * 100));
+    const risk = pred == null ? null : computeRiskAnalysis(pred);
     return {
       ...d,
       nextForecast: primary
@@ -197,9 +184,10 @@ function attachRiskScores(districtPayloads) {
             upperBound: primary.upperBound,
           }
         : null,
-      riskScore,
-      riskLevel:
-        riskScore == null ? "insufficient" : riskLevelFromScore(riskScore),
+      riskScore: risk?.riskScore ?? null,
+      riskLevel: risk?.riskLevel ?? "insufficient",
+      risk: risk?.risk ?? "Insufficient",
+      riskLabel: risk?.riskLabel ?? "Insufficient Data",
     };
   });
 }

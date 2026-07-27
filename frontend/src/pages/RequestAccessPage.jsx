@@ -1,8 +1,7 @@
 import axios from "axios";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeftIcon,
   BuildingOffice2Icon,
   EnvelopeIcon,
   EyeIcon,
@@ -12,11 +11,11 @@ import {
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { notify } from "../utils/toast";
+import AuthPageLayout from "../layouts/AuthPageLayout";
 import {
   getPasswordValidationResults,
   validatePassword,
 } from "../utils/passwordValidation";
-import logo from "../../../mobile/assets/foodsafe_logo.png";
 
 const MAX_REASON = 300;
 const OTP_RESEND_COOLDOWN_SECONDS = 180;
@@ -232,20 +231,14 @@ const RequestAccess = () => {
   ).padStart(2, "0")}`;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl bg-blue-600 rounded-2xl">
-        <div className="flex items-center justify-center">
-          <div className="p-8">
-            <img
-              src={logo}
-              className="h-14 sm:h-16 w-auto object-contain mx-auto select-none"
-              alt="FoodSafe Manila"
-              draggable="false"
-              decoding="async"
-            />
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
+    <>
+      <AuthPageLayout
+        title="Request dashboard access"
+        description="Apply for access to FoodSafe's administrative monitoring and analytics tools."
+        backTo="/login"
+        backLabel="Back to login"
+        contentWidth="wide"
+      >
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
             <p className="text-sm text-blue-800 font-semibold">
               For Health Officials & Researchers Only
@@ -548,15 +541,6 @@ const RequestAccess = () => {
                   : "Send Verification Code"}
             </button>
 
-            <div className="text-center">
-              <Link
-                to="/login"
-                className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
-              >
-                <ArrowLeftIcon className="w-4 h-4" />
-                Back to Login
-              </Link>
-            </div>
           </form>
 
           <div className="mt-6 pt-6 border-t border-gray-200 text-xs text-gray-600 text-center">
@@ -566,8 +550,7 @@ const RequestAccess = () => {
               health data and access is granted only to authorized personnel.
             </p>
           </div>
-        </div>
-      </div>
+      </AuthPageLayout>
 
       {otpModalOpen && otpSent && !submitted && (
         <div className="fixed inset-0 z-[1000] bg-black/40 flex items-center justify-center p-4">
@@ -678,7 +661,7 @@ const RequestAccess = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

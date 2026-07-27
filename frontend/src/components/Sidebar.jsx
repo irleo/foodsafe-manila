@@ -32,7 +32,7 @@ export default function Sidebar({ isOpen }) {
       });
 
       setAuth(null);
-      navigate("/login", { replace: true });
+      navigate("/", { replace: true });
     } catch (error) {
       console.error("Logout failed", error);
     }
@@ -41,7 +41,7 @@ export default function Sidebar({ isOpen }) {
   const links =
     auth?.role === "admin"
       ? [
-          { name: "Dashboard", path: "/", icon: Squares2X2Icon, end: true },
+          { name: "Dashboard", path: "/dashboard", icon: Squares2X2Icon },
           {
             name: "Data",
             path: "/datasets",
@@ -61,7 +61,7 @@ export default function Sidebar({ isOpen }) {
           },
         ]
       : [
-          { name: "Dashboard", path: "/", icon: Squares2X2Icon, end: true },
+          { name: "Dashboard", path: "/dashboard", icon: Squares2X2Icon },
           {
             name: "Data",
             path: "/datasets",

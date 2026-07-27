@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+.print-only {
+  display: none;
+}
+
 .leaflet-pane,
 .leaflet-top,
 .leaflet-bottom {
@@ -19,6 +23,10 @@
 
   .no-print {
     display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
   }
 
   .analytics-print-root {

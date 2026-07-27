@@ -2,6 +2,7 @@ import express from "express";
 import { verifyToken, verifyRole } from "../middleware/authMiddleware.js";
 import {
   uploadDataset,
+  handleDatasetUploadError,
   listDatasets,
   downloadDataset,
   downloadOfficialCaseTemplate,
@@ -17,6 +18,7 @@ router.post(
   "/upload",
   verifyToken,
   datasetUpload.single("file"),
+  handleDatasetUploadError,
   uploadDataset
 );
 

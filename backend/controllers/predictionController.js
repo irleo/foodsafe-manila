@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import PredictionRun from "../models/PredictionRun.js";
 import { refreshMonthlyDistrictPredictions } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
 import Dataset from "../models/Dataset.js";
+import { computeRiskAnalysis } from "../utils/riskUtils.js";
 
 function toDatasetScope(datasetId) {
   if (datasetId && mongoose.Types.ObjectId.isValid(datasetId)) {
@@ -52,6 +53,27 @@ export const getPredictions = async (req, res) => {
             (d) => d.districtKey === districtFilter || d.district === districtFilter,
           )
         : districts;
+    const districtsWithRisk = filtered.map((district) => {
+      const forecast = Array.isArray(district.forecast)
+        ? district.forecast.find((f) => f.isPrimaryTarget) || district.forecast[0]
+        : null;
+      const nextForecast = district.nextForecast || forecast || null;
+      const predictedCases =
+        nextForecast == null ? null : Number(nextForecast.predictedCases ?? 0);
+      const risk =
+        predictedCases == null || !Number.isFinite(predictedCases)
+          ? null
+          : computeRiskAnalysis(predictedCases);
+
+      return {
+        ...district,
+        nextForecast,
+        riskScore: risk?.riskScore ?? null,
+        riskLevel: risk?.riskLevel ?? "insufficient",
+        risk: risk?.risk ?? "Insufficient",
+        riskLabel: risk?.riskLabel ?? "Insufficient Data",
+      };
+    });
 
     return res.json({
       success: true,
@@ -67,7 +89,7 @@ export const getPredictions = async (req, res) => {
       generatedAt: run.generatedAt,
       trigger: run.trigger,
       status: run.status,
-      payload: { ...payload, districts: filtered },
+      payload: { ...payload, districts: districtsWithRisk },
     });
   } catch (err) {
     return res.status(500).json({ message: err?.message || "Server error" });

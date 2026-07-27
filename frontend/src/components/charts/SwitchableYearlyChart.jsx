@@ -36,6 +36,7 @@ function monthIndexFromDateKey(dateKey) {
 function filterByMonthRange(data, months) {
   const safe = Array.isArray(data) ? data : [];
   if (!safe.length) return [];
+  if (months === "all") return safe;
   if (!Number.isFinite(months) || months <= 0) return safe;
 
   const indices = safe
@@ -137,7 +138,7 @@ export default function SwitchableYearlyChart({
             ))}
           </div>
           <div className="inline-flex rounded-lg border border-gray-300 bg-gray-50 p-1 self-start">
-            {[3, 6, 12].map((months) => (
+            {[3, 6, 12, "all"].map((months) => (
               <button
                 key={months}
                 type="button"
@@ -148,7 +149,7 @@ export default function SwitchableYearlyChart({
                     : "text-gray-600 hover:bg-white"
                 }`}
               >
-                {months === 12 ? "1Y" : `${months}M`}
+                {months === "all" ? "All" : months === 12 ? "1Y" : `${months}M`}
               </button>
             ))}
           </div>

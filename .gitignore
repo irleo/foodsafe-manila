@@ -1,12 +1,8 @@
-# Files
-rawHealthOffice.xlsx
-cleanedOfficialCases.xlsx
-officialCasesTemplate.csv
-task.txt
-DOCU.md
-
 # Folders
 uploads
+docs
+files
+.agents
 
 # Logs
 logs

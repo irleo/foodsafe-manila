@@ -15,7 +15,12 @@ const DatasetSchema = new mongoose.Schema(
     // For official-case XLSX uploads:
     formatType: {
       type: String,
-      enum: ["raw_health_office", "processed_template", "csv_generic"],
+      enum: [
+        "raw_health_office",
+        "processed_template",
+        "processed_template_csv",
+        "csv_generic",
+      ],
       default: "csv_generic",
       index: true,
     },

@@ -16,7 +16,7 @@ const ALLOWED_SYMPTOMS = new Set([
 ]);
 
 
-const MAX_REPORTS_PER_24H = Infinity;
+const MAX_REPORTS_PER_24H = 3;
 const DUPLICATE_WINDOW_HOURS = 6;
 const UNUSUAL_REPORT_THRESHOLD_24H = 10;
 
