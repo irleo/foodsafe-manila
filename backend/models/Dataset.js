@@ -40,13 +40,13 @@ const DatasetSchema = new mongoose.Schema(
 
     uploadedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "WebUser",
       required: false, // depends on JWT payload
     },
 
     errorMessage: { type: String, default: "" },
   },
-  { timestamps: true }
+  { timestamps: true, collection: "datasets" }
 );
 
 export default mongoose.model("Dataset", DatasetSchema);

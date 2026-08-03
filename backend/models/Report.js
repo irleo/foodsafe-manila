@@ -76,7 +76,7 @@ const reportSchema = new mongoose.Schema(
 
     reportedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "MobileUser",
       required: true,
       index: true,
     },
@@ -99,7 +99,7 @@ const reportSchema = new mongoose.Schema(
     isCounted: { type: Boolean, default: true, index: true },
     excludeReason: { type: String, default: null, trim: true },
   },
-  { timestamps: true },
+  { timestamps: true, collection: "reports" },
 );
 
 // Useful indexes for queries by time + district

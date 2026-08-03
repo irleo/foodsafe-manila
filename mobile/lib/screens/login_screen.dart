@@ -4,7 +4,9 @@ import '../widgets/snackbar_widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_service.dart';
 import '../services/session.dart';
+import '../utils/philippine_mobile_number.dart';
 import '../widgets/app_loading.dart';
+import '../widgets/philippine_mobile_prefix.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -35,7 +37,7 @@ class _LogInScreenState extends State<LoginScreen> {
     setState(() => _loading = true);
 
     try {
-      String phone = _phoneCtrl.text.replaceAll(" ", "");
+      final phone = toLocalPhilippineMobileNumber(_phoneCtrl.text);
       String password = _passCtrl.text;
 
       var user = await ApiService.login(phone, password);
@@ -117,37 +119,34 @@ class _LogInScreenState extends State<LoginScreen> {
                               label: "Phone Number",
                               child: TextFormField(
                                 controller: _phoneCtrl,
-                                keyboardType: TextInputType.phone,
+                                keyboardType: TextInputType.number,
                                 textInputAction: TextInputAction.next,
+                                inputFormatters: const [
+                                  PhilippineMobileInputFormatter(),
+                                ],
                                 style: GoogleFonts.inter(),
                                 decoration: InputDecoration(
-                                  hintText: "Enter phone number",
+                                  hintText: philippineMobileHint,
                                   hintStyle: GoogleFonts.inter(
                                     color: Color(0xFFD1D5DB),
                                   ),
-                                  prefixIcon: Icon(LucideIcons.phone),
+                                  prefixIcon: const PhilippineMobilePrefix(),
+                                  prefixIconConstraints: const BoxConstraints(
+                                    minWidth: 88,
+                                  ),
                                 ),
-                                validator: (v) {
-                                  final value = (v ?? "").trim();
-
-                                  if (value.isEmpty) {
-                                    return "Phone number is required.";
-                                  }
-
-                                  // remove all spaces
-                                  String digitsOnly = value.replaceAll(
-                                    RegExp(r'\s+'),
-                                    '',
-                                  );
-
-                                  // must be exactly 11 digits
-                                  final phoneRegex = RegExp(r'^\d{11}$');
-
-                                  if (!phoneRegex.hasMatch(digitsOnly)) {
-                                    return "Enter a valid 11-digit phone number.";
-                                  }
-                                  return null;
-                                },
+                                validator: validatePhilippineMobileInput,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                philippineMobileHelper,
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: Color(0xFF6B7280),
+                                ),
                               ),
                             ),
                             const SizedBox(height: 14),

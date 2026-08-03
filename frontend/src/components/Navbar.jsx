@@ -11,6 +11,11 @@ import logo from "../../../mobile/assets/foodsafe_logo.png";
 import { notify } from "../utils/toast";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const configuredPollMs = Number(import.meta.env.VITE_NOTIFICATION_POLL_MS);
+const NOTIFICATION_POLL_MS =
+  Number.isFinite(configuredPollMs) && configuredPollMs >= 15000
+    ? configuredPollMs
+    : 60000;
 
 export default function Navbar() {
   const { auth, loading } = useAuth();
@@ -39,7 +44,10 @@ export default function Navbar() {
     }
 
     let isMounted = true;
+    let requestInFlight = false;
     const runFetch = async () => {
+      if (document.visibilityState !== "visible" || requestInFlight) return;
+      requestInFlight = true;
       try {
         const res = await fetch(`${API_BASE}/api/notifications?limit=20`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -51,15 +59,22 @@ export default function Navbar() {
         setNotifications(Array.isArray(data) ? data : []);
       } catch {
         if (!isMounted) return;
+      } finally {
+        requestInFlight = false;
       }
     };
 
     runFetch();
-    const timer = setInterval(runFetch, 15000);
+    const timer = setInterval(runFetch, NOTIFICATION_POLL_MS);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") runFetch();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       isMounted = false;
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [token]);
 

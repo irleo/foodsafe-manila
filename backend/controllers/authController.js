@@ -1,4 +1,4 @@
-import User from "../models/User.js";
+import User from "../models/WebUser.js";
 import EmailOtp from "../models/EmailOtp.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";

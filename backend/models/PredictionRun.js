@@ -133,7 +133,7 @@ const predictionRunSchema = new mongoose.Schema(
       max: 36,
     },
   },
-  { timestamps: true }
+  { timestamps: true, collection: "prediction_runs" }
 );
 
 // Ensure single run per (model+granularity+scope). This prevents recompute storms

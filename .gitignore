@@ -1,8 +1,12 @@
+# Specific Files
+AGENTS.md
+
 # Folders
 uploads
 docs
 files
 .agents
+backend/scripts
 
 # Logs
 logs

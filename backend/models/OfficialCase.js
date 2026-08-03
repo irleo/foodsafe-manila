@@ -63,7 +63,7 @@ const officialCaseSchema = new mongoose.Schema(
       default: "official",
     },
   },
-  { timestamps: true }
+  { timestamps: true, collection: "official_cases" }
 );
 
 officialCaseSchema.index({ year: 1, month: 1 });

@@ -30,11 +30,11 @@ export default function Sidebar({ isOpen }) {
         success: "Logged out successfully!",
         error: (e) => e?.response?.data?.message || "Logout failed.",
       });
-
-      setAuth(null);
-      navigate("/", { replace: true });
     } catch (error) {
       console.error("Logout failed", error);
+    } finally {
+      setAuth(null);
+      navigate("/", { replace: true });
     }
   };
 

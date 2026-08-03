@@ -13,11 +13,7 @@ class SnackbarWidgets {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.only(
-          bottom: 30,
-          left: 16,
-          right: 16,
-        ),
+        margin: EdgeInsets.only(bottom: 30, left: 16, right: 16),
         padding: EdgeInsets.zero,
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -81,136 +77,6 @@ class SnackbarWidgets {
       message: msg,
       icon: Icons.info_outline,
       bgColor: const Color(0xFF2563EB),
-    );
-  }
-
-  static void showTopNotification(BuildContext context, String otp) {
-    final overlay = Overlay.of(context);
-
-    late OverlayEntry entry;
-
-    entry = OverlayEntry(
-      builder: (context) {
-        final topPadding = MediaQuery.of(context).padding.top;
-
-        return Positioned(
-          top: topPadding + 12,
-          left: 12,
-          right: 12,
-          child: Material(
-            color: Colors.transparent,
-            child: _TopNotificationCard(
-              otp: otp,
-              onDismiss: () {
-                entry.remove();
-              },
-            ),
-          ),
-        );
-      },
-    );
-
-    overlay.insert(entry);
-
-    // Auto remove after 4 seconds
-    Future.delayed(const Duration(seconds: 4), () {
-      if (entry.mounted) {
-        entry.remove();
-      }
-    });
-  }
-}
-
-class _TopNotificationCard extends StatefulWidget {
-  final String otp;
-  final VoidCallback onDismiss;
-
-  const _TopNotificationCard({
-    required this.otp,
-    required this.onDismiss,
-  });
-
-  @override
-  State<_TopNotificationCard> createState() => _TopNotificationCardState();
-}
-
-class _TopNotificationCardState extends State<_TopNotificationCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<Offset> _slide;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-
-    _slide = Tween(
-      begin: const Offset(0, -1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOut,
-    ));
-
-    _controller.forward();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SlideTransition(
-      position: _slide,
-      child: Material(
-        elevation: 12,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(
-                Icons.sms_outlined,
-                color: Color(0xFF2563EB),
-                size: 28,
-              ),
-              const SizedBox(width: 12),
-
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Message Received",
-                      style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      "Your OTP code is ${widget.otp}",
-                      style: GoogleFonts.inter(fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

@@ -12,6 +12,7 @@ class RiskAlertService {
   RiskAlertService._();
 
   Timer? _timer;
+  bool _isChecking = false;
   int? _lastAlertedBarangayNo;
   final ValueNotifier<String?> latestMessage = ValueNotifier(null);
   final ValueNotifier<bool> isHighRiskArea = ValueNotifier(false);
@@ -28,6 +29,9 @@ class RiskAlertService {
   }
 
   Future<void> _checkPosition() async {
+    if (_isChecking) return;
+    _isChecking = true;
+
     try {
       final permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied ||
@@ -80,6 +84,8 @@ class RiskAlertService {
       }
     } catch (_) {
       // Ignore transient GPS/API errors during background checks.
+    } finally {
+      _isChecking = false;
     }
   }
 }

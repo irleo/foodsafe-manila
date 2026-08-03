@@ -1,18 +1,19 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import CitizenUser from "../models/CitizenUser.js";
+import MobileUser from "../models/MobileUser.js";
 import {
   normalizePhone,
-  sanitizeCitizenUser,
+  sanitizeMobileUser,
   signCitizenTokens,
 } from "../utils/citizenAuth.js";
 import { validatePassword } from "../utils/passwordValidation.js";
+import { consumeMobileOtpVerification } from "../services/mobileOtpService.js";
 
 // POST /api/auth/register
 export const registerCitizen = async (req, res) => {
-  const { username, phone, password, email } = req.body;
+  const { username, phone, password, email, verificationToken } = req.body;
 
-  if (!username || !phone || !password) {
+  if (!username || !phone || !password || !verificationToken) {
     return res.status(400).json({ message: "Missing required fields" });
   }
 
@@ -23,21 +24,33 @@ export const registerCitizen = async (req, res) => {
 
   try {
     const normalizedPhone = normalizePhone(phone);
-    const existing = await CitizenUser.findOne({ phone_number: normalizedPhone });
+    const existing = await MobileUser.findOne({ phone_number: normalizedPhone });
 
     if (existing) {
       return res.status(409).json({ message: "Phone number already registered" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await CitizenUser.create({
+    const verified = await consumeMobileOtpVerification({
+      phone: normalizedPhone,
+      purpose: "registration",
+      verificationToken,
+    });
+
+    if (!verified) {
+      return res.status(403).json({
+        message: "Phone verification is invalid or expired",
+      });
+    }
+
+    const mobileUser = await MobileUser.create({
       username: String(username).trim(),
       phone_number: normalizedPhone,
       password: hashedPassword,
       email: email ? String(email).trim() : "",
     });
 
-    return res.status(201).json(sanitizeCitizenUser(user));
+    return res.status(201).json(sanitizeMobileUser(mobileUser));
   } catch (error) {
     if (error?.code === 11000) {
       return res.status(409).json({ message: "Phone number already registered" });
@@ -57,21 +70,21 @@ export const loginCitizen = async (req, res) => {
 
   try {
     const normalizedPhone = normalizePhone(phone);
-    const user = await CitizenUser.findOne({ phone_number: normalizedPhone });
+    const mobileUser = await MobileUser.findOne({ phone_number: normalizedPhone });
 
-    if (!user) {
+    if (!mobileUser) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(password, mobileUser.password);
     if (!isMatch) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    const { accessToken, refreshToken } = signCitizenTokens(user._id);
+    const { accessToken, refreshToken } = signCitizenTokens(mobileUser._id);
 
     return res.status(200).json({
-      ...sanitizeCitizenUser(user),
+      ...sanitizeMobileUser(mobileUser),
       accessToken,
       refreshToken,
     });
@@ -90,7 +103,7 @@ export const checkPhoneExists = async (req, res) => {
 
   try {
     const normalizedPhone = normalizePhone(phone);
-    const exists = await CitizenUser.exists({ phone_number: normalizedPhone });
+    const exists = await MobileUser.exists({ phone_number: normalizedPhone });
     return res.json({ exists: Boolean(exists) });
   } catch (error) {
     console.error("Phone exists check error:", error);
@@ -100,9 +113,9 @@ export const checkPhoneExists = async (req, res) => {
 
 // POST /api/auth/reset-password
 export const resetCitizenPassword = async (req, res) => {
-  const { phone, newPassword } = req.body;
+  const { phone, newPassword, verificationToken } = req.body;
 
-  if (!phone || !newPassword) {
+  if (!phone || !newPassword || !verificationToken) {
     return res.status(400).json({ message: "Missing required fields" });
   }
 
@@ -113,14 +126,26 @@ export const resetCitizenPassword = async (req, res) => {
 
   try {
     const normalizedPhone = normalizePhone(phone);
-    const user = await CitizenUser.findOne({ phone_number: normalizedPhone });
+    const mobileUser = await MobileUser.findOne({ phone_number: normalizedPhone });
 
-    if (!user) {
+    if (!mobileUser) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    user.password = await bcrypt.hash(newPassword, 10);
-    await user.save();
+    const verified = await consumeMobileOtpVerification({
+      phone: normalizedPhone,
+      purpose: "password_reset",
+      verificationToken,
+    });
+
+    if (!verified) {
+      return res.status(403).json({
+        message: "Phone verification is invalid or expired",
+      });
+    }
+
+    mobileUser.password = await bcrypt.hash(newPassword, 10);
+    await mobileUser.save();
 
     return res.json({ success: true });
   } catch (error) {
@@ -144,17 +169,17 @@ export const refreshCitizenToken = async (req, res) => {
       return res.status(403).json({ message: "Invalid refresh token" });
     }
 
-    const user = await CitizenUser.findById(decoded.id);
-    if (!user) {
+    const mobileUser = await MobileUser.findById(decoded.id);
+    if (!mobileUser) {
       return res.status(401).json({ message: "Invalid refresh token" });
     }
 
-    const { accessToken, refreshToken } = signCitizenTokens(user._id);
+    const { accessToken, refreshToken } = signCitizenTokens(mobileUser._id);
 
     return res.status(200).json({
       accessToken,
       refreshToken,
-      user: sanitizeCitizenUser(user),
+      user: sanitizeMobileUser(mobileUser),
     });
   } catch (error) {
     console.error("Citizen refresh error:", error);

@@ -4,7 +4,7 @@ const activityLogSchema = new mongoose.Schema(
   {
     actor: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "WebUser",
       required: true,
     },
     actionType: {
@@ -40,6 +40,7 @@ const activityLogSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    collection: "activity_logs",
   },
 );
 

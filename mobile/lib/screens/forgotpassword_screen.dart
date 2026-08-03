@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:foodsafe_manila/services/session.dart';
@@ -5,8 +7,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../services/api_service.dart';
-import '../services/otp_service.dart';
+import '../utils/philippine_mobile_number.dart';
 import '../widgets/app_loading.dart';
+import '../widgets/philippine_mobile_prefix.dart';
 import '../widgets/snackbar_widgets.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -41,24 +44,21 @@ class _ForgotScreenState extends State<ForgotPasswordScreen> {
 
   int _currentStep = 0;
   int _resendSeconds = 0;
-  bool _otpSnackbarShown = false;
-  bool _otpTimerStarted = false;
-
-  late OTPService _otpService;
+  Timer? _resendTimer;
+  String? _verificationToken;
 
   @override
   void initState() {
     super.initState();
 
-    otpControllers = List.generate(4, (_) => TextEditingController());
-    otpFocusNodes = List.generate(4, (_) => FocusNode());
-
-    _otpService = OTPService();
+    otpControllers = List.generate(6, (_) => TextEditingController());
+    otpFocusNodes = List.generate(6, (_) => FocusNode());
   }
 
   @override
   void dispose() {
     _phoneCtrl.dispose();
+    _otpCtrl.dispose();
     _newPassCtrl.dispose();
     _confirmPassCtrl.dispose();
 
@@ -69,41 +69,50 @@ class _ForgotScreenState extends State<ForgotPasswordScreen> {
       f.dispose();
     }
 
-    _otpService.stopResendTimer();
+    _resendTimer?.cancel();
     super.dispose();
   }
 
-  // Mock OTP generation
-  void _sendOTP({bool forceNew = false}) {
-    final wasExpired = _otpService.isExpired;
-    final otp = _otpService.generateOTP(forceNew: forceNew);
+  void _startResendTimer() {
+    _resendTimer?.cancel();
+    setState(() => _resendSeconds = 60);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_resendSeconds <= 1) {
+        timer.cancel();
+        setState(() => _resendSeconds = 0);
+      } else {
+        setState(() => _resendSeconds--);
+      }
+    });
+  }
 
-    // Show OTP in snackbar once per generated OTP (or on explicit forced resend)
-    if (forceNew || !_otpSnackbarShown || wasExpired) {
-      _otpSnackbarShown = true;
-      Future.delayed(const Duration(milliseconds: 800), () {
-        if (!mounted) return;
-        SnackbarWidgets.showTopNotification(context, otp);
-      });
-    }
+  Future<bool> _sendOTP({bool forceNew = false}) async {
+    setState(() => _loading = true);
+    try {
+      final phone = toLocalPhilippineMobileNumber(_phoneCtrl.text);
+      await ApiService.sendMobileOtp(phone: phone, purpose: 'password_reset');
+      if (!mounted) return false;
 
-    // For forced resend, restart always. For step navigation with existing timer, do not reset.
-    if (forceNew || !_otpTimerStarted) {
-      _otpTimerStarted = true;
-      _otpService.startResendTimer(
-        onTick: (remaining) {
-          if (!mounted) return;
-          setState(() {
-            _resendSeconds = remaining;
-          });
-        },
-        onCompleted: () {
-          if (!mounted) return;
-          setState(() {
-            _resendSeconds = 0;
-          });
-        },
-      );
+      _verificationToken = null;
+      if (forceNew) {
+        for (final controller in otpControllers) {
+          controller.clear();
+        }
+        _otpCtrl.clear();
+      }
+
+      _startResendTimer();
+      SnackbarWidgets.success(context, "Verification code sent");
+      return true;
+    } catch (error) {
+      if (mounted) SnackbarWidgets.error(context, error.toString());
+      return false;
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -115,11 +124,12 @@ class _ForgotScreenState extends State<ForgotPasswordScreen> {
     setState(() => _loading = true);
 
     try {
-      String phone = _phoneCtrl.text.replaceAll(" ", "");
+      final phone = toLocalPhilippineMobileNumber(_phoneCtrl.text);
 
       bool success = await ApiService.updatePassword(
         phone: phone,
         newPassword: _newPassCtrl.text,
+        verificationToken: _verificationToken!,
       );
 
       if (!mounted) return;
@@ -128,9 +138,9 @@ class _ForgotScreenState extends State<ForgotPasswordScreen> {
         SnackbarWidgets.success(context, "Password updated successfully");
 
         Navigator.pop(context); // return to login
-      } else {
-        SnackbarWidgets.error(context, "Failed to update password");
       }
+    } catch (error) {
+      if (mounted) SnackbarWidgets.error(context, error.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -138,42 +148,51 @@ class _ForgotScreenState extends State<ForgotPasswordScreen> {
 
   Future<void> _nextStep() async {
     if (_currentStep == 0) {
-      // Validate personal info
+      FocusScope.of(context).unfocus();
       if (!_formKey.currentState!.validate()) return;
 
-      String phone = _phoneCtrl.text.replaceAll(" ", "");
-      final exists = await ApiService.checkPhoneExists(phone);
-
-      if (!mounted) return;
-
-      if (!exists) {
-        SnackbarWidgets.error(context, "Invalid phone number");
-        return;
-      }
-
-      _sendOTP();
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      setState(() => _loading = true);
+      try {
+        final phone = toLocalPhilippineMobileNumber(_phoneCtrl.text);
+        final exists = await ApiService.checkPhoneExists(phone);
         if (!mounted) return;
-        FocusScope.of(context).requestFocus(otpFocusNodes[0]);
-      });
 
-      setState(() => _currentStep = 1);
+        if (!exists) {
+          SnackbarWidgets.error(context, "Phone number is not registered");
+          return;
+        }
+
+        final sent = await _sendOTP();
+        if (!sent || !mounted) return;
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          FocusScope.of(context).requestFocus(otpFocusNodes[0]);
+        });
+
+        setState(() => _currentStep = 1);
+      } catch (error) {
+        if (mounted) SnackbarWidgets.error(context, error.toString());
+      } finally {
+        if (mounted) setState(() => _loading = false);
+      }
       return;
     }
     if (_currentStep == 1) {
-      if (_otpService.isExpired) {
-        SnackbarWidgets.error(context, "OTP expired. Please resend.");
-        return;
+      setState(() => _loading = true);
+      try {
+        _verificationToken = await ApiService.verifyMobileOtp(
+          phone: toLocalPhilippineMobileNumber(_phoneCtrl.text),
+          purpose: 'password_reset',
+          otp: _otpCtrl.text,
+        );
+        if (!mounted) return;
+        setState(() => _currentStep = 2);
+      } catch (error) {
+        if (mounted) SnackbarWidgets.error(context, error.toString());
+      } finally {
+        if (mounted) setState(() => _loading = false);
       }
-
-      if (!_otpService.validateOTP(_otpCtrl.text)) {
-        SnackbarWidgets.error(context, "Invalid OTP");
-        return;
-      }
-
-      setState(() => _currentStep = 2);
-
       return;
     }
   }
@@ -237,6 +256,7 @@ class _ForgotScreenState extends State<ForgotPasswordScreen> {
                     children: [
                       Form(
                         key: _formKey,
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -316,40 +336,25 @@ class _ForgotScreenState extends State<ForgotPasswordScreen> {
           label: "Phone Number *",
           child: TextFormField(
             controller: _phoneCtrl,
-            keyboardType: TextInputType.phone,
+            keyboardType: TextInputType.number,
             textInputAction: TextInputAction.done,
-            validator: (v) {
-              final value = (v ?? "").trim();
-
-              if (value.isEmpty) {
-                return "Phone number is required.";
-              }
-
-              // remove all spaces
-              String digitsOnly = value.replaceAll(RegExp(r'\s+'), '');
-
-              // must be exactly 11 digits
-              final phoneRegex = RegExp(r'^\d{11}$');
-
-              if (!phoneRegex.hasMatch(digitsOnly)) {
-                return "Enter a valid 11-digit phone number.";
-              }
-              return null;
-            },
+            inputFormatters: const [PhilippineMobileInputFormatter()],
+            validator: validatePhilippineMobileInput,
             style: GoogleFonts.inter(),
             decoration: InputDecoration(
-              hintText: "Enter phone number",
+              hintText: philippineMobileHint,
               hintStyle: GoogleFonts.inter(color: Color(0xFFD1D5DB)),
-              prefixIcon: Icon(LucideIcons.phone),
+              prefixIcon: const PhilippineMobilePrefix(),
+              prefixIconConstraints: const BoxConstraints(minWidth: 88),
             ),
           ),
         ),
-        _helper("Enter the phone number you used during registration"),
+        _helper(philippineMobileHelper),
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: _nextStep,
+            onPressed: _loading ? null : _nextStep,
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF2563EB),
               foregroundColor: Colors.white,
@@ -398,7 +403,7 @@ class _ForgotScreenState extends State<ForgotPasswordScreen> {
   }
 
   Widget _otpStep() {
-    // Autofill _otpCtrl when all 4 digits entered
+    // Autofill _otpCtrl when all 6 digits are entered.
     void updateOtp() {
       _otpCtrl.text = otpControllers.map((c) => c.text).join();
     }
@@ -411,17 +416,17 @@ class _ForgotScreenState extends State<ForgotPasswordScreen> {
           style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 10),
-        Text("Enter the 4-digit OTP sent to your phone."),
+        Text("Enter the 6-digit OTP sent to your phone."),
         const SizedBox(height: 30),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: List.generate(4, (index) {
+          children: List.generate(6, (index) {
             return SizedBox(
               height: 64,
-              width: 64,
+              width: 44,
               child: TextFormField(
                 onChanged: (value) {
-                  if (value.length == 1 && index < 3) {
+                  if (value.length == 1 && index < 5) {
                     // Move to next field
                     FocusScope.of(
                       context,
@@ -523,7 +528,7 @@ class _ForgotScreenState extends State<ForgotPasswordScreen> {
             const SizedBox(width: 16),
             Expanded(
               child: ElevatedButton(
-                onPressed: _nextStep,
+                onPressed: _loading ? null : _nextStep,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF2563EB),
                   foregroundColor: Colors.white,

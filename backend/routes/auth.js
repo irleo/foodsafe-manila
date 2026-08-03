@@ -16,10 +16,28 @@ import {
   resetCitizenPassword,
   refreshCitizenToken,
 } from '../controllers/citizenAuthController.js';
+import {
+  requestMobileOtp,
+  confirmMobileOtp,
+} from "../controllers/mobileOtpController.js";
 
 const requestAccessLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const mobileOtpSendLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const mobileOtpVerifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -36,6 +54,8 @@ router.post("/reset-password/verify-otp", verifyResetOtp);
 router.post("/reset-password/complete", completePasswordReset);
 
 // Citizen mobile auth (same /api/auth prefix as web)
+router.post('/mobile/otp/send', mobileOtpSendLimiter, requestMobileOtp);
+router.post('/mobile/otp/verify', mobileOtpVerifyLimiter, confirmMobileOtp);
 router.post('/register', registerCitizen);
 router.get('/user/exists', checkPhoneExists);
 router.post('/reset-password', resetCitizenPassword);
