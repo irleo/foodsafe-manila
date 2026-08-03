@@ -4,7 +4,9 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../services/api_service.dart';
 import '../services/session.dart';
+import '../utils/philippine_mobile_number.dart';
 import '../widgets/app_loading.dart';
+import '../widgets/philippine_mobile_prefix.dart';
 
 class PersonalInfoScreen extends StatefulWidget {
   const PersonalInfoScreen({super.key});
@@ -39,7 +41,9 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
 
     if (user != null) {
       _nameCtrl.text = user!['username'] ?? '';
-      _phoneCtrl.text = user!['phone_number'] ?? '';
+      _phoneCtrl.text = toPhilippineMobileInput(
+        user!['phone_number']?.toString() ?? '',
+      );
       _emailCtrl.text = user!['email'] ?? '';
     }
   }
@@ -60,7 +64,7 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
       final updatedUser = await ApiService.updateUser(
         id: userId,
         username: _nameCtrl.text.trim(),
-        phone: _phoneCtrl.text.trim(),
+        phone: toLocalPhilippineMobileNumber(_phoneCtrl.text),
         email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
       );
 
@@ -70,7 +74,9 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
         await Session.saveCurrentUser(updatedUser);
         if (!mounted) return;
         _nameCtrl.text = updatedUser['username'] ?? '';
-        _phoneCtrl.text = updatedUser['phone_number'] ?? '';
+        _phoneCtrl.text = toPhilippineMobileInput(
+          updatedUser['phone_number']?.toString() ?? '',
+        );
         _emailCtrl.text = updatedUser['email'] ?? '';
         _updated = true;
 
@@ -204,20 +210,27 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
                               label: "Phone Number",
                               child: TextFormField(
                                 controller: _phoneCtrl,
-                                validator: _required,
-                                keyboardType: TextInputType.phone,
+                                validator: validatePhilippineMobileInput,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: const [
+                                  PhilippineMobileInputFormatter(),
+                                ],
                                 style: GoogleFonts.inter(),
                                 decoration: InputDecoration(
-                                  prefixIcon: Icon(
-                                    LucideIcons.phone,
+                                  prefixIcon: PhilippineMobilePrefix(
                                     color: Theme.of(
                                       context,
                                     ).colorScheme.outline,
                                   ),
-                                  hintText: 'Enter phone number',
+                                  prefixIconConstraints: const BoxConstraints(
+                                    minWidth: 88,
+                                  ),
+                                  hintText: philippineMobileHint,
                                   hintStyle: GoogleFonts.inter(
                                     color: Color(0xFFD1D5DB),
                                   ),
+                                  helperText: philippineMobileHelper,
+                                  helperMaxLines: 2,
                                   contentPadding: const EdgeInsets.symmetric(
                                     vertical: 14,
                                   ),
@@ -254,7 +267,7 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
                                 ),
                               ),
                             ),
-                            
+
                             const SizedBox(height: 24),
 
                             SizedBox(

@@ -1,5 +1,6 @@
 import 'package:geocoding/geocoding.dart';
 import 'package:location/location.dart' as loc;
+import 'debug_location_service.dart';
 import 'manila_geo_service.dart';
 
 class LocationService {
@@ -10,6 +11,11 @@ class LocationService {
   static Future<void> preloadLocation() async {
     await ManilaGeoService.ensureLoaded();
     cachedAddress = await getUserAddress();
+  }
+
+  static Future<void> clearCache() async {
+    cachedAddress = null;
+    cachedManilaLocation = null;
   }
 
   static Future<bool> _handlePermission() async {
@@ -40,6 +46,13 @@ class LocationService {
       return cachedManilaLocation;
     }
 
+    final simulated = await DebugLocationService.getSimulatedLocation();
+    if (simulated != null) {
+      cachedManilaLocation = simulated;
+      cachedAddress = simulated.formatted;
+      return simulated;
+    }
+
     final hasPermission = await _handlePermission();
     if (!hasPermission) return null;
 
@@ -48,24 +61,9 @@ class LocationService {
       final locData = await _location.getLocation();
       if (locData.latitude == null || locData.longitude == null) return null;
 
-      String locality = '';
-      try {
-        final placemarks = await placemarkFromCoordinates(
-          locData.latitude!,
-          locData.longitude!,
-        );
-        if (placemarks.isNotEmpty) {
-          final place = placemarks.first;
-          locality = place.subLocality?.trim().isNotEmpty == true
-              ? place.subLocality!.trim()
-              : (place.locality ?? place.subAdministrativeArea ?? '').trim();
-        }
-      } catch (_) {}
-
       final resolved = ManilaGeoService.lookup(
         locData.latitude!,
         locData.longitude!,
-        localityName: locality,
       );
 
       cachedManilaLocation = resolved;
@@ -81,6 +79,9 @@ class LocationService {
   static Future<String> getUserAddress({bool forceRefresh = false}) async {
     if (cachedAddress != null && !forceRefresh) return cachedAddress!;
 
+    final simulated = await DebugLocationService.getSimulatedLocation();
+    if (simulated != null) return simulated.formatted;
+
     final hasPermission = await _handlePermission();
     if (!hasPermission) return 'Location unavailable';
 
@@ -90,11 +91,9 @@ class LocationService {
         return 'Location unavailable';
       }
 
-      // Try Manila structured first
       final resolved = await resolveManilaLocation(forceRefresh: forceRefresh);
       if (resolved != null) return resolved.formatted;
 
-      // ✅ Fallback: general geocoding (outside Manila)
       final placemarks = await placemarkFromCoordinates(
         locData.latitude!,
         locData.longitude!,
@@ -122,6 +121,9 @@ class LocationService {
   }
 
   static Future<Map<String, double>?> getCurrentCoordinates() async {
+    final simulated = await DebugLocationService.getSimulatedCoordinates();
+    if (simulated != null) return simulated;
+
     final hasPermission = await _handlePermission();
     if (!hasPermission) return null;
 
@@ -139,4 +141,8 @@ class LocationService {
       return null;
     }
   }
+
+  /// True when debug simulation is active (reports may proceed outside real GPS).
+  static Future<bool> isUsingDebugLocation() =>
+      DebugLocationService.isEnabled();
 }

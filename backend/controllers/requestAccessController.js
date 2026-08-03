@@ -1,4 +1,4 @@
-import User from "../models/User.js";
+import User from "../models/WebUser.js";
 import bcrypt from "bcryptjs";
 import { validatePassword } from "../utils/passwordValidation.js";
 

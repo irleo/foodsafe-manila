@@ -19,14 +19,17 @@ const userSchema = new mongoose.Schema(
 
     // optional audit fields
     approvedAt: { type: Date },
-    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "WebUser" },
 
     resetOtpHash: { type: String, default: null, select: false },
     resetOtpExpiresAt: { type: Date, default: null, select: false },
     resetOtpRequestedAt: { type: Date, default: null, select: false },
     resetOtpAttempts: { type: Number, default: 0, select: false },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    collection: "web_users",
+  }
 );
 
-export default mongoose.model("User", userSchema);
+export default mongoose.model("WebUser", userSchema);

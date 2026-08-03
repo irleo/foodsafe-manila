@@ -519,7 +519,7 @@ class MapCtaCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'View district risk zones',
+                          'View district risk areas',
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: const Color(0xFF6B7280),
@@ -967,7 +967,7 @@ class _NearbyAlertCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        _RiskPillCompact(level: item.risk),
+                        _RiskPillCompact(level: item.risk, band: item.riskBand),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -1000,13 +1000,6 @@ class _NearbyAlertCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        Text(
-                          item.timeAgo,
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: const Color(0xFF9CA3AF),
-                          ),
-                        ),
                       ],
                     ),
                   ],
@@ -1022,37 +1015,19 @@ class _NearbyAlertCard extends StatelessWidget {
 
 class _RiskPillCompact extends StatelessWidget {
   final RiskLevel level;
+  final String? band;
 
-  const _RiskPillCompact({required this.level});
+  const _RiskPillCompact({required this.level, this.band});
 
   @override
   Widget build(BuildContext context) {
-    late final Color bg;
-    late final Color fg;
-    late final String label;
-
-    switch (level) {
-      case RiskLevel.high:
-        bg = const Color(0xFFFEE2E2);
-        fg = const Color(0xFFB91C1C);
-        label = 'High';
-        break;
-      case RiskLevel.moderate:
-        bg = const Color(0xFFFEF3C7);
-        fg = const Color(0xFFB45309);
-        label = 'Moderate';
-        break;
-      case RiskLevel.low:
-        bg = const Color(0xFFDCFCE7);
-        fg = const Color(0xFF15803D);
-        label = 'Low';
-        break;
-    }
+    final style = _styleForLevel(level);
+    final label = (band != null && band!.isNotEmpty) ? band! : style.label;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: bg,
+        color: style.bg,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -1060,10 +1035,39 @@ class _RiskPillCompact extends StatelessWidget {
         style: GoogleFonts.inter(
           fontSize: 10,
           fontWeight: FontWeight.w700,
-          color: fg,
+          color: style.fg,
         ),
       ),
     );
+  }
+
+  ({Color bg, Color fg, String label}) _styleForLevel(RiskLevel level) {
+    switch (level) {
+      case RiskLevel.critical:
+        return (
+          bg: const Color(0xFFFEE2E2),
+          fg: const Color(0xFF991B1B),
+          label: 'Critical',
+        );
+      case RiskLevel.high:
+        return (
+          bg: const Color(0xFFFFEDD5),
+          fg: const Color(0xFFC2410C),
+          label: 'High',
+        );
+      case RiskLevel.moderate:
+        return (
+          bg: const Color(0xFFFEF3C7),
+          fg: const Color(0xFFB45309),
+          label: 'Moderate',
+        );
+      case RiskLevel.low:
+        return (
+          bg: const Color(0xFFDCFCE7),
+          fg: const Color(0xFF15803D),
+          label: 'Low',
+        );
+    }
   }
 }
 
@@ -1076,10 +1080,15 @@ class _NearbyRiskColors {
 
 _NearbyRiskColors _riskColorsFor(RiskLevel level) {
   switch (level) {
-    case RiskLevel.high:
+    case RiskLevel.critical:
       return const _NearbyRiskColors(
         bg: Color(0xFFFEE2E2),
         icon: Color(0xFFDC2626),
+      );
+    case RiskLevel.high:
+      return const _NearbyRiskColors(
+        bg: Color(0xFFFFEDD5),
+        icon: Color(0xFFEA580C),
       );
     case RiskLevel.moderate:
       return const _NearbyRiskColors(

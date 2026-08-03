@@ -12,6 +12,9 @@ import '../services/api_client.dart';
 import '../services/risk_alert_service.dart';
 import '../services/session.dart';
 import 'personal_info_screen.dart';
+import 'package:flutter/foundation.dart';
+import '../screens/debug_location_screen.dart';
+
 
 class BottomNavBarScreen extends StatefulWidget {
   const BottomNavBarScreen({super.key});
@@ -169,6 +172,19 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
                 subtitle: "View and manage your submitted reports",
                 page: const ReportHistoryScreen(),
               ),
+              if (kDebugMode) ...[
+                    _buildMenuTile(
+                      icon: Icons.location_searching,
+                      gradientColors: const [
+                        Color(0xFF8B5CF6),
+                        Color(0xFF7C3AED),
+                      ],
+                      title: 'Simulate location (debug)',
+                      subtitle:
+                          'Test reports and alerts from a Manila barangay',
+                      page: const DebugLocationScreen(),
+                    ),
+                  ],
               Spacer(),
               Container(
                 color: Colors.white,

@@ -23,7 +23,7 @@ const notificationSchema = new mongoose.Schema(
     targetMonth: { type: String, default: null, trim: true }, // YYYY-MM
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
-  { timestamps: true },
+  { timestamps: true, collection: "notifications" },
 );
 
 notificationSchema.index({ createdAt: -1 });

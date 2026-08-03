@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../services/api_service.dart';
 import '../services/session.dart';
+import '../utils/format_helpers.dart';
 import '../widgets/app_loading.dart';
 
 class ReportHistoryScreen extends StatefulWidget {
@@ -135,12 +136,6 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
         .split(' ')
         .map((part) => part.isEmpty ? part : '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}')
         .join(' ');
-  }
-
-  String _withBarangay(String base, String? barangay) {
-    final b = (barangay ?? '').trim();
-    if (b.isEmpty) return base;
-    return '$base, $b';
   }
 
   Future<void> _fetchReports() async {
@@ -363,17 +358,21 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                                 final symptomsList = <String>[];
                                 if (symptomsValue is String) {
                                   symptomsList.addAll(
-                                    symptomsValue
-                                        .split(',')
-                                        .map((s) => s.trim())
-                                        .where((s) => s.isNotEmpty),
+                                    FormatHelpers.formatSymptoms(
+                                      symptomsValue
+                                          .split(',')
+                                          .map((s) => s.trim())
+                                          .where((s) => s.isNotEmpty),
+                                    ),
                                   );
                                 } else if (symptomsValue is List) {
                                   symptomsList.addAll(
-                                    symptomsValue
-                                        .map((item) => item?.toString().trim())
-                                        .where((s) => s != null && s.isNotEmpty)
-                                        .cast<String>(),
+                                    FormatHelpers.formatSymptoms(
+                                      symptomsValue
+                                          .map((item) => item?.toString().trim())
+                                          .where((s) => s != null && s.isNotEmpty)
+                                          .cast<String>(),
+                                    ),
                                   );
                                 }
 
@@ -387,8 +386,16 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                                   rawReportLocation.split(',').first.trim(),
                                 );
 
+                                final reportBarangayNo =
+                                    (location?['barangayNo'] as num?)?.toInt();
                                 final reportBarangay =
                                     location?['barangay'] as String?;
+                                final reportLocationDisplay =
+                                    FormatHelpers.formatLocationDisplay(
+                                  district: reportLocationBase,
+                                  barangayNo: reportBarangayNo,
+                                  barangayName: reportBarangay,
+                                );
 
                                 final rawExposureSite = (report['food_location'] as String?) ??
                                     (report['exposureDistrict'] as String?) ??
@@ -398,9 +405,17 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                                   rawExposureSite.split(',').first.trim(),
                                 );
 
+                                final exposureBarangayNo =
+                                    (report['exposureBarangayNo'] as num?)?.toInt();
                                 final exposureBarangay =
                                     report['exposureBarangay'] as String? ??
                                     location?['barangay'] as String?;
+                                final exposureLocationDisplay =
+                                    FormatHelpers.formatLocationDisplay(
+                                  district: exposureSiteBase,
+                                  barangayNo: exposureBarangayNo,
+                                  barangayName: exposureBarangay,
+                                );
 
                                 final foodSource =
                                     (report['food_source'] as String?) ??
@@ -418,15 +433,9 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                                         ? _formatTime(reportedAt)
                                         : 'Unknown',
                                     symptoms: symptomsList,
-                                    reportLocation: _withBarangay(
-                                      reportLocationBase,
-                                      reportBarangay,
-                                    ),
+                                    reportLocation: reportLocationDisplay,
                                     reportBarangay: reportBarangay,
-                                    exposureSite: _withBarangay(
-                                      exposureSiteBase,
-                                      exposureBarangay,
-                                    ),
+                                    exposureSite: exposureLocationDisplay,
                                     exposureBarangay: exposureBarangay,
                                     foodSource: foodSource,
                                   ),
@@ -1100,7 +1109,7 @@ class ReportCard extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Possible Exposure Site',
+                                    'Exposure Site',
                                     style: GoogleFonts.inter(
                                       fontSize: 12,
                                       color: Colors.grey.shade500,

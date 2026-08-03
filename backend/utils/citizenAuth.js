@@ -1,11 +1,19 @@
 import jwt from "jsonwebtoken";
 
 export function normalizePhone(phone) {
-  return String(phone || "").replaceAll(" ", "").trim();
+  const digits = String(phone || "").replace(/\D/g, "");
+
+  if (/^09\d{9}$/.test(digits)) return digits;
+  if (/^639\d{9}$/.test(digits)) return `0${digits.slice(2)}`;
+
+  throw new Error("Invalid Philippine mobile number");
 }
 
-export function sanitizeCitizenUser(user) {
-  const obj = typeof user?.toObject === "function" ? user.toObject() : user;
+export function sanitizeMobileUser(mobileUser) {
+  const obj =
+    typeof mobileUser?.toObject === "function"
+      ? mobileUser.toObject()
+      : mobileUser;
   const id = String(obj._id);
   return {
     _id: id,

@@ -19,6 +19,10 @@ import mobileRouter from "./routes/mobile.js";
 
 import { connectDB } from "./config/db.js";
 import { registerPredictionCron } from "./jobs/predictionCron.js";
+import {
+  monitorRequestPerformance,
+  startProcessMemoryMonitor,
+} from "./middleware/performanceMonitoring.js";
 
 dotenv.config();
 
@@ -43,6 +47,7 @@ const allowedOrigins =
 // Middleware
 app.use(express.json());
 app.use(cookieParser());
+app.use(monitorRequestPerformance);
 
 app.use(
   cors({
@@ -134,6 +139,7 @@ const startServer = async () => {
     await connectDB();
 
     registerPredictionCron();
+    startProcessMemoryMonitor();
 
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);

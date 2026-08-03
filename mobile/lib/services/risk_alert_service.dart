@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'api_service.dart';
+import 'debug_location_service.dart';
+import 'location_service.dart';
 import 'manila_geo_service.dart';
 import 'notification_service.dart';
 
@@ -10,6 +12,7 @@ class RiskAlertService {
   RiskAlertService._();
 
   Timer? _timer;
+  bool _isChecking = false;
   int? _lastAlertedBarangayNo;
   final ValueNotifier<String?> latestMessage = ValueNotifier(null);
   final ValueNotifier<bool> isHighRiskArea = ValueNotifier(false);
@@ -26,6 +29,9 @@ class RiskAlertService {
   }
 
   Future<void> _checkPosition() async {
+    if (_isChecking) return;
+    _isChecking = true;
+
     try {
       final permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied ||
@@ -40,10 +46,13 @@ class RiskAlertService {
       );
 
       await ManilaGeoService.ensureLoaded();
-      final location = ManilaGeoService.lookup(
-        position.latitude,
-        position.longitude,
-      );
+      final simulated = await DebugLocationService.getSimulatedLocation();
+      final location = simulated ??
+          await LocationService.resolveManilaLocation() ??
+          ManilaGeoService.lookup(
+            position.latitude,
+            position.longitude,
+          );
       if (location == null) return;
 
       final nearby = await ApiService.getNearbyRisk(
@@ -75,6 +84,8 @@ class RiskAlertService {
       }
     } catch (_) {
       // Ignore transient GPS/API errors during background checks.
+    } finally {
+      _isChecking = false;
     }
   }
 }

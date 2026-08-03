@@ -1,29 +1,50 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-enum RiskLevel { high, moderate, low }
+enum RiskLevel { critical, high, moderate, low }
 
 class AlertItem {
+  final String id;
   final String title;
   final RiskLevel risk;
+  final String riskBand;
   final String message;
   final String location;
-  final String timeAgo;
+  final String district;
+  final int? barangayNo;
+  final String? barangayName;
   final String cases;
   final String distance;
+  final double? avgIncidentRate;
+  final DateTime? generatedAt;
+  final String? dataCoverage;
   final Map<String, dynamic>? areaData;
 
   const AlertItem({
+    required this.id,
     required this.title,
     required this.risk,
+    required this.riskBand,
     required this.message,
     required this.location,
-    required this.timeAgo,
+    required this.district,
+    this.barangayNo,
+    this.barangayName,
     required this.cases,
     required this.distance,
+    this.avgIncidentRate,
+    this.generatedAt,
+    this.dataCoverage,
     this.areaData,
   });
+
+  String get formattedTimestamp {
+    final dt = generatedAt;
+    if (dt == null) return 'Just now';
+    return DateFormat('MMM d, yyyy · h:mm a').format(dt);
+  }
 }
 
 class AlertCard extends StatelessWidget {
@@ -49,16 +70,16 @@ class AlertCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isUnread ? Colors.white : const Color(0xFFF9FAFB),
         borderRadius: BorderRadius.circular(14),
         border: isUnread
             ? Border(
-                left: BorderSide(color: colors.border, width: 4),
-                top: BorderSide(color: colors.border),
-                right: BorderSide(color: colors.border),
-                bottom: BorderSide(color: colors.border),
+                left: BorderSide(color: colors.secondary, width: 4),
+                top: BorderSide(color: colors.secondary),
+                right: BorderSide(color: colors.secondary),
+                bottom: BorderSide(color: colors.secondary),
               )
-            : null,
+            : Border.all(color: const Color(0xFFE5E7EB)),
         boxShadow: const [
           BoxShadow(
             blurRadius: 10,
@@ -71,18 +92,40 @@ class AlertCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // icon bubble
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(color: colors.bg, shape: BoxShape.circle),
-            child: Icon(
-              item.risk == RiskLevel.low
-                  ? LucideIcons.bell
-                  : LucideIcons.triangleAlert,
-              color: colors.icon,
-              size: 26,
-            ),
+          // icon bubble with unread badge
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: colors.secondary,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  item.risk == RiskLevel.low
+                      ? LucideIcons.bell
+                      : LucideIcons.triangleAlert,
+                  color: colors.primary,
+                  size: 26,
+                ),
+              ),
+              if (isUnread)
+                Positioned(
+                  top: -2,
+                  right: -2,
+                  child: Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2563EB),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(width: 12),
 
@@ -100,14 +143,15 @@ class AlertCard extends StatelessWidget {
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: item.risk == RiskLevel.high
+                          color: item.risk == RiskLevel.critical ||
+                                  item.risk == RiskLevel.high
                               ? const Color(0xFF111827)
                               : const Color(0xFF374151),
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
-                    _RiskPill(level: item.risk),
+                    _RiskPill(level: item.risk, band: item.riskBand),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -130,14 +174,15 @@ class AlertCard extends StatelessWidget {
                         text: item.location,
                       ),
                     ),
-                    Expanded(
-                      child: _MetaRow(
-                        icon: LucideIcons.clock,
-                        text: item.timeAgo,
-                      ),
-                    ),
                   ],
                 ),
+                if (item.generatedAt != null) ...[
+                  const SizedBox(height: 6),
+                  _MetaRow(
+                    icon: LucideIcons.clock,
+                    text: item.formattedTimestamp,
+                  ),
+                ],
                 const SizedBox(height: 12),
 
                 const Divider(height: 1, color: Color(0xFFF3F4F6)),
@@ -198,11 +243,10 @@ class AlertDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = _riskColors(item.risk);
     final area = item.areaData;
-    final official = area?['officialCases'];
-    final suspected = area?['suspectedCases'];
-    final total = area?['totalCases'];
     final score = area?['riskScore'];
     final riskLabelText = area?['riskLabel']?.toString();
+    final districtTotal = area?['districtTotalCases'];
+    final barangayCases = area?['cases'];
 
     return DraggableScrollableSheet(
       initialChildSize: 0.55,
@@ -238,14 +282,14 @@ class AlertDetailSheet extends StatelessWidget {
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            color: colors.bg,
+                            color: colors.secondary,
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
                             item.risk == RiskLevel.low
                                 ? LucideIcons.bell
                                 : LucideIcons.triangleAlert,
-                            color: colors.icon,
+                            color: colors.primary,
                             size: 26,
                           ),
                         ),
@@ -263,10 +307,44 @@ class AlertDetailSheet extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              _RiskPill(level: item.risk),
+                              _RiskPill(level: item.risk, band: item.riskBand),
                             ],
                           ),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    _detailSection(
+                      title: 'Alert overview',
+                      children: [
+                        _detailRow(
+                          LucideIcons.clock,
+                          'Date & time',
+                          item.formattedTimestamp,
+                        ),
+                        const SizedBox(height: 12),
+                        _detailRow(
+                          LucideIcons.shieldAlert,
+                          'Severity',
+                          '${item.riskBand} risk',
+                        ),
+                        if (item.avgIncidentRate != null) ...[
+                          const SizedBox(height: 12),
+                          _detailRow(
+                            LucideIcons.activity,
+                            'District avg. incident rate',
+                            item.avgIncidentRate!.toStringAsFixed(1),
+                          ),
+                        ],
+                        if (item.dataCoverage != null &&
+                            item.dataCoverage!.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          _detailRow(
+                            LucideIcons.database,
+                            'Dataset coverage',
+                            item.dataCoverage!,
+                          ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -286,65 +364,91 @@ class AlertDetailSheet extends StatelessWidget {
                         color: const Color(0xFF374151),
                         height: 1.45,
                       ),
+
                     ),
                     const SizedBox(height: 20),
-                    _detailRow(LucideIcons.mapPin, 'Location', item.location),
-                    const SizedBox(height: 12),
-                    _detailRow(LucideIcons.clock, 'Reported', item.timeAgo),
-                    if (riskLabelText != null && riskLabelText.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      _detailRow(
-                        LucideIcons.shield,
-                        'Risk classification',
-                        riskLabelText,
-                      ),
-                    ],
-                    if (score != null) ...[
-                      const SizedBox(height: 12),
-                      _detailRow(
-                        LucideIcons.activity,
-                        'Risk score',
-                        score.toString(),
-                      ),
-                    ],
-                    if (total != null || official != null || suspected != null) ...[
-                      const SizedBox(height: 20),
-                      Text(
-                        'Case breakdown',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF9CA3AF),
+                    _detailSection(
+                      title: 'Affected location',
+                      children: [
+                        _detailRow(
+                          LucideIcons.mapPin,
+                          'Location',
+                          item.location,
                         ),
+                        if (barangayCases != null) ...[
+                          const SizedBox(height: 12),
+                          _detailRow(
+                            LucideIcons.users,
+                            'Cases in this barangay',
+                            barangayCases.toString(),
+                          ),
+                        ],
+                        if (districtTotal != null) ...[
+                          const SizedBox(height: 12),
+                          _detailRow(
+                            LucideIcons.landmark,
+                            'District total cases',
+                            districtTotal.toString(),
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (riskLabelText != null && riskLabelText.isNotEmpty ||
+                        score != null) ...[
+                      const SizedBox(height: 20),
+                      _detailSection(
+                        title: 'Risk assessment',
+                        children: [
+                          if (riskLabelText != null &&
+                              riskLabelText.isNotEmpty) ...[
+                            _detailRow(
+                              LucideIcons.shield,
+                              'Risk classification',
+                              riskLabelText,
+                            ),
+                          ],
+                          if (score != null) ...[
+                            if (riskLabelText != null &&
+                                riskLabelText.isNotEmpty)
+                              const SizedBox(height: 12),
+                            _detailRow(
+                              LucideIcons.gauge,
+                              'Risk score',
+                              score.toString(),
+                            ),
+                          ],
+                        ],
                       ),
-                      const SizedBox(height: 10),
-                      if (total != null)
-                        _detailChip('Total cases', total.toString()),
-                      if (official != null) ...[
-                        const SizedBox(height: 8),
-                        _detailChip('Official cases', official.toString()),
-                      ],
-                      if (suspected != null) ...[
-                        const SizedBox(height: 8),
-                        _detailChip('Suspected reports', suspected.toString()),
-                      ],
                     ],
                     const SizedBox(height: 20),
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEFF6FF),
+                        color: _recommendationBg(item.risk),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFDBEAFE)),
+                        border: Border.all(color: _recommendationBorder(item.risk)),
                       ),
-                      child: Text(
-                        _recommendationFor(item.risk),
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: const Color(0xFF1E40AF),
-                          height: 1.4,
-                        ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            LucideIcons.info,
+                            size: 18,
+                            color: _recommendationFg(item.risk),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _recommendationFor(item.risk),
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: _recommendationFg(item.risk),
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -373,6 +477,39 @@ class AlertDetailSheet extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _detailSection({
+    required String title,
+    required List<Widget> children,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF9CA3AF),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: children,
+          ),
+        ),
+      ],
     );
   }
 
@@ -410,37 +547,12 @@ class AlertDetailSheet extends StatelessWidget {
     );
   }
 
-  Widget _detailChip(String label, String value) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFF3F4F6)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF6B7280)),
-          ),
-          Text(
-            value,
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF111827),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   String _recommendationFor(RiskLevel level) {
     switch (level) {
+      case RiskLevel.critical:
+        return 'Immediate caution advised. Avoid all high-risk food sources in this area, '
+            'drink only safe water, wash hands thoroughly before eating, and seek medical '
+            'attention promptly if you experience symptoms.';
       case RiskLevel.high:
         return 'Avoid high-risk food sources in this area. Wash hands frequently, '
             'ensure food is fully cooked, and seek medical attention if symptoms appear.';
@@ -450,6 +562,45 @@ class AlertDetailSheet extends StatelessWidget {
       case RiskLevel.low:
         return 'Continue standard food safety practices. Stay informed about updates '
             'in your area.';
+    }
+  }
+
+  Color _recommendationBg(RiskLevel level) {
+    switch (level) {
+      case RiskLevel.critical:
+        return const Color(0xFFFEF2F2);
+      case RiskLevel.high:
+        return const Color(0xFFFFF7ED);
+      case RiskLevel.moderate:
+        return const Color(0xFFFFFBEB);
+      case RiskLevel.low:
+        return const Color(0xFFEFF6FF);
+    }
+  }
+
+  Color _recommendationBorder(RiskLevel level) {
+    switch (level) {
+      case RiskLevel.critical:
+        return const Color(0xFFFECACA);
+      case RiskLevel.high:
+        return const Color(0xFFFED7AA);
+      case RiskLevel.moderate:
+        return const Color(0xFFFDE68A);
+      case RiskLevel.low:
+        return const Color(0xFFDBEAFE);
+    }
+  }
+
+  Color _recommendationFg(RiskLevel level) {
+    switch (level) {
+      case RiskLevel.critical:
+        return const Color(0xFF991B1B);
+      case RiskLevel.high:
+        return const Color(0xFF9A3412);
+      case RiskLevel.moderate:
+        return const Color(0xFF92400E);
+      case RiskLevel.low:
+        return const Color(0xFF1E40AF);
     }
   }
 }
@@ -483,81 +634,93 @@ class _MetaRow extends StatelessWidget {
 
 class _RiskPill extends StatelessWidget {
   final RiskLevel level;
-  const _RiskPill({required this.level});
+  final String? band;
+
+  const _RiskPill({required this.level, this.band});
 
   @override
   Widget build(BuildContext context) {
-    late final Color bg;
-    late final Color fg;
-    late final String label;
-
-    switch (level) {
-      case RiskLevel.high:
-        bg = const Color(0xFFFEE2E2);
-        fg = const Color(0xFFB91C1C);
-        label = "High Risk";
-        break;
-      case RiskLevel.moderate:
-        bg = const Color(0xFFFEF3C7);
-        fg = const Color(0xFFB45309);
-        label = "Moderate Risk";
-        break;
-      case RiskLevel.low:
-        bg = const Color(0xFFDCFCE7);
-        fg = const Color(0xFF15803D);
-        label = "Low Risk";
-        break;
-    }
+    final style = _styleForLevel(level);
+    final label = (band != null && band!.isNotEmpty) ? band! : style.label;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: bg,
+        color: style.bg,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
         style: GoogleFonts.inter(
           fontSize: 11,
-          color: fg,
+          color: style.fg,
           fontWeight: FontWeight.w600,
         ),
       ),
     );
   }
+
+  ({Color bg, Color fg, String label}) _styleForLevel(RiskLevel level) {
+    switch (level) {
+      case RiskLevel.critical:
+        return (
+          bg: const Color(0xFFFEE2E2),
+          fg: const Color(0xFF991B1B),
+          label: 'Critical',
+        );
+      case RiskLevel.high:
+        return (
+          bg: const Color(0xFFFFEDD5),
+          fg: const Color(0xFFC2410C),
+          label: 'High Risk',
+        );
+      case RiskLevel.moderate:
+        return (
+          bg: const Color(0xFFFEF3C7),
+          fg: const Color(0xFFB45309),
+          label: 'Moderate Risk',
+        );
+      case RiskLevel.low:
+        return (
+          bg: const Color(0xFFDCFCE7),
+          fg: const Color(0xFF15803D),
+          label: 'Low Risk',
+        );
+    }
+  }
 }
 
 class _RiskColors {
-  final Color border;
-  final Color bg;
-  final Color icon;
+  final Color primary;
+  final Color secondary;
 
   const _RiskColors({
-    required this.border,
-    required this.bg,
-    required this.icon,
+    required this.primary,
+    required this.secondary,
   });
 }
 
 _RiskColors _riskColors(RiskLevel level) {
   switch (level) {
+    case RiskLevel.critical:
+      return const _RiskColors(
+        primary: Color(0xFFFEE2E2),
+        secondary: Color(0xFFDC2626),
+      );
     case RiskLevel.high:
       return const _RiskColors(
-        border: Color(0xFFFECACA),
-        bg: Color(0xFFFEE2E2),
-        icon: Color(0xFFDC2626),
+        primary: Color(0xFFFFEDD5),
+        secondary: Color(0xFFEA580C),
       );
     case RiskLevel.moderate:
       return const _RiskColors(
-        border: Color(0xFFFDE68A),
-        bg: Color(0xFFFEF3C7),
-        icon: Color(0xFFD97706),
+        secondary: Color(0xFFFEF3C7),
+        primary: Color(0xFFD97706),
       );
     case RiskLevel.low:
       return const _RiskColors(
-        border: Color(0xFFF3F4F6),
-        bg: Color(0xFFDCFCE7),
-        icon: Color(0xFF16A34A),
+        secondary: Color(0xFFDCFCE7),
+        primary: Color(0xFF16A34A),
       );
   }
 }

@@ -7,7 +7,7 @@ import {
   deleteUser,
   getProfile,
 } from "../controllers/userController.js";
-import { updateCitizenProfile } from "../controllers/citizenUserController.js";
+import { updateMobileProfile } from "../controllers/mobileUserController.js";
 
 const router = express.Router();
 
@@ -38,6 +38,6 @@ router.delete("/:id", verifyToken, verifyRole("admin"), deleteUser);
 router.get("/me", verifyToken, getProfile);
 
 // Citizen mobile profile update
-router.put("/:id", verifyToken, updateCitizenProfile);
+router.put("/:id", verifyToken, updateMobileProfile);
 
 export default router;

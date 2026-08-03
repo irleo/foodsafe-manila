@@ -8,7 +8,7 @@ class ApiConfig {
   static const bool useHomeWifi = true;
 
   /// Your development machine IP when testing on a physical phone.
-  static const String hostLanIp = '192.168.1.8';
+  static const String hostLanIp = '192.168.1.9';
   static const String hostHotspotIp = '10.102.88.214';
 
   static const String hostEmulator = '10.0.2.2';

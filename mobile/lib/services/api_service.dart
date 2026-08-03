@@ -33,6 +33,7 @@ class ApiService {
     required String username,
     required String phone,
     required String password,
+    required String verificationToken,
     String? email,
   }) async {
     final response = await ApiClient.post(
@@ -41,12 +42,52 @@ class ApiService {
         'username': username,
         'phone': phone,
         'password': password,
+        'verificationToken': verificationToken,
         'email': email ?? '',
       },
       auth: false,
     );
 
+    ApiClient.throwIfError(response, fallback: 'Failed to create account');
     return response.statusCode == 201;
+  }
+
+  static Future<int> sendMobileOtp({
+    required String phone,
+    required String purpose,
+  }) async {
+    final response = await ApiClient.post(
+      '/auth/mobile/otp/send',
+      body: {'phone': phone, 'purpose': purpose},
+      auth: false,
+    );
+
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Failed to send verification code',
+    );
+    final data = ApiClient.decodeMap(response);
+    return data['expiresInSeconds'] as int? ?? 300;
+  }
+
+  static Future<String> verifyMobileOtp({
+    required String phone,
+    required String purpose,
+    required String otp,
+  }) async {
+    final response = await ApiClient.post(
+      '/auth/mobile/otp/verify',
+      body: {'phone': phone, 'purpose': purpose, 'otp': otp},
+      auth: false,
+    );
+
+    ApiClient.throwIfError(response, fallback: 'Failed to verify code');
+    final data = ApiClient.decodeMap(response);
+    final token = data['verificationToken'] as String?;
+    if (token == null || token.isEmpty) {
+      throw ApiException(response.statusCode, 'Verification token is missing');
+    }
+    return token;
   }
 
   static Future<bool> checkPhoneExists(String phone) async {
@@ -56,7 +97,7 @@ class ApiService {
       auth: false,
     );
 
-    if (response.statusCode != 200) return false;
+    ApiClient.throwIfError(response, fallback: 'Failed to check mobile number');
 
     final data = ApiClient.decodeMap(response);
     return data['exists'] as bool? ?? false;
@@ -65,13 +106,19 @@ class ApiService {
   static Future<bool> updatePassword({
     required String phone,
     required String newPassword,
+    required String verificationToken,
   }) async {
     final response = await ApiClient.post(
       '/auth/reset-password',
-      body: {'phone': phone, 'newPassword': newPassword},
+      body: {
+        'phone': phone,
+        'newPassword': newPassword,
+        'verificationToken': verificationToken,
+      },
       auth: false,
     );
 
+    ApiClient.throwIfError(response, fallback: 'Failed to update password');
     return response.statusCode == 200;
   }
 
@@ -83,11 +130,7 @@ class ApiService {
   }) async {
     final response = await ApiClient.put(
       '/users/$id',
-      body: {
-        'username': username,
-        'phone': phone,
-        'email': email ?? '',
-      },
+      body: {'username': username, 'phone': phone, 'email': email ?? ''},
     );
 
     if (response.statusCode != 200) return null;
@@ -200,7 +243,9 @@ class ApiService {
     return ApiClient.decodeMap(response);
   }
 
-  static Future<Map<String, dynamic>?> getRiskHeatmap({String months = '12'}) async {
+  static Future<Map<String, dynamic>?> getRiskHeatmap({
+    String months = '12',
+  }) async {
     final response = await ApiClient.get(
       '/risk/heatmap',
       query: {'months': months},

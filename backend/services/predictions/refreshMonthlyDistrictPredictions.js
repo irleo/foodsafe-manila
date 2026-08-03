@@ -7,6 +7,7 @@ import Dataset from "../../models/Dataset.js";
 import { normalizeDistrictKey } from "../../constants/manilaDistrictCoords.js";
 import { createNotification } from "../notificationService.js";
 import { computeRiskAnalysis } from "../../utils/riskUtils.js";
+import { runSerializedForecast } from "./forecastExecution.js";
 
 function ymToInt(year, month) {
   return year * 100 + month;
@@ -199,7 +200,7 @@ function toDatasetScope(datasetId) {
   return "all";
 }
 
-export async function refreshMonthlyDistrictPredictions({
+async function refreshMonthlyDistrictPredictionsImpl({
   trigger,
   datasetId,
   horizonMonths = 1,
@@ -303,106 +304,106 @@ export async function refreshMonthlyDistrictPredictions({
       }))
       .sort((a, b) => a.district.localeCompare(b.district));
 
-    const districtForecasts = await Promise.all(
-      districtsSeries.map(async ({ district, series, suspectedSeries }) => {
-        const reportFeatures = buildReportFeatures(suspectedSeries);
-        const mergedSeries = series.map((p, idx) => ({
-          year: p.year,
-          month: p.month,
-          cases: p.y,
-          lag1: Number(reportFeatures[idx]?.lag1 || 0),
-          lag2: Number(reportFeatures[idx]?.lag2 || 0),
-          avg3: Number(reportFeatures[idx]?.avg3 || 0),
-          suspectedReports: Number(suspectedSeries[idx]?.y || 0),
-        }));
+    const districtForecasts = [];
+    for (const { district, series, suspectedSeries } of districtsSeries) {
+      const reportFeatures = buildReportFeatures(suspectedSeries);
+      const mergedSeries = series.map((p, idx) => ({
+        year: p.year,
+        month: p.month,
+        cases: p.y,
+        lag1: Number(reportFeatures[idx]?.lag1 || 0),
+        lag2: Number(reportFeatures[idx]?.lag2 || 0),
+        avg3: Number(reportFeatures[idx]?.avg3 || 0),
+        suspectedReports: Number(suspectedSeries[idx]?.y || 0),
+      }));
 
-        const historicalSeries = mergedSeries.map((p) => ({
+      const historicalSeries = mergedSeries.map((p) => ({
+        year: p.year,
+        month: p.month,
+        cases: p.cases,
+        suspectedReports: p.suspectedReports,
+        lag1: p.lag1,
+        lag2: p.lag2,
+        avg3: p.avg3,
+      }));
+
+      if (series.length < 3) {
+        districtForecasts.push({
+          district,
+          districtKey: normalizeDistrictKey(district),
+          status: "insufficient_data",
+          message: "No sufficient data",
+          historicalSeries,
+          backtestSeries: [],
+          forecast: [],
+        });
+        continue;
+      }
+
+      try {
+        const prophetSeries = mergedSeries.map((p) => ({
           year: p.year,
           month: p.month,
-          cases: p.cases,
-          suspectedReports: p.suspectedReports,
+          y: p.cases,
           lag1: p.lag1,
           lag2: p.lag2,
           avg3: p.avg3,
         }));
+        const futureRegressors = buildFutureReportRegressors(
+          suspectedSeries,
+          horizonMonths,
+        );
+        const r = await runProphetMonthlyForecast(prophetSeries, {
+          horizonMonths,
+          futureRegressors,
+        });
+        const forecast = (r.forecast || []).map((f) => ({
+          year: f.year,
+          month: f.month,
+          predictedCases: f.predictedCases,
+          lowerBound: f.lowerBound,
+          upperBound: f.upperBound,
+          isPrimaryTarget: f.isPrimaryTarget,
+        }));
+        const primary = forecast.find((f) => f.isPrimaryTarget);
+        const hitsTarget =
+          primary?.year === target.year && primary?.month === target.month;
 
-        if (series.length < 3) {
-          return {
-            district,
-            districtKey: normalizeDistrictKey(district),
-            status: "insufficient_data",
-            message: "No sufficient data",
-            historicalSeries,
-            backtestSeries: [],
-            forecast: [],
-          };
-        }
-
-        try {
-          const prophetSeries = mergedSeries.map((p) => ({
+        districtForecasts.push({
+          district,
+          districtKey: normalizeDistrictKey(district),
+          status: hitsTarget ? "success" : "insufficient_data",
+          message: hitsTarget ? null : "No sufficient data",
+          historicalSeries,
+          suspectedReportSeries: suspectedSeries.map((p) => ({
             year: p.year,
             month: p.month,
-            y: p.cases,
-            lag1: p.lag1,
-            lag2: p.lag2,
-            avg3: p.avg3,
-          }));
-          const futureRegressors = buildFutureReportRegressors(
-            suspectedSeries,
-            horizonMonths,
-          );
-          const r = await runProphetMonthlyForecast(prophetSeries, {
-            horizonMonths,
-            futureRegressors,
-          });
-          const forecast = (r.forecast || []).map((f) => ({
-            year: f.year,
-            month: f.month,
-            predictedCases: f.predictedCases,
-            lowerBound: f.lowerBound,
-            upperBound: f.upperBound,
-            isPrimaryTarget: f.isPrimaryTarget,
-          }));
-          const primary = forecast.find((f) => f.isPrimaryTarget);
-          const hitsTarget =
-            primary?.year === target.year && primary?.month === target.month;
-
-          return {
-            district,
-            districtKey: normalizeDistrictKey(district),
-            status: hitsTarget ? "success" : "insufficient_data",
-            message: hitsTarget ? null : "No sufficient data",
-            historicalSeries,
-            suspectedReportSeries: suspectedSeries.map((p) => ({
-              year: p.year,
-              month: p.month,
-              suspectedReports: p.y,
-            })),
-            futureRegressors,
-            backtestSeries: (r.backtest || []).map((b) => ({
-              year: b.year,
-              month: b.month,
-              actualCases: b.actualCases,
-              predictedCases: b.predictedCases,
-              lowerBound: b.lowerBound,
-              upperBound: b.upperBound,
-            })),
-            forecast: hitsTarget ? forecast : [],
-          };
-        } catch (e) {
-          return {
-            district,
-            districtKey: normalizeDistrictKey(district),
-            status: "insufficient_data",
-            message: "No sufficient data",
-            error: e?.message || "forecast_failed",
-            historicalSeries,
-            backtestSeries: [],
-            forecast: [],
-          };
-        }
-      }),
-    );
+            suspectedReports: p.y,
+          })),
+          futureRegressors,
+          backtestSeries: (r.backtest || []).map((b) => ({
+            year: b.year,
+            month: b.month,
+            actualCases: b.actualCases,
+            predictedCases: b.predictedCases,
+            lowerBound: b.lowerBound,
+            upperBound: b.upperBound,
+          })),
+          forecast: hitsTarget ? forecast : [],
+        });
+      } catch (e) {
+        districtForecasts.push({
+          district,
+          districtKey: normalizeDistrictKey(district),
+          status: "insufficient_data",
+          message: "No sufficient data",
+          error: e?.message || "forecast_failed",
+          historicalSeries,
+          backtestSeries: [],
+          forecast: [],
+        });
+      }
+    }
 
     const withRisk = attachRiskScores(districtForecasts);
 
@@ -488,4 +489,16 @@ export async function refreshMonthlyDistrictPredictions({
     ).lean();
     return saved;
   }
+}
+
+export function refreshMonthlyDistrictPredictions(options = {}) {
+  const datasetKey = options.datasetId ? String(options.datasetId) : "latest";
+  const horizonMonths = Number(options.horizonMonths || 1);
+  const key = `monthly:${datasetKey}:horizon:${horizonMonths}`;
+  const label = `monthly dataset=${datasetKey} horizon=${horizonMonths}`;
+
+  return runSerializedForecast(
+    { key, label },
+    () => refreshMonthlyDistrictPredictionsImpl(options),
+  );
 }

@@ -3,6 +3,7 @@ import Dataset from "../../models/Dataset.js";
 import OfficialCase from "../../models/OfficialCase.js";
 import PredictionRun from "../../models/PredictionRun.js";
 import { runProphetForecast } from "../prophet/runForecast.js";
+import { runSerializedForecast } from "./forecastExecution.js";
 
 function fillYearlyGaps(series) {
   const safe = Array.isArray(series) ? series : [];
@@ -111,7 +112,7 @@ async function resolveBasisMonthFromDataset(datasetScope) {
  *
  * @param {{ trigger: "official_upload"|"monthly_fallback"|"manual", datasetId?: string, force?: boolean }} opts
  */
-export async function refreshProphetPredictions({
+async function refreshProphetPredictionsImpl({
   trigger,
   datasetId,
   force = false,
@@ -186,20 +187,19 @@ export async function refreshProphetPredictions({
 
     const totalResult = await runProphetForecast(totalSeries);
 
-    const districtResults = await Promise.all(
-      districtEntries.map(async ({ district, series }) => {
-        try {
-          const r = await runProphetForecast(series);
-          return { district, ok: true, ...r };
-        } catch (err) {
-          return {
-            district,
-            ok: false,
-            error: err?.message || "forecast_failed",
-          };
-        }
-      })
-    );
+    const districtResults = [];
+    for (const { district, series } of districtEntries) {
+      try {
+        const result = await runProphetForecast(series);
+        districtResults.push({ district, ok: true, ...result });
+      } catch (err) {
+        districtResults.push({
+          district,
+          ok: false,
+          error: err?.message || "forecast_failed",
+        });
+      }
+    }
 
     const districts = attachRiskScores(districtResults);
 
@@ -274,5 +274,16 @@ export async function refreshProphetPredictions({
     ).lean();
     return saved;
   }
+}
+
+export function refreshProphetPredictions(options = {}) {
+  const datasetKey = options.datasetId ? String(options.datasetId) : "all";
+  const key = `yearly:${datasetKey}`;
+  const label = `yearly dataset=${datasetKey}`;
+
+  return runSerializedForecast(
+    { key, label },
+    () => refreshProphetPredictionsImpl(options),
+  );
 }
 

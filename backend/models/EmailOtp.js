@@ -35,7 +35,7 @@ const emailOtpSchema = new mongoose.Schema(
       select: false,
     },
   },
-  { timestamps: true },
+  { timestamps: true, collection: "email_otps" },
 );
 
 emailOtpSchema.index({ email: 1, purpose: 1 }, { unique: true });
