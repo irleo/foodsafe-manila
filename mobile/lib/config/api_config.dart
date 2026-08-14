@@ -4,7 +4,7 @@ class ApiConfig {
     defaultValue: '',
   );
 
-  static const bool usePhysicalDevice = true;
+  static const bool usePhysicalDevice = false;
   static const bool useHomeWifi = true;
 
   /// Your development machine IP when testing on a physical phone.

@@ -12,14 +12,14 @@ import '../widgets/app_loading.dart';
 import '../widgets/philippine_mobile_prefix.dart';
 import '../widgets/snackbar_widgets.dart';
 
-class ForgotPasswordScreen extends StatefulWidget {
-  const ForgotPasswordScreen({super.key});
+class ChangePasswordScreen extends StatefulWidget {
+  const ChangePasswordScreen({super.key});
 
   @override
-  State<ForgotPasswordScreen> createState() => _ForgotScreenState();
+  State<ChangePasswordScreen> createState() => _ChangePasswordScreenState();
 }
 
-class _ForgotScreenState extends State<ForgotPasswordScreen> {
+class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _phoneCtrl = TextEditingController(); // NEW
@@ -316,19 +316,20 @@ class _ForgotScreenState extends State<ForgotPasswordScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.all(14),
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Color(0xFFEFF6FF),
-            border: Border.all(color: Color(0xFFBFDBFE)),
-            borderRadius: BorderRadius.circular(14),
+        Text(
+          "Change password",
+          style: GoogleFonts.inter(
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF111827),
           ),
-          child: Expanded(
-            child: Text(
-              "We'll send a verification code to your registered phone number via SMS. Use this code to reset your password.",
-              style: GoogleFonts.inter(fontSize: 13, color: Colors.blue[800]),
-            ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          "Enter your registered phone number and we'll send you a one-time reset code.",
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            color: Color(0xFF4B5563),
           ),
         ),
         const SizedBox(height: 14),
@@ -379,25 +380,6 @@ class _ForgotScreenState extends State<ForgotPasswordScreen> {
                   ),
           ),
         ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'Remember your password?',
-              style: GoogleFonts.inter(color: Colors.grey[600], fontSize: 13),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(
-                'Sign in',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFF2563EB),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
       ],
     );
   }
@@ -412,7 +394,7 @@ class _ForgotScreenState extends State<ForgotPasswordScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "OTP Verification",
+          "OTP verification",
           style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 10),
@@ -564,7 +546,7 @@ class _ForgotScreenState extends State<ForgotPasswordScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionTitle(
-          "Account Security",
+          "Change password",
           "Set a new password for your account",
         ),
         _LabeledField(
@@ -635,33 +617,55 @@ class _ForgotScreenState extends State<ForgotPasswordScreen> {
 
         const SizedBox(height: 20),
 
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _submit,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2563EB),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              elevation: 0,
-            ),
-            child: _loading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: AppLoadingIndicator(
-                      size: 20,
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : Text(
-                    "Submit",
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w800),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => setState(() => _currentStep--),
+                style: OutlinedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
-          ),
+                  side: const BorderSide(color: Color(0xFFD1D5DB)),
+                ),
+                child: Text(
+                  "Back",
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w800,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _submit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 0,
+                ),
+                child: _loading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: AppLoadingIndicator(
+                          size: 20,
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        "Submit",
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w800),
+                      ),
+              ),
+            ),
+          ],
         ),
       ],
     );
