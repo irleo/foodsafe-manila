@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import OfficialCase from "../models/OfficialCase.js";
+import { paginationMeta, parsePagination } from "../utils/pagination.js";
 
 export const listCasesByDataset = async (req, res) => {
   try {
@@ -8,8 +9,7 @@ export const listCasesByDataset = async (req, res) => {
       return res.status(400).json({ message: "Invalid datasetId" });
     }
 
-    const limit = Math.min(Number(req.query.limit ?? 200), 1000);
-    const skip = Math.max(Number(req.query.skip ?? 0), 0);
+    const { page, limit, skip } = parsePagination(req.query);
 
     const query = { datasetId: new mongoose.Types.ObjectId(datasetId) };
     if (req.query.year !== undefined && req.query.year !== "") {
@@ -66,6 +66,8 @@ export const listCasesByDataset = async (req, res) => {
       total,
       limit,
       skip,
+      page,
+      pagination: paginationMeta({ page, limit, total }),
       items,
     });
   } catch (err) {

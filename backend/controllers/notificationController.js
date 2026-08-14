@@ -1,4 +1,5 @@
 import Notification from "../models/Notification.js";
+import { paginationMeta, parsePagination } from "../utils/pagination.js";
 
 function toNotification({
   id,
@@ -23,14 +24,21 @@ function toNotification({
 
 export const getNotifications = async (req, res) => {
   try {
-    const limit = Math.min(Number(req.query.limit) || 5, 20);
-    const notifications = await Notification.find({})
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .select("type title message createdAt dotColor unread");
+    const { page, limit, skip } = parsePagination(req.query, {
+      defaultLimit: 10,
+    });
+    const [notifications, total] = await Promise.all([
+      Notification.find({})
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .select("type title message createdAt dotColor unread")
+        .lean(),
+      Notification.countDocuments({}),
+    ]);
 
-    return res.json(
-      notifications.map((n) =>
+    return res.json({
+      items: notifications.map((n) =>
         toNotification({
           id: String(n._id),
           type: n.type,
@@ -41,7 +49,8 @@ export const getNotifications = async (req, res) => {
           unread: Boolean(n.unread),
         }),
       ),
-    );
+      pagination: paginationMeta({ page, limit, total }),
+    });
   } catch (error) {
     return res.status(500).json({ message: "Failed to fetch notifications." });
   }

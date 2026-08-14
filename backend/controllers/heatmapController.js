@@ -167,7 +167,7 @@ export const getDistrictHeatmap = async (req, res) => {
       datasetScope: new mongoose.Types.ObjectId(datasetId),
       status: "success",
     })
-      .sort({ generatedAt: -1, createdAt: -1 })
+      .sort({ generatedAt: -1 })
       .select("forecastTargetYear forecastTargetMonth payload")
       .lean();
 

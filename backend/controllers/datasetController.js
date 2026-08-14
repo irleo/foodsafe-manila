@@ -4,6 +4,8 @@ import csv from "csv-parser";
 import xlsx from "xlsx";
 import Dataset from "../models/Dataset.js";
 import OfficialCase from "../models/OfficialCase.js";
+import { paginationMeta, parsePagination } from "../utils/pagination.js";
+import { refreshDashboardSummaryAfterWrite } from "../services/dashboardSummaryService.js";
 import { logActivity } from "../utils/logActivity.js";
 import {
   importOfficialCasesCsv,
@@ -506,6 +508,7 @@ export const uploadDataset = async (req, res) => {
       warningsCount: report.warnings.length,
     };
     await dataset.save();
+    await refreshDashboardSummaryAfterWrite();
 
     // Legacy forecast trigger removed (predictions now handled by monthly run service).
 
@@ -625,6 +628,7 @@ export const handleDatasetUploadError = async (err, req, res, next) => {
 
 export const listDatasets = async (req, res) => {
   try {
+    const { page, limit, skip } = parsePagination(req.query);
     const statusParam = String(req.query.status || "validated").toLowerCase();
 
     let filter = {};
@@ -645,15 +649,23 @@ export const listDatasets = async (req, res) => {
         : { status: "validated" };
     }
 
-    const datasets = await Dataset.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .select(
-        "name originalFileName storedFileName recordsCount status coverageStart coverageEnd createdAt uploadedAt errorMessage uploadedBy",
-      )
-      .populate("uploadedBy", "username email role");
+    const [datasets, total] = await Promise.all([
+      Dataset.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .select(
+          "name originalFileName storedFileName recordsCount status coverageStart coverageEnd createdAt errorMessage uploadedBy",
+        )
+        .populate("uploadedBy", "username email role")
+        .lean(),
+      Dataset.countDocuments(filter),
+    ]);
 
-    res.json(datasets);
+    res.json({
+      items: datasets,
+      pagination: paginationMeta({ page, limit, total }),
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -661,7 +673,9 @@ export const listDatasets = async (req, res) => {
 
 export const downloadDataset = async (req, res) => {
   try {
-    const dataset = await Dataset.findById(req.params.id);
+    const dataset = await Dataset.findById(req.params.id)
+      .select("name originalFileName filePath")
+      .lean();
     if (!dataset)
       return res.status(404).json({ message: "Dataset not found." });
 

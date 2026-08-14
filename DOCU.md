@@ -351,17 +351,14 @@ The core Starter-tier safeguards—request caching and coalescing, MongoDB pool 
 - [ ] Split the large frontend JavaScript bundle into lazily loaded routes or feature chunks to reduce its current initial download and parsing cost.
 - [ ] Configure Render health checks and deployment-after-CI behavior, then test a failed-release rollback before production rollout.
 - [ ] Review the final environment variables and secrets in Render, deploy the verified revision, and monitor the service during the pilot period.
-- [ ] Track this documentation file in Git if it should be included in the repository, then review, commit, and push the completed changes.
 
-## Other Task
+
+## Other Tasks
 
 - [ ] User/device-based rate-limit changes
 - [ ] Report-model index modifications
 - [ ] Firebase token storage and FCM integration
-- [x] Semaphore regular-SMS integration for backend-generated mobile OTPs
 - [ ] Authentication pagination
-- [x] Mobile OTP API contract changes
-- [x] Rename user models and collections to `WebUser`/`web_users` and `MobileUser`/`mobile_users`
 - [ ] Dataset-file deletion
 - [ ] Moving forecasting to a separate Render service
 - [ ] Increasing the mobile polling interval beyond 45 seconds

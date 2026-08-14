@@ -29,7 +29,7 @@ export const getPredictions = async (req, res) => {
       datasetScope,
       status: "success",
     })
-      .sort({ generatedAt: -1, createdAt: -1 })
+      .sort({ generatedAt: -1 })
       .select(
         "_id granularity basisDatasetId basisYear basisMonth forecastTargetYear forecastTargetMonth forecastHorizonMonths generatedAt trigger status payload",
       )

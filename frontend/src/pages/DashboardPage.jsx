@@ -29,7 +29,7 @@ export default function Dashboard() {
 
   const { datasetId } = useLatestDatasetId(token);
   const { items: officialItems } = useOfficialCases({ token, datasetId, limit: 5000 });
-  const { reports } = useReports(token);
+  const { reports } = useReports(token, { fetchAll: true });
 
   const caseRows = useMemo(() => {
     const safe = Array.isArray(officialItems) ? officialItems : [];
@@ -76,13 +76,13 @@ export default function Dashboard() {
 
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/activity?limit=5`, {
+        const res = await fetch(`${API_BASE}/api/activity?page=1&limit=5`, {
           headers: { Authorization: token ? `Bearer ${token}` : "" },
           credentials: "include",
         });
         const data = await res.json();
         if (!isMounted) return;
-        setActivity(Array.isArray(data) ? data : []);
+        setActivity(Array.isArray(data?.items) ? data.items : []);
       } catch {
         if (!isMounted) return;
         setActivity([]);

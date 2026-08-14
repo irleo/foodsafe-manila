@@ -10,7 +10,8 @@ export function useOfficialCases({ token, datasetId, year, month, district, dise
   const url = useMemo(() => {
     if (!datasetId) return null;
     const params = new URLSearchParams();
-    params.set("limit", String(limit));
+    params.set("page", "1");
+    params.set("limit", String(Math.min(Math.max(Number(limit) || 50, 1), 50)));
     if (year != null && year !== "All") params.set("year", String(year));
     if (month != null && month !== "All") params.set("month", String(month));
     if (district) params.set("district", district);
@@ -33,14 +34,31 @@ export function useOfficialCases({ token, datasetId, year, month, district, dise
       try {
         setLoading(true);
         setErrorMsg("");
-        const res = await fetch(url, {
-          headers: { Authorization: token ? `Bearer ${token}` : "" },
-          signal: controller.signal,
-        });
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(j.message || "Failed to load official cases.");
+        const requestPage = async (pageUrl) => {
+          const res = await fetch(pageUrl, {
+            headers: { Authorization: token ? `Bearer ${token}` : "" },
+            signal: controller.signal,
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(data.message || "Failed to load official cases.");
+          }
+          return data;
+        };
+
+        const first = await requestPage(url);
+        let allItems = Array.isArray(first?.items) ? first.items : [];
+        const totalPages = first?.pagination?.totalPages || 1;
+        for (let page = 2; page <= totalPages; page += 1) {
+          const nextUrl = new URL(url);
+          nextUrl.searchParams.set("page", String(page));
+          const next = await requestPage(nextUrl.toString());
+          allItems = allItems.concat(
+            Array.isArray(next?.items) ? next.items : [],
+          );
+        }
         if (!isMounted) return;
-        setItems(Array.isArray(j.items) ? j.items : []);
+        setItems(allItems);
       } catch (e) {
         if (!isMounted || e?.name === "AbortError") return;
         setItems([]);

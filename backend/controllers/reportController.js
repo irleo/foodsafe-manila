@@ -4,6 +4,28 @@ import {
   createNotification,
   createUnusualReportNotification,
 } from "../services/notificationService.js";
+import { paginationMeta, parsePagination } from "../utils/pagination.js";
+import { refreshDashboardSummaryAfterWrite } from "../services/dashboardSummaryService.js";
+
+const REPORT_LIST_FIELDS = [
+  "_id",
+  "datasetId",
+  "location.name",
+  "location.district",
+  "location.barangay",
+  "exposureDistrict",
+  "exposureBarangay",
+  "symptoms",
+  "caseCount",
+  "foodSource",
+  "reportedAt",
+  "createdAt",
+  "reportedBy",
+  "source",
+  "caseClassification",
+  "isCounted",
+  "excludeReason",
+].join(" ");
 
 const ALLOWED_SYMPTOMS = new Set([
   "nausea",
@@ -175,7 +197,8 @@ export const createReport = async (req, res) => {
       source: "citizen_app",
     })
       .sort({ reportedAt: -1 })
-      .select("symptoms exposureDistrict location.district");
+      .select("symptoms exposureDistrict location.district")
+      .lean();
 
     let isCounted = true;
     let excludeReason = null;
@@ -225,6 +248,7 @@ export const createReport = async (req, res) => {
     };
 
     const report = await Report.create(payload);
+    await refreshDashboardSummaryAfterWrite();
 
     const alertDistrict = exposureDistrictKey || reporterDistrictKey;
     const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -273,10 +297,20 @@ export const getUserReports = async (req, res) => {
       return res.status(403).json({ message: "Access denied" });
     }
 
-    const reports = await Report.find({ reportedBy: userId }).sort({ reportedAt: -1 });
+    const { page, limit, skip } = parsePagination(req.query);
+    const query = { reportedBy: userId };
+    const [reports, total] = await Promise.all([
+      Report.find(query)
+        .sort({ reportedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .select(REPORT_LIST_FIELDS)
+        .lean(),
+      Report.countDocuments(query),
+    ]);
 
     const formattedReports = reports.map((report) => {
-      const obj = report.toObject({ getters: true, versionKey: false });
+      const obj = report;
       const loc = obj.location || {};
       const reportLocation = loc.name || loc.district || "Unknown";
       const exposureSite =
@@ -298,7 +332,10 @@ export const getUserReports = async (req, res) => {
       };
     });
 
-    return res.json(formattedReports);
+    return res.json({
+      items: formattedReports,
+      pagination: paginationMeta({ page, limit, total }),
+    });
   } catch (error) {
     console.error("Error fetching user reports:", error);
     return res.status(500).json({ message: "Failed to load reports" });
@@ -313,9 +350,10 @@ export const getLastUserReport = async (req, res) => {
       return res.status(403).json({ message: "Access denied" });
     }
 
-    const latestReport = await Report.findOne({ reportedBy: userId }).sort({
-      reportedAt: -1,
-    });
+    const latestReport = await Report.findOne({ reportedBy: userId })
+      .sort({ reportedAt: -1 })
+      .select("reportedAt")
+      .lean();
 
     return res.json({
       lastReportAt: latestReport ? latestReport.reportedAt : null,
@@ -337,7 +375,7 @@ export const getReports = async (req, res) => {
 
   try {
     const { datasetId, district, onlyCounted, from, to } = req.query;
-    const limit = Math.min(Number(req.query.limit) || 2000, 5000);
+    const { page, limit, skip } = parsePagination(req.query);
 
     const query = {};
     if (datasetId) query.datasetId = datasetId;
@@ -377,25 +415,28 @@ export const getReports = async (req, res) => {
       }
     }
 
-    const reports = await Report.find(query)
-      .sort({ reportedAt: -1 })
-      .limit(limit);
-    // include reporter details for admin Data page "Submitted by"
-    await Report.populate(reports, {
-      path: "reportedBy",
-      select: "username email",
-    });
+    const [reports, total] = await Promise.all([
+      Report.find(query)
+        .sort({ reportedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .select(REPORT_LIST_FIELDS)
+        // The admin report log displays the submitter, so this relation is required.
+        .populate("reportedBy", "username email")
+        .lean(),
+      Report.countDocuments(query),
+    ]);
 
     // Back-compat: ensure caseClassification exists for old docs
-    return res.json(
-      reports.map((r) => {
-        const obj = typeof r?.toObject === "function" ? r.toObject() : r;
+    return res.json({
+      items: reports.map((obj) => {
         return {
           ...obj,
           caseClassification: obj?.caseClassification || "suspected",
         };
-      })
-    );
+      }),
+      pagination: paginationMeta({ page, limit, total }),
+    });
   } catch (error) {
     return res.status(500).json({ message: "Failed to fetch reports." });
   }

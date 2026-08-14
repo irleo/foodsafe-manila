@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Spinner from "../Spinner.jsx";
 import {
   RefreshCw,
@@ -8,8 +8,6 @@ import {
   ChevronUp,
   Clock3,
 } from "lucide-react";
-
-const PAGE_SIZE = 10;
 
 function formatDistrictKey(value) {
   if (!value) return "—";
@@ -65,25 +63,28 @@ function classificationBadge(caseClassification) {
   );
 }
 
-export default function ReportsLogList({ reports, loading, onRefresh, viewerRole }) {
-  const [page, setPage] = useState(1);
+export default function ReportsLogList({
+  reports,
+  pagination,
+  loading,
+  onRefresh,
+  onPageChange,
+  viewerRole,
+}) {
   const [expandedId, setExpandedId] = useState(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPage(1);
     setExpandedId(null);
   }, [reports]);
 
-  const totalPages = Math.max(1, Math.ceil(reports.length / PAGE_SIZE));
-
-  const paginatedReports = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return reports.slice(start, start + PAGE_SIZE);
-  }, [reports, page]);
-
-  const rangeStart = reports.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(page * PAGE_SIZE, reports.length);
+  const page = pagination?.page || 1;
+  const limit = pagination?.limit || 10;
+  const total = pagination?.total || 0;
+  const totalPages = pagination?.totalPages || 1;
+  const paginatedReports = reports;
+  const rangeStart = total === 0 ? 0 : (page - 1) * limit + 1;
+  const rangeEnd = Math.min(page * limit, total);
 
   const toggleExpanded = (reportId) => {
     setExpandedId((prev) => (prev === reportId ? null : reportId));
@@ -158,7 +159,7 @@ export default function ReportsLogList({ reports, loading, onRefresh, viewerRole
           <p className="mt-1 text-sm text-gray-500">
             {loading
               ? "Loading latest citizen-submitted reports..."
-              : `${reports.length} report${reports.length === 1 ? "" : "s"} found`}
+              : `${total} report${total === 1 ? "" : "s"} found`}
           </p>
         </div>
 
@@ -414,14 +415,14 @@ export default function ReportsLogList({ reports, loading, onRefresh, viewerRole
 
           <div className="flex flex-col gap-3 border-t border-gray-200 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-gray-500">
-              Showing {rangeStart}-{rangeEnd} of {reports.length} reports
+              Showing {rangeStart}-{rangeEnd} of {total} reports
             </p>
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setPage((prev) => prev - 1)}
+                onClick={() => onPageChange?.(page - 1)}
                 disabled={page <= 1}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Prev
               </button>
@@ -431,9 +432,9 @@ export default function ReportsLogList({ reports, loading, onRefresh, viewerRole
               </span>
 
               <button
-                onClick={() => setPage((prev) => prev + 1)}
+                onClick={() => onPageChange?.(page + 1)}
                 disabled={page >= totalPages}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Next
               </button>

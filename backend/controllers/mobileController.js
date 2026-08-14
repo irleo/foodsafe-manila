@@ -5,6 +5,7 @@ import {
   monthsAgoDate,
 } from "../utils/riskUtils.js";
 import { createAsyncTtlCache } from "../utils/asyncTtlCache.js";
+import { getDashboardSummary } from "../services/dashboardSummaryService.js";
 
 const riskSnapshotCache = createAsyncTtlCache({
   name: "mobile-risk-snapshot",
@@ -14,10 +15,6 @@ const nearbyRiskCache = createAsyncTtlCache({
   name: "mobile-nearby-risk",
   defaultTtlMs: 60_000,
 });
-const mobileDashboardCache = createAsyncTtlCache({
-  name: "mobile-dashboard",
-  defaultTtlMs: 120_000,
-});
 
 function positiveInteger(value, fallback) {
   const parsed = Number.parseInt(value, 10);
@@ -26,10 +23,6 @@ function positiveInteger(value, fallback) {
 
 function riskCacheTtlMs() {
   return positiveInteger(process.env.RISK_CACHE_TTL_MS, 60_000);
-}
-
-function dashboardCacheTtlMs() {
-  return positiveInteger(process.env.DASHBOARD_CACHE_TTL_MS, 120_000);
 }
 
 async function aggregateOfficialByBarangay(since, barangayNo = null) {
@@ -196,127 +189,28 @@ function getNearbyAreaRisk(barangayNo, months) {
 export const getMobileDashboard = async (req, res) => {
   try {
     const year = new Date().getFullYear();
-    const payload = await mobileDashboardCache.getOrLoad(
-      `year:${year}`,
-      async () => {
-        const [
-          totalCasesAgg,
-          topDistrictAgg,
-          topDiseaseAgg,
-          reportCountAgg,
-          officialByDistrict,
-          reportsByDistrict,
-          previousYearAgg,
-        ] = await Promise.all([
-          OfficialCase.aggregate([
-            { $match: { year } },
-            { $group: { _id: null, total: { $sum: "$cases" } } },
-          ]),
-          OfficialCase.aggregate([
-            { $match: { year } },
-            { $group: { _id: "$district", total: { $sum: "$cases" } } },
-            { $sort: { total: -1 } },
-            { $limit: 1 },
-          ]),
-          OfficialCase.aggregate([
-            { $match: { year } },
-            { $group: { _id: "$disease", total: { $sum: "$cases" } } },
-            { $sort: { total: -1 } },
-            { $limit: 1 },
-          ]),
-          Report.aggregate([
-            {
-              $match: {
-                isCounted: true,
-                reportedAt: { $gte: new Date(year, 0, 1) },
-              },
-            },
-            { $group: { _id: null, total: { $sum: "$caseCount" } } },
-          ]),
-          OfficialCase.aggregate([
-            { $match: { year } },
-            { $group: { _id: "$district", total: { $sum: "$cases" } } },
-          ]),
-          Report.aggregate([
-            {
-              $match: {
-                isCounted: true,
-                reportedAt: { $gte: new Date(year, 0, 1) },
-              },
-            },
-            {
-              $group: {
-                _id: {
-                  $ifNull: ["$exposureDistrict", "$location.district"],
-                },
-                total: { $sum: "$caseCount" },
-              },
-            },
-          ]),
-          OfficialCase.aggregate([
-            { $match: { year: year - 1 } },
-            { $group: { _id: null, total: { $sum: "$cases" } } },
-          ]),
-        ]);
-
-        const districtRisk = new Map();
-        for (const row of officialByDistrict) {
-          districtRisk.set(row._id, {
-            district: row._id,
-            official: row.total,
-            suspected: 0,
-          });
-        }
-        for (const row of reportsByDistrict) {
-          const key = row._id;
-          if (!key) continue;
-          const existing = districtRisk.get(key) || {
-            district: key,
-            official: 0,
-            suspected: 0,
-          };
-          existing.suspected = row.total;
-          districtRisk.set(key, existing);
-        }
-
-        let highRiskDistricts = 0;
-        let criticalRiskDistricts = 0;
-        let mediumRiskDistricts = 0;
-        let lowRiskDistricts = 0;
-
-        for (const entry of districtRisk.values()) {
-          const level = computeRiskAnalysis(
-            entry.official + entry.suspected,
-          ).riskLevel;
-          if (level === "critical") criticalRiskDistricts += 1;
-          else if (level === "high") highRiskDistricts += 1;
-          else if (level === "medium") mediumRiskDistricts += 1;
-          else lowRiskDistricts += 1;
-        }
-
-        const currentYearTotal = totalCasesAgg[0]?.total || 0;
-        const previousYearTotal = previousYearAgg[0]?.total || 0;
-        const growth =
-          previousYearTotal > 0
-            ? ((currentYearTotal - previousYearTotal) / previousYearTotal) * 100
-            : 0;
-
-        return {
-          totalCases: currentYearTotal,
-          suspectedReports: reportCountAgg[0]?.total || 0,
-          topDistrict: topDistrictAgg[0]?._id || "N/A",
-          topDisease: topDiseaseAgg[0]?._id || "N/A",
-          growth: growth.toFixed(1),
-          criticalRiskDistricts,
-          highRiskDistricts,
-          mediumRiskDistricts,
-          moderateRiskDistricts: mediumRiskDistricts,
-          lowRiskDistricts,
-          year,
-        };
-      },
-      { ttlMs: dashboardCacheTtlMs() },
-    );
+    const summary = await getDashboardSummary(year);
+    const growth =
+      summary.previousYearTotal > 0
+        ? ((summary.currentYearTotal - summary.previousYearTotal) /
+            summary.previousYearTotal) *
+          100
+        : 0;
+    const counts = summary.riskLevelCounts || {};
+    const payload = {
+      totalCases: summary.totalCases,
+      suspectedReports: summary.suspectedReports,
+      topDistrict: summary.topDistrict || "N/A",
+      topDisease: summary.topDisease || "N/A",
+      growth: growth.toFixed(1),
+      criticalRiskDistricts: counts.critical || 0,
+      highRiskDistricts: counts.high || 0,
+      mediumRiskDistricts: counts.medium || 0,
+      moderateRiskDistricts: counts.medium || 0,
+      lowRiskDistricts: counts.low || 0,
+      year,
+      summaryGeneratedAt: summary.generatedAt,
+    };
 
     return res.json(payload);
   } catch (error) {

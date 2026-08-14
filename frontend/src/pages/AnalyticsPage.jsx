@@ -29,7 +29,7 @@ export default function Analytics() {
     datasetId,
     limit: 5000,
   });
-  const { reports } = useReports(token);
+  const { reports } = useReports(token, { fetchAll: true });
 
   // // Reports Version
   // const { reports, loading, errorMsg } = useReports(token);

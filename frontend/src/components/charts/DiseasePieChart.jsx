@@ -34,32 +34,45 @@ const renderDiseaseLabel = ({
 };
 
 
-export default function DiseaseDistributionChart({ data, title="Disease Distribution" }) {
+export default function DiseaseDistributionChart({
+  data = [],
+  title = "Disease Distribution",
+}) {
+  const chartData = Array.isArray(data)
+    ? data.filter((item) => Number(item?.cases) > 0)
+    : [];
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <h2 className="font-semibold mb-6">{title}</h2>
 
-      <div className="w-full h-[350px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="cases"
-              nameKey="disease"
-              label={renderDiseaseLabel}
-              labelLine={false}
-            >
-              {data.map((_, index) => (
-                <Cell
-                  key={index}
-                  fill={CHART_COLORS[index % CHART_COLORS.length]}
-                />
-              ))}
-            </Pie>
-            <Tooltip />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
+      {chartData.length === 0 ? (
+        <p className="text-sm text-gray-500">
+          No disease distribution data available.
+        </p>
+      ) : (
+        <div className="w-full h-[350px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={chartData}
+                dataKey="cases"
+                nameKey="disease"
+                label={renderDiseaseLabel}
+                labelLine={false}
+              >
+                {chartData.map((item, index) => (
+                  <Cell
+                    key={item.disease ?? index}
+                    fill={CHART_COLORS[index % CHART_COLORS.length]}
+                  />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }

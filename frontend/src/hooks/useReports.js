@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
-export function useReports(token) {
+export function useReports(token, { fetchAll = false, autoFetch = true } = {}) {
   const [reports, setReports] = useState([]);
+  const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -14,7 +15,8 @@ export function useReports(token) {
       onlyCounted,
       from,
       to,
-      limit,
+      page = 1,
+      limit = fetchAll ? 50 : 20,
     } = {}) => {
       if (!token) {
         setReports([]);
@@ -26,32 +28,40 @@ export function useReports(token) {
         setLoading(true);
         setErrorMsg("");
 
-        const params = new URLSearchParams();
-        if (datasetId) params.set("datasetId", datasetId);
-        if (district) params.set("district", district);
-        if (typeof onlyCounted === "boolean") {
-          params.set("onlyCounted", String(onlyCounted));
+        const requestPage = async (requestedPage) => {
+          const params = new URLSearchParams({
+            page: String(requestedPage),
+            limit: String(limit),
+          });
+          if (datasetId) params.set("datasetId", datasetId);
+          if (district) params.set("district", district);
+          if (typeof onlyCounted === "boolean") {
+            params.set("onlyCounted", String(onlyCounted));
+          }
+          if (from) params.set("from", from);
+          if (to) params.set("to", to);
+
+          const res = await fetch(`${API_BASE}/api/reports?${params}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(data.message || "Failed to load reports.");
+          }
+          return data;
+        };
+
+        const first = await requestPage(page);
+        let items = Array.isArray(first?.items) ? first.items : [];
+        if (fetchAll && page === 1) {
+          const totalPages = first?.pagination?.totalPages || 1;
+          for (let nextPage = 2; nextPage <= totalPages; nextPage += 1) {
+            const next = await requestPage(nextPage);
+            items = items.concat(Array.isArray(next?.items) ? next.items : []);
+          }
         }
-        if (from) params.set("from", from);
-        if (to) params.set("to", to);
-        if (limit) params.set("limit", String(limit));
-
-        const qs = params.toString();
-        const url = `${API_BASE}/api/reports${qs ? `?${qs}` : ""}`;
-
-        const res = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!res.ok) {
-          const j = await res.json().catch(() => ({}));
-          throw new Error(j.message || "Failed to load reports.");
-        }
-
-        const data = await res.json();
-        setReports(Array.isArray(data) ? data : []);
+        setReports(items);
+        setPagination(first?.pagination || null);
       } catch (err) {
         setErrorMsg(err?.message || "Failed to load reports.");
         setReports([]);
@@ -59,11 +69,11 @@ export function useReports(token) {
         setLoading(false);
       }
     },
-    [token],
+    [fetchAll, token],
   );
 
   useEffect(() => {
-    if (!token) {
+    if (!token || !autoFetch) {
       setLoading(false);
       return;
     }
@@ -78,7 +88,7 @@ export function useReports(token) {
     return () => {
       isMounted = false;
     };
-  }, [token, fetchReports]);
+  }, [autoFetch, token, fetchReports]);
 
-  return { reports, loading, errorMsg, fetchReports };
+  return { reports, pagination, loading, errorMsg, fetchReports };
 }

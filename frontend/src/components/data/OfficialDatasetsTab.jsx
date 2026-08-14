@@ -30,10 +30,15 @@ export default function OfficialDatasetsTab() {
   const [showFailed, setShowFailed] = useState(false);
   const statusFilter = showFailed ? "validated,failed" : "validated";
 
-  const { recent, loadingRecent, fetchRecent, upload, download, downloadTemplate } = useDatasets(
-    token,
-    statusFilter,
-  );
+  const {
+    recent,
+    pagination,
+    loadingRecent,
+    fetchRecent,
+    upload,
+    download,
+    downloadTemplate,
+  } = useDatasets(token, statusFilter);
 
   const canValidate = useMemo(() => {
     if (!file) return false;
@@ -302,8 +307,10 @@ export default function OfficialDatasetsTab() {
       <div className="space-y-6">
         <RecentDatasetsList
           recent={recent}
+          pagination={pagination}
           loading={loadingRecent}
           onRefresh={fetchRecent}
+          onPageChange={fetchRecent}
           onDownload={downloadDataset}
           showFailed={showFailed}
           onShowFailedChange={setShowFailed}

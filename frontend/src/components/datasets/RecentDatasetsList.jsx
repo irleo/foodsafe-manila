@@ -1,4 +1,3 @@
-import { useMemo, useState } from "react";
 import {
   ArrowDownTrayIcon,
   CalendarIcon,
@@ -10,25 +9,18 @@ import { formatDate } from "../../utils/formatDate";
 
 export default function RecentDatasetsList({
   recent,
+  pagination,
   loading,
   onRefresh,
+  onPageChange,
   onDownload,
   showFailed,
   onShowFailedChange,
 }) {
-  const PAGE_SIZE = 5;
-  const [page, setPage] = useState(0);
-
-  const totalPages = useMemo(() => {
-    return Math.max(1, Math.ceil((recent?.length || 0) / PAGE_SIZE));
-  }, [recent?.length]);
-
-  const safePage = Math.min(page, totalPages - 1);
-
-  const pageItems = useMemo(() => {
-    const start = safePage * PAGE_SIZE;
-    return (recent || []).slice(start, start + PAGE_SIZE);
-  }, [recent, safePage]);
+  const page = pagination?.page || 1;
+  const limit = pagination?.limit || 5;
+  const total = pagination?.total || 0;
+  const totalPages = pagination?.totalPages || 1;
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -38,11 +30,8 @@ export default function RecentDatasetsList({
           <p className="text-xs text-gray-500">Upload audit log</p>
         </div>
         <button
-          className="flex items-center gap-1 text-sm px-3 py-1 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
-          onClick={() => {
-            setPage(0); // reset to first page on refresh (optional)
-            onRefresh?.();
-          }}
+          className="flex items-center gap-1 text-sm px-3 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+          onClick={() => onRefresh?.(page)}
           disabled={loading}
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
@@ -68,7 +57,7 @@ export default function RecentDatasetsList({
           </div>
           
           <div className="space-y-3">
-            {pageItems.map((d) => (
+            {recent.map((d) => (
               <div
                 key={d._id}
                 className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
@@ -122,7 +111,7 @@ export default function RecentDatasetsList({
                   </div>
 
                   <button
-                    className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-50"
+                    className="p-2.5 hover:bg-gray-100 rounded-lg disabled:opacity-50"
                     onClick={() => onDownload(d._id)}
                     disabled={d.status !== "validated"}
                     title={
@@ -139,18 +128,17 @@ export default function RecentDatasetsList({
           {/* Pagination footer */}
           <div className="mt-4 flex items-center justify-between">
             <p className="text-xs text-gray-500">
-              Showing {page * PAGE_SIZE + 1}–
-              {Math.min((page + 1) * PAGE_SIZE, recent.length)} of{" "}
-              {recent.length}
+              Showing {(page - 1) * limit + 1}–
+              {Math.min(page * limit, total)} of {total}
             </p>
 
             {/* Dots */}
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                disabled={safePage === 0}
+                className="text-xs px-3 py-2.5 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+                onClick={() => onPageChange?.(page - 1)}
+                disabled={page <= 1 || loading}
               >
                 Prev
               </button>
@@ -160,23 +148,25 @@ export default function RecentDatasetsList({
                   <button
                     key={i}
                     type="button"
-                    onClick={() => setPage(i)}
+                    onClick={() => onPageChange?.(i + 1)}
                     aria-label={`Go to page ${i + 1}`}
                     className={[
-                      "h-2.5 w-2.5 rounded-full transition",
-                      i === safePage
-                        ? "bg-blue-600"
-                        : "bg-gray-300 hover:bg-gray-400",
+                      "h-10 w-10 rounded-full border text-xs font-medium transition",
+                      i + 1 === page
+                        ? "border-blue-600 bg-blue-600 text-white"
+                        : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50",
                     ].join(" ")}
-                  />
+                  >
+                    {i + 1}
+                  </button>
                 ))}
               </div>
 
               <button
                 type="button"
-                className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                disabled={safePage === totalPages - 1}
+                className="text-xs px-3 py-2.5 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+                onClick={() => onPageChange?.(page + 1)}
+                disabled={page >= totalPages || loading}
               >
                 Next
               </button>

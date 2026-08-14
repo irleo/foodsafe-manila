@@ -17,13 +17,18 @@ export default function DiseaseTrendStackedAreaChart({
 }) {
   const safeData = Array.isArray(data) ? data : [];
   const safeKeys = Array.isArray(keys) ? keys : [];
+  const hasTrendData = safeData.some((item) =>
+    safeKeys.some((key) => Number(item?.[key]) > 0),
+  );
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <h2 className="font-semibold mb-6">{title}</h2>
 
-      {safeData.length === 0 || safeKeys.length === 0 ? (
-        <div className="text-sm text-gray-500">No disease trend data available.</div>
+      {!hasTrendData ? (
+        <p className="text-sm text-gray-500">
+          No disease trend data available.
+        </p>
       ) : (
         <div className="w-full" style={{ height }}>
           <ResponsiveContainer width="100%" height="100%">

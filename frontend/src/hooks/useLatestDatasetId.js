@@ -20,9 +20,14 @@ export function useLatestDatasetId(token) {
       try {
         setLoading(true);
         setErrorMsg("");
-        const rows = await fetchDatasets({ token, status: "validated" });
+        const { items } = await fetchDatasets({
+          token,
+          status: "validated",
+          page: 1,
+          limit: 1,
+        });
         if (!isMounted) return;
-        setDatasetId(rows?.[0]?._id || null);
+        setDatasetId(items?.[0]?._id || null);
       } catch (e) {
         if (!isMounted) return;
         setDatasetId(null);

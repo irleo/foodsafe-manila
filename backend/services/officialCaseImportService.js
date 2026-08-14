@@ -5,6 +5,7 @@ import csv from "csv-parser";
 
 import Dataset from "../models/Dataset.js";
 import OfficialCase from "../models/OfficialCase.js";
+import { refreshDashboardSummaryAfterWrite } from "./dashboardSummaryService.js";
 import {
   isBlankRow,
   normalizeRawHealthOfficeRow,
@@ -304,6 +305,7 @@ export async function importOfficialCasesXlsx({
     dataset.skippedRows = validationErrors.length;
     dataset.status = "validated";
     await dataset.save();
+    await refreshDashboardSummaryAfterWrite();
 
     return {
       success: true,
@@ -429,6 +431,7 @@ export async function importOfficialCasesXlsx({
     dataset.skippedRows = validationErrors.length;
     dataset.status = "validated";
     await dataset.save();
+    await refreshDashboardSummaryAfterWrite();
 
     return {
       success: true,
@@ -589,6 +592,7 @@ export async function importOfficialCasesCsv({
   dataset.skippedRows = validationErrors.length;
   dataset.status = "validated";
   await dataset.save();
+  await refreshDashboardSummaryAfterWrite();
 
   return {
     success: true,
