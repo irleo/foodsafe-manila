@@ -11,4 +11,3 @@ export function legislativeDistrictFromBarangayNo(value) {
   if (barangayNo <= 828) return "District 5";
   return "District 6";
 }
-

@@ -33,12 +33,10 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
   bool _isOtpVerificationMode = false;
   String? _pendingPhoneNumber;
   String? _originalPhoneNumber;
-  String? _pendingName;
-  String? _pendingEmail;
   final _otpCtrl = TextEditingController();
   late List<TextEditingController> otpControllers;
   late List<FocusNode> otpFocusNodes;
-  int _resendSeconds = 0;
+  final int _resendSeconds = 0;
 
   @override
   void dispose() {
@@ -243,8 +241,6 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
       setState(() {
         _isOtpVerificationMode = true;
         _pendingPhoneNumber = _phoneCtrl.text.trim();
-        _pendingName = _nameCtrl.text.trim();
-        _pendingEmail = _emailCtrl.text.trim();
       });
 
       // Request focus on first OTP field after frame is built
@@ -389,8 +385,6 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                 setState(() {
                   _isOtpVerificationMode = false;
                   _pendingPhoneNumber = null;
-                  _pendingName = null;
-                  _pendingEmail = null;
                 });
               }
               return;
@@ -583,8 +577,6 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                 setState(() {
                                   _isOtpVerificationMode = false;
                                   _pendingPhoneNumber = null;
-                                  _pendingName = null;
-                                  _pendingEmail = null;
                                 });
                               }
                             }

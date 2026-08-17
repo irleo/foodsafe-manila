@@ -323,8 +323,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
 
           if (backPressedOnce) {
             await SystemNavigator.pop();
-          } 
-          else {
+          } else {
             setState(() {
               backPressedOnce = true;
             });

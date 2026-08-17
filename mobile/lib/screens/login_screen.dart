@@ -75,8 +75,7 @@ class _LogInScreenState extends State<LoginScreen> {
 
             if (backPressedOnce) {
               await SystemNavigator.pop();
-            } 
-            else {
+            } else {
               setState(() {
                 backPressedOnce = true;
               });
