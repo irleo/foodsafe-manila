@@ -5,6 +5,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 export function useReports(token, { fetchAll = false, autoFetch = true } = {}) {
   const [reports, setReports] = useState([]);
   const [pagination, setPagination] = useState(null);
+  const [permissions, setPermissions] = useState({ canAccessPatientIdentity: false });
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -62,6 +63,7 @@ export function useReports(token, { fetchAll = false, autoFetch = true } = {}) {
         }
         setReports(items);
         setPagination(first?.pagination || null);
+        setPermissions(first?.permissions || { canAccessPatientIdentity: false });
       } catch (err) {
         setErrorMsg(err?.message || "Failed to load reports.");
         setReports([]);
@@ -90,5 +92,5 @@ export function useReports(token, { fetchAll = false, autoFetch = true } = {}) {
     };
   }, [autoFetch, token, fetchReports]);
 
-  return { reports, pagination, loading, errorMsg, fetchReports };
+  return { reports, pagination, permissions, loading, errorMsg, fetchReports };
 }

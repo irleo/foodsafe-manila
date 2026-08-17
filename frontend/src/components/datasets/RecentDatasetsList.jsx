@@ -6,6 +6,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { RefreshCw } from "lucide-react";
 import { formatDate } from "../../utils/formatDate";
+import { formatStatusLabel } from "../../utils/formatStatusLabel";
 
 export default function RecentDatasetsList({
   recent,
@@ -73,6 +74,14 @@ export default function RecentDatasetsList({
                           "-"}{" "}
                         records
                       </p>
+                      <p className="mt-1 text-xs font-medium text-blue-700">
+                        {formatProviderType(d.providerType)} · {d.providerName || d.dataSource || "Source not specified"} · {formatStatusLabel(d.reportingFrequency || "monthly")}
+                      </p>
+                      {d.coverageStart && d.coverageEnd && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Coverage: {formatDate(d.coverageStart)}–{formatDate(d.coverageEnd)}
+                        </p>
+                      )}
 
                       {d.status === "failed" && d.errorMessage && (
                         <p className="text-xs text-red-600 mt-1">
@@ -104,7 +113,7 @@ export default function RecentDatasetsList({
                                 : "bg-yellow-100 text-yellow-700",
                           ].join(" ")}
                         >
-                          {d.status || "pending"}
+                          {formatStatusLabel(d.status || "pending")}
                         </span>
                       </div>
                     </div>
@@ -176,4 +185,15 @@ export default function RecentDatasetsList({
       )}
     </div>
   );
+}
+
+function formatProviderType(value) {
+  const labels = {
+    hospital: "Hospital",
+    health_center: "Health Center",
+    cesu: "CESU",
+    doh: "DOH",
+    citizen_patient_report: "Citizen/Patient Report",
+  };
+  return labels[value] || "Source";
 }

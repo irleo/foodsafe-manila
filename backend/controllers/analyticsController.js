@@ -1,10 +1,9 @@
 import Dataset from "../models/Dataset.js";
-import OfficialCase from "../models/OfficialCase.js";
+import { getAnalyticalCaseRows } from "../services/analyticalCaseService.js";
 import {
   getYearRange,
   getMaxYearInData,
   buildDistrictStatisticsFromCases,
-  buildRiskLevelDonutDataFromDistrictStats,
   buildYoYCaseStatsFromCases,
 } from "../services/statisticsCaseBuilders.js";
 
@@ -16,16 +15,16 @@ export async function getAnalyticsSummary(req, res) {
     const dataset = await Dataset.findById(datasetId).select("_id name status").lean();
     if (!dataset) return res.status(404).json({ message: "Dataset not found." });
 
-    const caseRows = await OfficialCase.find({ datasetId })
-      .select("city district disease year month caseClassification cases source datasetId")
-      .lean();
+    const caseRows = await getAnalyticalCaseRows({
+      datasetId,
+      statuses: ["confirmed"],
+    });
 
     const yearRange = getYearRange(caseRows);
     const baseYear = getMaxYearInData(caseRows);
     const previousYear = baseYear ? baseYear - 1 : null;
 
     const districtStats = buildDistrictStatisticsFromCases(caseRows);
-    const riskDonut = buildRiskLevelDonutDataFromDistrictStats(districtStats);
     const yoy = buildYoYCaseStatsFromCases(caseRows);
 
     // Monthly analytics (for charts + filters)
@@ -87,6 +86,10 @@ export async function getAnalyticsSummary(req, res) {
         computedAt: new Date().toISOString(),
         rowCount: caseRows.length,
         totalCases,
+        totalDefinition:
+          "Confirmed official cases and confirmed surveillance reports",
+        selectedCaseStatus: "confirmed",
+        unionStrategy: "query_time_no_copy",
         yearRange,
         baseYear,
         previousYear,
@@ -102,10 +105,10 @@ export async function getAnalyticsSummary(req, res) {
       casesByDisease,
       casesByCaseClassification,
       districtStats,
-      riskDonut,
+      caseConcentrationByDistrict: districtStats,
     });
   } catch (err) {
-    return res.status(500).json({
+    return res.status(err?.status || 500).json({
       message: "Failed to build analytics summary",
       error: err?.message,
     });

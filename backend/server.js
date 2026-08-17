@@ -16,6 +16,7 @@ import notificationRouter from "./routes/notifications.js";
 import healthRouter from "./routes/health.js";
 import predictionsRouter from "./routes/predictions.js";
 import mobileRouter from "./routes/mobile.js";
+import thresholdRouter from "./routes/thresholds.js";
 
 import { connectDB } from "./config/db.js";
 import { registerPredictionCron } from "./jobs/predictionCron.js";
@@ -114,6 +115,7 @@ app.use("/api/activity", activityRoutes);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/health", healthRouter);
 app.use("/api/predictions", predictionsRouter);
+app.use("/api/thresholds", thresholdRouter);
 app.use("/api", mobileRouter);
 
 // 404 handler

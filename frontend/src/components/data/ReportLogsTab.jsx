@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MapPin, Info } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useReports } from "../../hooks/useReports.js";
 import ReportsLogList from "../reports/ReportsLogList";
@@ -25,10 +25,9 @@ const DISTRICT_OPTIONS = [
 export default function ReportLogsTab() {
   const { auth } = useAuth();
   const token = auth?.accessToken;
-  const viewerRole = auth?.role || "user";
 
   const [reportDistrict, setReportDistrict] = useState("");
-  const { reports, pagination, loading, errorMsg, fetchReports } =
+  const { reports, pagination, permissions, loading, errorMsg, fetchReports } =
     useReports(token, { autoFetch: false });
 
   const [onlyCounted] = useState(false);
@@ -138,7 +137,8 @@ export default function ReportLogsTab() {
         loading={loading}
         onRefresh={loadReports}
         onPageChange={(page) => loadReports({ page })}
-        viewerRole={viewerRole}
+        token={token}
+        canAccessPatientIdentity={permissions.canAccessPatientIdentity}
       />
     </div>
   );

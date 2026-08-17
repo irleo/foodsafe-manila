@@ -5,7 +5,9 @@ import {
 } from "@heroicons/react/24/outline";
 
 export default function AnalyticsStats({
-  thisYearCases,
+  latestYear,
+  latestYearCases,
+  previousYear,
   topDistrict,
   topDisease,
   districtsCovered,
@@ -17,10 +19,12 @@ export default function AnalyticsStats({
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 analytics-print-grid analytics-stats-print-grid">
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 analytics-print-block">
         <div className="flex items-center justify-between mb-2">
-          <p className="text-sm text-gray-600">Total Cases This Year</p>
+          <p className="text-sm text-gray-600">
+            {latestYear ? `Validated / Confirmed Cases in ${latestYear}` : "Validated / Confirmed Cases"}
+          </p>
           <ArrowTrendingUpIcon height={20} width={20} />
         </div>
-        <p className="text-3xl">{thisYearCases}</p>
+        <p className="text-3xl">{latestYearCases}</p>
         <div className="flex items-center gap-2 mt-2">
           {hasYoY ? (
             <>
@@ -30,9 +34,9 @@ export default function AnalyticsStats({
                 <ArrowDownRightIcon height={12} width={12} />
               )}
               <span
-                className={`text-sm ${yoyPct >= 0 ? "text-red-600" : "text-green-600"}`}
+                className="text-sm font-medium text-blue-700"
               >
-                {Math.abs(yoyPct).toFixed(1)}% vs last year
+                {Math.abs(yoyPct).toFixed(1)}% vs {previousYear ?? "previous year"}
               </span>
             </>
           ) : (
@@ -42,7 +46,7 @@ export default function AnalyticsStats({
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 analytics-print-block">
-        <p className="text-sm text-gray-600 mb-2">Top District</p>
+        <p className="text-sm text-gray-600 mb-2">Highest Case Concentration</p>
         <p className="text-2xl font-semibold">{topDistrict}</p>
         <p className="text-sm text-gray-600 mt-2">
           Highest case volume (current data)
@@ -50,9 +54,9 @@ export default function AnalyticsStats({
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 analytics-print-block">
-        <p className="text-sm text-gray-600 mb-2">Top Diseases</p>
+        <p className="text-sm text-gray-600 mb-2">Most Recorded Condition</p>
         <p className="text-2xl font-semibold">{topDisease}</p>
-        <p className="text-sm text-gray-600 mt-2">Most frequent diagnosis</p>
+        <p className="text-sm text-gray-600 mt-2">Largest confirmed case total</p>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 analytics-print-block">

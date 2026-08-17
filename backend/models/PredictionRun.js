@@ -27,7 +27,7 @@ const predictionRunSchema = new mongoose.Schema(
 
     trigger: {
       type: String,
-      enum: ["official_upload", "monthly_fallback", "manual"],
+      enum: ["official_upload", "report_confirmation", "monthly_fallback", "manual"],
       required: true,
       index: true,
     },
@@ -131,6 +131,13 @@ const predictionRunSchema = new mongoose.Schema(
       default: null,
       min: 1,
       max: 36,
+    },
+    inputFingerprint: {
+      type: String,
+      default: null,
+      trim: true,
+      minlength: 64,
+      maxlength: 64,
     },
   },
   { timestamps: true, collection: "prediction_runs" }

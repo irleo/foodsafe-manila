@@ -60,7 +60,7 @@ function formatMonthLabel(dateKey) {
 }
 
 function getSeriesValue(row) {
-  return Number(row?.officialCases || 0) + Number(row?.citizenReports || 0);
+  return Number(row?.totalCases || 0);
 }
 
 export default function SwitchableYearlyChart({
@@ -80,7 +80,6 @@ export default function SwitchableYearlyChart({
     );
 
     return filtered.map((row, index) => {
-      const displayCases = getSeriesValue(row);
       const window3 = filtered
         .slice(Math.max(0, index - 2), index + 1)
         .map((x) => getSeriesValue(x));
@@ -93,25 +92,21 @@ export default function SwitchableYearlyChart({
 
       return {
         ...row,
-        displayCases,
         ma3: Number(ma3.toFixed(2)),
         ma6: Number(ma6.toFixed(2)),
       };
     });
   }, [data, rangeMonths]);
 
-  const hasOfficialSeries = chartData.some((row) => Number(row?.officialCases || 0) > 0);
-  const hasReportSeries = chartData.some((row) => Number(row?.citizenReports || 0) > 0);
-
   const commonTooltip = {
     labelFormatter: (label) => String(formatMonthLabel(label)),
     formatter: (value, name) => {
       const labels = {
-        officialCases: "Official Cases",
-        citizenReports: "Citizen Reports",
-        displayCases: "Cases",
-        ma3: "MA 3",
-        ma6: "MA 6",
+        reportedCases: "Reported Cases",
+        suspectedCases: "Suspected Cases",
+        confirmedCases: "Validated / Confirmed Cases",
+        ma3: "Total MA 3",
+        ma6: "Total MA 6",
       };
       return [Number(value || 0), labels[name] || name];
     },
@@ -176,7 +171,7 @@ export default function SwitchableYearlyChart({
           <div className="group relative inline-flex items-center justify-center h-6 w-6 rounded-full border border-gray-300 bg-white text-gray-500">
             <span className="text-xs font-semibold">i</span>
             <div className="pointer-events-none absolute -bottom-12 right-0 z-10 hidden w-72 rounded-md bg-gray-900 px-3 py-2 text-xs text-white shadow-lg group-hover:block">
-              MA3 and MA6 overlays are visible only in Line view.
+              MA3 and MA6 show moving averages of the combined case total and are visible only in Line view.
             </div>
           </div>
         </div>
@@ -194,17 +189,11 @@ export default function SwitchableYearlyChart({
                 <YAxis allowDecimals={false} />
                 <Tooltip {...commonTooltip} />
                 <Legend />
-                {hasOfficialSeries && (
-                  <Line type="monotone" dataKey="officialCases" stroke="#2563eb" strokeWidth={2} dot={<HollowDot stroke="#2563eb" />} activeDot={{ r: 5 }} name="Official Cases" />
-                )}
-                {hasReportSeries && (
-                  <Line type="monotone" dataKey="citizenReports" stroke="#16a34a" strokeWidth={2} dot={<HollowDot stroke="#16a34a" />} activeDot={{ r: 5 }} name="Citizen Reports" />
-                )}
-                {!hasOfficialSeries && !hasReportSeries && (
-                  <Line type="monotone" dataKey="displayCases" stroke="#2563eb" strokeWidth={2} dot={<HollowDot stroke="#2563eb" />} activeDot={{ r: 5 }} name="Cases" />
-                )}
-                {showMa3 && <Line type="monotone" dataKey="ma3" stroke="#f59e0b" strokeWidth={2} strokeDasharray="6 4" dot={false} name="MA 3" />}
-                {showMa6 && <Line type="monotone" dataKey="ma6" stroke="#db2777" strokeWidth={2} strokeDasharray="2 4" dot={false} name="MA 6" />}
+                <Line type="monotone" dataKey="reportedCases" stroke="#93c5fd" strokeWidth={2} strokeDasharray="3 3" dot={<HollowDot stroke="#93c5fd" />} activeDot={{ r: 5 }} name="Reported Submissions" />
+                <Line type="monotone" dataKey="suspectedCases" stroke="#3b82f6" strokeWidth={2} strokeDasharray="7 3" dot={<HollowDot stroke="#3b82f6" />} activeDot={{ r: 5 }} name="Suspected Cases" />
+                <Line type="monotone" dataKey="confirmedCases" stroke="#1d4ed8" strokeWidth={2.5} dot={<HollowDot stroke="#1d4ed8" />} activeDot={{ r: 5 }} name="Validated / Confirmed Cases" />
+                {showMa3 && <Line type="monotone" dataKey="ma3" stroke="#475569" strokeWidth={2} strokeDasharray="6 4" dot={false} name="Combined MA 3" />}
+                {showMa6 && <Line type="monotone" dataKey="ma6" stroke="#64748b" strokeWidth={2} strokeDasharray="2 4" dot={false} name="Combined MA 6" />}
               </LineChart>
             )}
 
@@ -215,9 +204,9 @@ export default function SwitchableYearlyChart({
                 <YAxis allowDecimals={false} />
                 <Tooltip {...commonTooltip} />
                 <Legend />
-                {hasOfficialSeries && <Bar dataKey="officialCases" fill="#2563eb" name="Official Cases" />}
-                {hasReportSeries && <Bar dataKey="citizenReports" fill="#16a34a" name="Citizen Reports" />}
-                {!hasOfficialSeries && !hasReportSeries && <Bar dataKey="displayCases" fill="#2563eb" name="Cases" />}
+                <Bar dataKey="reportedCases" fill="#93c5fd" name="Reported Submissions" />
+                <Bar dataKey="suspectedCases" fill="#3b82f6" name="Suspected Cases" />
+                <Bar dataKey="confirmedCases" fill="#1d4ed8" name="Validated / Confirmed Cases" />
               </BarChart>
             )}
 
@@ -228,9 +217,9 @@ export default function SwitchableYearlyChart({
                 <YAxis allowDecimals={false} />
                 <Tooltip {...commonTooltip} />
                 <Legend />
-                {hasOfficialSeries && <Area type="monotone" dataKey="officialCases" stroke="#2563eb" fill="#93c5fd" fillOpacity={0.45} name="Official Cases" />}
-                {hasReportSeries && <Area type="monotone" dataKey="citizenReports" stroke="#16a34a" fill="#86efac" fillOpacity={0.35} name="Citizen Reports" />}
-                {!hasOfficialSeries && !hasReportSeries && <Area type="monotone" dataKey="displayCases" stroke="#2563eb" fill="#93c5fd" name="Cases" />}
+                <Area type="monotone" dataKey="reportedCases" stackId="cases" stroke="#60a5fa" fill="#bfdbfe" fillOpacity={0.7} name="Reported Submissions" />
+                <Area type="monotone" dataKey="suspectedCases" stackId="cases" stroke="#2563eb" fill="#60a5fa" fillOpacity={0.6} name="Suspected Cases" />
+                <Area type="monotone" dataKey="confirmedCases" stackId="cases" stroke="#1d4ed8" fill="#2563eb" fillOpacity={0.55} name="Validated / Confirmed Cases" />
               </AreaChart>
             )}
           </ResponsiveContainer>

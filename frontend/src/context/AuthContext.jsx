@@ -11,6 +11,7 @@ function authFromResponse(data) {
     accessToken: data.accessToken,
     role: data.user.role,
     username: data.user.username,
+    canAccessPatientIdentity: data.user.canAccessPatientIdentity === true,
   };
 }
 

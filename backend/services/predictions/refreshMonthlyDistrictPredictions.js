@@ -1,13 +1,14 @@
 import mongoose from "mongoose";
-import OfficialCase from "../../models/OfficialCase.js";
-import Report from "../../models/Report.js";
+import { createHash } from "crypto";
 import PredictionRun from "../../models/PredictionRun.js";
 import { runProphetMonthlyForecast } from "../prophet/runMonthlyForecast.js";
 import Dataset from "../../models/Dataset.js";
 import { normalizeDistrictKey } from "../../constants/manilaDistrictCoords.js";
 import { createNotification } from "../notificationService.js";
-import { computeRiskAnalysis } from "../../utils/riskUtils.js";
 import { runSerializedForecast } from "./forecastExecution.js";
+import { getAnalyticalCaseRows } from "../analyticalCaseService.js";
+
+const MIN_TRAINING_MONTHS = 24;
 
 function ymToInt(year, month) {
   return year * 100 + month;
@@ -25,7 +26,7 @@ function addMonths(year, month, delta) {
   return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
 }
 
-function fillMonthlyGaps(series, endYm = null) {
+function completeMonthlySeries(series, endYm = null) {
   const safe = Array.isArray(series) ? series : [];
   if (!safe.length) return [];
   const sorted = [...safe].sort(
@@ -42,27 +43,26 @@ function fillMonthlyGaps(series, endYm = null) {
   let cur = min;
   while (cur <= max) {
     const { year, month } = intToYm(cur);
-    out.push({ year, month, y: by.has(cur) ? by.get(cur) : 0 });
+    out.push({
+      year,
+      month,
+      y: by.has(cur) ? by.get(cur) : null,
+      observed: by.has(cur),
+    });
     const next = addMonths(year, month, 1);
     cur = ymToInt(next.year, next.month);
   }
   return out;
 }
 
-async function aggregateMonthlyByDistrict(match) {
-  const rows = await OfficialCase.aggregate([
-    { $match: match },
-    {
-      $group: {
-        _id: { district: "$district", year: "$year", month: "$month" },
-        y: { $sum: "$cases" },
-      },
-    },
-    { $sort: { "_id.district": 1, "_id.year": 1, "_id.month": 1 } },
-  ]);
+async function aggregateMonthlyByDistrict(datasetId) {
+  const rows = await getAnalyticalCaseRows({
+    datasetId,
+    statuses: ["confirmed"],
+  });
   const byDistrict = new Map();
   for (const r of rows) {
-    const d = String(r?._id?.district || "").trim();
+    const d = String(r?.district || "").trim();
     if (!d) continue;
     const districtKey = normalizeDistrictKey(d);
     if (!byDistrict.has(districtKey)) {
@@ -71,53 +71,30 @@ async function aggregateMonthlyByDistrict(match) {
         series: [],
       });
     }
-    byDistrict
-      .get(districtKey)
-      .series.push({ year: r._id.year, month: r._id.month, y: r.y });
+    const series = byDistrict.get(districtKey).series;
+    const existing = series.find(
+      (point) => point.year === r.year && point.month === r.month,
+    );
+    if (existing) existing.y += Number(r.cases || 0);
+    else series.push({ year: r.year, month: r.month, y: Number(r.cases || 0) });
   }
   return byDistrict;
 }
 
-async function aggregateMonthlySuspectedReportsByDistrict() {
-  const rows = await Report.aggregate([
-    {
-      $match: {
-        source: "citizen_app",
-        isCounted: true,
-      },
-    },
-    {
-      $project: {
-        district: { $ifNull: ["$exposureDistrict", "$location.district"] },
-        year: { $year: "$reportedAt" },
-        month: { $month: "$reportedAt" },
-        count: { $ifNull: ["$caseCount", 1] },
-      },
-    },
-    {
-      $group: {
-        _id: { district: "$district", year: "$year", month: "$month" },
-        y: { $sum: "$count" },
-      },
-    },
-    { $sort: { "_id.district": 1, "_id.year": 1, "_id.month": 1 } },
-  ]);
-
-  const byDistrict = new Map();
-  for (const r of rows) {
-    const d = String(r?._id?.district || "").trim();
-    if (!d) continue;
-    const districtKey = normalizeDistrictKey(d);
-    if (!byDistrict.has(districtKey)) byDistrict.set(districtKey, []);
-    byDistrict
-      .get(districtKey)
-      .push({ year: r._id.year, month: r._id.month, y: r.y });
-  }
-  return byDistrict;
+function inputFingerprint(byDistrict) {
+  const normalized = [...byDistrict.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([districtKey, value]) => ({
+      districtKey,
+      series: [...value.series]
+        .sort((a, b) => ymToInt(a.year, a.month) - ymToInt(b.year, b.month))
+        .map(({ year, month, y }) => ({ year, month, y: Number(y || 0) })),
+    }));
+  return createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
 }
 
-function buildReportFeatures(reportSeries = []) {
-  const safe = Array.isArray(reportSeries) ? reportSeries : [];
+function buildAutoregressiveFeatures(targetSeries = []) {
+  const safe = Array.isArray(targetSeries) ? targetSeries : [];
   return safe.map((point, idx) => {
     const prev1 = idx - 1 >= 0 ? Number(safe[idx - 1]?.y || 0) : 0;
     const prev2 = idx - 2 >= 0 ? Number(safe[idx - 2]?.y || 0) : 0;
@@ -133,26 +110,8 @@ function buildReportFeatures(reportSeries = []) {
   });
 }
 
-function alignSuspectedToOfficialSeries(
-  officialSeries = [],
-  suspectedSeries = [],
-  maxYm,
-) {
-  const clipped = (
-    Array.isArray(suspectedSeries) ? suspectedSeries : []
-  ).filter((p) => ymToInt(p.year, p.month) <= maxYm);
-  const byYm = new Map(
-    clipped.map((p) => [`${p.year}-${p.month}`, Number(p.y || 0)]),
-  );
-  return (Array.isArray(officialSeries) ? officialSeries : []).map((p) => ({
-    year: p.year,
-    month: p.month,
-    y: byYm.get(`${p.year}-${p.month}`) || 0,
-  }));
-}
-
-function buildFutureReportRegressors(reportSeries = [], horizonMonths = 1) {
-  const safe = Array.isArray(reportSeries) ? reportSeries : [];
+function buildFutureAutoregressiveRegressors(targetSeries = [], horizonMonths = 1) {
+  const safe = Array.isArray(targetSeries) ? targetSeries : [];
   const rows = [];
   let a = Number(safe[safe.length - 1]?.y || 0);
   let b = Number(safe[safe.length - 2]?.y || 0);
@@ -161,36 +120,12 @@ function buildFutureReportRegressors(reportSeries = [], horizonMonths = 1) {
   for (let i = 0; i < horizonMonths; i += 1) {
     const avg3 = (a + b + c) / 3;
     rows.push({ lag1: a, lag2: b, avg3 });
-    // Persistence fallback for unknown future report counts.
+    // Persistence fallback for unknown future confirmed-case lag values.
     c = b;
     b = a;
     a = a;
   }
   return rows;
-}
-
-function attachRiskScores(districtPayloads) {
-  return districtPayloads.map((d) => {
-    const primary = d.forecast?.find((x) => x.isPrimaryTarget);
-    const pred = primary ? Number(primary.predictedCases ?? 0) : null;
-    const risk = pred == null ? null : computeRiskAnalysis(pred);
-    return {
-      ...d,
-      nextForecast: primary
-        ? {
-            year: primary.year,
-            month: primary.month,
-            predictedCases: primary.predictedCases,
-            lowerBound: primary.lowerBound,
-            upperBound: primary.upperBound,
-          }
-        : null,
-      riskScore: risk?.riskScore ?? null,
-      riskLevel: risk?.riskLevel ?? "insufficient",
-      risk: risk?.risk ?? "Insufficient",
-      riskLabel: risk?.riskLabel ?? "Insufficient Data",
-    };
-  });
 }
 
 function toDatasetScope(datasetId) {
@@ -216,23 +151,17 @@ async function refreshMonthlyDistrictPredictionsImpl({
   }
 
   const datasetScope = toDatasetScope(resolvedDatasetId);
-  const match =
-    datasetScope === "all"
-      ? {}
-      : { datasetId: new mongoose.Types.ObjectId(datasetScope) };
-
   const now = new Date();
 
   try {
-    const byDistrict = await aggregateMonthlyByDistrict(match);
-    const suspectedByDistrict =
-      await aggregateMonthlySuspectedReportsByDistrict();
+    const byDistrict = await aggregateMonthlyByDistrict(resolvedDatasetId);
+    const fingerprint = inputFingerprint(byDistrict);
     const rawDistricts = [...byDistrict.values()]
       .map(({ district, series }) => ({ district, series }))
       .sort((a, b) => a.district.localeCompare(b.district));
 
     if (!rawDistricts.length) {
-      throw new Error("No monthly official case data found for forecasting.");
+      throw new Error("No monthly confirmed case data found for forecasting.");
     }
 
     const allRawPoints = rawDistricts.flatMap((d) => d.series);
@@ -249,7 +178,7 @@ async function refreshMonthlyDistrictPredictionsImpl({
       status: "success",
     })
       .select(
-        "_id basisYear basisMonth forecastTargetYear forecastTargetMonth forecastHorizonMonths payload",
+        "_id basisYear basisMonth forecastTargetYear forecastTargetMonth forecastHorizonMonths inputFingerprint payload",
       )
       .lean();
 
@@ -259,6 +188,7 @@ async function refreshMonthlyDistrictPredictionsImpl({
       existingSuccess.basisMonth === basis.month &&
       existingSuccess.forecastTargetYear === target.year &&
       existingSuccess.forecastTargetMonth === target.month &&
+      existingSuccess.inputFingerprint === fingerprint &&
       Number(existingSuccess.forecastHorizonMonths || 1) ===
         Number(horizonMonths || 1);
 
@@ -283,6 +213,7 @@ async function refreshMonthlyDistrictPredictionsImpl({
           forecastTargetYear: null,
           forecastTargetMonth: null,
           forecastHorizonMonths: horizonMonths,
+          inputFingerprint: fingerprint,
         },
       },
       {
@@ -295,44 +226,51 @@ async function refreshMonthlyDistrictPredictionsImpl({
     const districtsSeries = [...byDistrict.values()]
       .map(({ district, series }) => ({
         district,
-        series: fillMonthlyGaps(series, maxYm),
-        suspectedSeries: alignSuspectedToOfficialSeries(
-          fillMonthlyGaps(series, maxYm),
-          suspectedByDistrict.get(normalizeDistrictKey(district)) || [],
-          maxYm,
-        ),
+        series: completeMonthlySeries(series, maxYm),
       }))
       .sort((a, b) => a.district.localeCompare(b.district));
 
     const districtForecasts = [];
-    for (const { district, series, suspectedSeries } of districtsSeries) {
-      const reportFeatures = buildReportFeatures(suspectedSeries);
+    for (const { district, series } of districtsSeries) {
+      const missingMonths = series.filter((point) => !point.observed);
+      const autoregressiveFeatures = buildAutoregressiveFeatures(series);
       const mergedSeries = series.map((p, idx) => ({
         year: p.year,
         month: p.month,
         cases: p.y,
-        lag1: Number(reportFeatures[idx]?.lag1 || 0),
-        lag2: Number(reportFeatures[idx]?.lag2 || 0),
-        avg3: Number(reportFeatures[idx]?.avg3 || 0),
-        suspectedReports: Number(suspectedSeries[idx]?.y || 0),
+        lag1: Number(autoregressiveFeatures[idx]?.lag1 || 0),
+        lag2: Number(autoregressiveFeatures[idx]?.lag2 || 0),
+        avg3: Number(autoregressiveFeatures[idx]?.avg3 || 0),
       }));
 
       const historicalSeries = mergedSeries.map((p) => ({
         year: p.year,
         month: p.month,
         cases: p.cases,
-        suspectedReports: p.suspectedReports,
         lag1: p.lag1,
         lag2: p.lag2,
         avg3: p.avg3,
       }));
 
-      if (series.length < 3) {
+      if (missingMonths.length) {
+        districtForecasts.push({
+          district,
+          districtKey: normalizeDistrictKey(district),
+          status: "data_gap",
+          message: `${missingMonths.length} monthly observation${missingMonths.length === 1 ? " is" : "s are"} missing`,
+          historicalSeries,
+          backtestSeries: [],
+          forecast: [],
+        });
+        continue;
+      }
+
+      if (series.length < MIN_TRAINING_MONTHS) {
         districtForecasts.push({
           district,
           districtKey: normalizeDistrictKey(district),
           status: "insufficient_data",
-          message: "No sufficient data",
+          message: `At least ${MIN_TRAINING_MONTHS} complete monthly observations are required`,
           historicalSeries,
           backtestSeries: [],
           forecast: [],
@@ -349,10 +287,7 @@ async function refreshMonthlyDistrictPredictionsImpl({
           lag2: p.lag2,
           avg3: p.avg3,
         }));
-        const futureRegressors = buildFutureReportRegressors(
-          suspectedSeries,
-          horizonMonths,
-        );
+      const futureRegressors = buildFutureAutoregressiveRegressors(series, horizonMonths);
         const r = await runProphetMonthlyForecast(prophetSeries, {
           horizonMonths,
           futureRegressors,
@@ -375,11 +310,6 @@ async function refreshMonthlyDistrictPredictionsImpl({
           status: hitsTarget ? "success" : "insufficient_data",
           message: hitsTarget ? null : "No sufficient data",
           historicalSeries,
-          suspectedReportSeries: suspectedSeries.map((p) => ({
-            year: p.year,
-            month: p.month,
-            suspectedReports: p.y,
-          })),
           futureRegressors,
           backtestSeries: (r.backtest || []).map((b) => ({
             year: b.year,
@@ -395,8 +325,8 @@ async function refreshMonthlyDistrictPredictionsImpl({
         districtForecasts.push({
           district,
           districtKey: normalizeDistrictKey(district),
-          status: "insufficient_data",
-          message: "No sufficient data",
+          status: "forecast_failed",
+          message: "Forecast generation failed",
           error: e?.message || "forecast_failed",
           historicalSeries,
           backtestSeries: [],
@@ -405,7 +335,12 @@ async function refreshMonthlyDistrictPredictionsImpl({
       }
     }
 
-    const withRisk = attachRiskScores(districtForecasts);
+    const successfulDistricts = districtForecasts.filter(
+      (district) => district.status === "success" && district.forecast?.length,
+    );
+    if (!successfulDistricts.length) {
+      throw new Error("Forecast generation failed for every district.");
+    }
 
     const payload = {
       generatedAt: now.toISOString(),
@@ -417,12 +352,25 @@ async function refreshMonthlyDistrictPredictionsImpl({
       forecastTargetYear: target.year,
       forecastTargetMonth: target.month,
       forecastHorizonMonths: horizonMonths,
-      exogenous: {
-        source: "suspected_reports",
-        features: ["lag1", "lag2", "avg3"],
-        note: "Official cases remain target; suspected report features are regressors.",
+      inputFingerprint: fingerprint,
+      coverage: {
+        totalDistricts: districtForecasts.length,
+        successfulDistricts: successfulDistricts.length,
+        completeCityForecast: successfulDistricts.length === districtForecasts.length,
       },
-      districts: withRisk,
+      inputDefinition: {
+        target: "Confirmed official cases plus confirmed surveillance reports",
+        includedCaseStatuses: ["confirmed"],
+        excludedCaseStatuses: ["reported", "suspected", "not_validated"],
+        sources: ["official_upload", "confirmed_surveillance_report"],
+        unionStrategy: "query_time_no_copy",
+      },
+      autoregressiveFeatures: {
+        source: "confirmed_target_series",
+        features: ["lag1", "lag2", "avg3"],
+        note: "Lag features are derived only from the confirmed target series.",
+      },
+      districts: districtForecasts,
     };
 
     const finishedAt = new Date();
@@ -439,6 +387,7 @@ async function refreshMonthlyDistrictPredictionsImpl({
           forecastTargetYear: target.year,
           forecastTargetMonth: target.month,
           forecastHorizonMonths: horizonMonths,
+          inputFingerprint: fingerprint,
         },
       },
       { returnDocument: "after" },

@@ -158,7 +158,6 @@ class ApiService {
         'exposureDistrict': exposureDistrict,
         'exposureBarangay': exposureBarangay,
         'exposureBarangayNo': exposureBarangayNo,
-        'caseClassification': 'suspected',
         'location': location,
       },
     );
@@ -334,7 +333,7 @@ class ApiService {
     String selectedYear = 'All',
     String selectedMonth = 'All',
     String selectedDisease = 'All',
-    String selectedCaseClassification = 'All',
+    String selectedCaseClassification = 'confirmed',
   }) async {
     final query = <String, String>{'datasetId': datasetId};
     if (selectedYear != 'All') query['year'] = selectedYear;

@@ -297,11 +297,24 @@ export const uploadDataset = async (req, res) => {
 
   try {
     const { name, coverageStart, coverageEnd, dataSource } = req.body;
+    const providerType = String(req.body.providerType || "").trim().toLowerCase();
+    const providerName = String(req.body.providerName || dataSource || "").trim();
+    const reportingFrequency = String(req.body.reportingFrequency || "weekly").trim().toLowerCase();
+    const allowedProviderTypes = new Set(["hospital", "health_center", "cesu", "doh"]);
 
     if (!req.file)
       return res.status(400).json({ message: "No file uploaded." });
     if (!name) {
       return res.status(400).json({ message: "Name is required." });
+    }
+    if (!allowedProviderTypes.has(providerType)) {
+      return res.status(400).json({ message: "Select a valid dataset source." });
+    }
+    if (!providerName) {
+      return res.status(400).json({ message: "Provider or facility name is required." });
+    }
+    if (!["weekly", "monthly"].includes(reportingFrequency)) {
+      return res.status(400).json({ message: "Reporting frequency must be weekly or monthly." });
     }
 
     const filePath = req.file.path;
@@ -319,12 +332,19 @@ export const uploadDataset = async (req, res) => {
         storedFileName: req.file.filename,
         mimeType: req.file.mimetype,
         userId: req.user?._id || req.user?.id,
+        providerType,
+        providerName,
+        reportingFrequency,
       });
 
       if (!result.success) {
         dataset = await Dataset.create({
           name,
-          dataSource: ext === ".csv" ? "official_csv" : "official_xlsx",
+          dataSource: providerName,
+          providerType,
+          providerName,
+          reportingFrequency,
+          ingestionMethod: ext === ".csv" ? "csv" : "excel",
           coverageStart: new Date(),
           coverageEnd: new Date(),
           originalFileName: req.file.originalname,
@@ -372,7 +392,14 @@ export const uploadDataset = async (req, res) => {
         actionType: "dataset_validated",
         title: "Official cases imported",
         subtitle: `${name} imported (${result.formatType}).`,
-        metadata: { datasetId: result.datasetId, name, formatType: result.formatType },
+        metadata: {
+          datasetId: result.datasetId,
+          name,
+          formatType: result.formatType,
+          providerType,
+          providerName,
+          reportingFrequency,
+        },
       });
 
       await createNotification({
@@ -655,7 +682,7 @@ export const listDatasets = async (req, res) => {
         .skip(skip)
         .limit(limit)
         .select(
-          "name originalFileName storedFileName recordsCount status coverageStart coverageEnd createdAt errorMessage uploadedBy",
+          "name dataSource providerType providerName reportingFrequency ingestionMethod originalFileName storedFileName recordsCount status coverageStart coverageEnd createdAt errorMessage uploadedBy",
         )
         .populate("uploadedBy", "username email role")
         .lean(),
@@ -701,12 +728,15 @@ export const downloadOfficialCaseTemplate = async (req, res) => {
       ["- disease: disease name (e.g. Cholera)"],
       ["- year: 4-digit year"],
       ["- month: 1–12"],
+      ["- epidemiological_year: ISO epidemiological year"],
+      ["- epidemiological_week: 1–53 (required for weekly datasets)"],
+      ["- week_start_date: Monday of the reporting week (YYYY-MM-DD)"],
       ["- case_classification: confirmed | suspected | probable"],
       ["- cases: numeric (integer)"],
       ["- source: optional, defaults to official"],
       [""],
       ["Notes:"],
-      ["- Keep one row per month per district per disease per classification."],
+      ["- Keep one row per week per district, barangay, disease, and classification for weekly data."],
       ["- Upload this XLSX as-is when ready."],
     ];
 
@@ -716,6 +746,9 @@ export const downloadOfficialCaseTemplate = async (req, res) => {
       "disease",
       "year",
       "month",
+      "epidemiological_year",
+      "epidemiological_week",
+      "week_start_date",
       "case_classification",
       "cases",
       "source",
@@ -728,6 +761,9 @@ export const downloadOfficialCaseTemplate = async (req, res) => {
         disease: "Cholera",
         year: 2026,
         month: 1,
+        epidemiological_year: 2026,
+        epidemiological_week: 2,
+        week_start_date: "2026-01-05",
         case_classification: "confirmed",
         cases: 3,
         source: "official",

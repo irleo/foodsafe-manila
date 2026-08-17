@@ -4,6 +4,26 @@ const DatasetSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     dataSource: { type: String, default: "" },
+    providerType: {
+      type: String,
+      enum: ["hospital", "health_center", "cesu", "doh", "citizen_patient_report"],
+      required: true,
+      default: "cesu",
+      index: true,
+    },
+    providerName: { type: String, required: true, trim: true, maxlength: 200, default: "CESU" },
+    reportingFrequency: {
+      type: String,
+      enum: ["weekly", "monthly"],
+      required: true,
+      default: "weekly",
+    },
+    ingestionMethod: {
+      type: String,
+      enum: ["csv", "excel", "citizen_app", "system_integration", "file"],
+      required: true,
+      default: "file",
+    },
     coverageStart: { type: Date, required: true },
     coverageEnd: { type: Date, required: true },
 

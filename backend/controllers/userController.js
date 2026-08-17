@@ -1,6 +1,9 @@
 import User from "../models/WebUser.js";
 import { logActivity } from "../utils/logActivity.js";
 
+const ASSIGNABLE_ROLES = new Set(["cesu", "surveillance_team"]);
+const GOVERNMENT_EMAIL_PATTERN = /^[^\s@]+@(?:[a-z0-9-]+\.)*gov\.ph$/i;
+
 /**
  * GET /api/users?page=1&limit=6&status=pending&search=juan
  * status: pending | approved | rejected | all (default: all)
@@ -74,7 +77,7 @@ export const getUserStats = async (req, res) => {
  */
 export const updateUserStatus = async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, role, canAccessPatientIdentity = false } = req.body;
 
     if (!["approved", "rejected"].includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
@@ -88,6 +91,25 @@ export const updateUserStatus = async (req, res) => {
       return res.status(403).json({ message: "Cannot change status of admin users" });
     }
 
+    if (status === "approved") {
+      if (!ASSIGNABLE_ROLES.has(role)) {
+        return res.status(400).json({ message: "Assign either the CESU or Surveillance Team role before approval." });
+      }
+      if (!GOVERNMENT_EMAIL_PATTERN.test(user.email)) {
+        return res.status(400).json({ message: "Only verified government email addresses ending in .gov.ph can be approved." });
+      }
+      user.role = role;
+      user.canAccessPatientIdentity =
+        role === "surveillance_team" && canAccessPatientIdentity === true;
+      user.approvedAt = new Date();
+      user.approvedBy = req.user?.id;
+    } else {
+      user.role = "unassigned";
+      user.canAccessPatientIdentity = false;
+      user.approvedAt = undefined;
+      user.approvedBy = undefined;
+    }
+
     user.status = status;
     await user.save();
 
@@ -96,7 +118,7 @@ export const updateUserStatus = async (req, res) => {
       actionType: status === "approved" ? "user_approved" : "user_rejected",
       title: status === "approved" ? "User approved" : "User rejected",
       subtitle: `${user.username} (${user.email}) was ${status}.`,
-      metadata: { userId: user._id, status },
+      metadata: { userId: user._id, status, role: user.role },
     });
 
     res.status(200).json({
@@ -106,11 +128,52 @@ export const updateUserStatus = async (req, res) => {
         username: user.username,
         email: user.email,
         status: user.status,
+        role: user.role,
+        canAccessPatientIdentity: user.canAccessPatientIdentity,
       },
     });
   } catch (error) {
     console.error("Error updating user status:", error);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const updateUserAccess = async (req, res) => {
+  try {
+    const { role, canAccessPatientIdentity = false } = req.body;
+    if (!ASSIGNABLE_ROLES.has(role)) {
+      return res.status(400).json({ message: "Role must be CESU or Surveillance Team." });
+    }
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    if (user.role === "admin") return res.status(403).json({ message: "Admin access cannot be changed here." });
+    if (user.status !== "approved") return res.status(409).json({ message: "Only approved users can have access updated." });
+    if (!GOVERNMENT_EMAIL_PATTERN.test(user.email)) {
+      return res.status(400).json({ message: "Only verified government email addresses ending in .gov.ph can receive system access." });
+    }
+
+    user.role = role;
+    user.canAccessPatientIdentity =
+      role === "surveillance_team" && canAccessPatientIdentity === true;
+    await user.save();
+    await logActivity({
+      actor: req.user?.id,
+      actionType: "user_access_updated",
+      title: "User access updated",
+      subtitle: `${user.username} was assigned to ${role}.`,
+      metadata: { userId: user._id, role, canAccessPatientIdentity: user.canAccessPatientIdentity },
+    });
+    return res.json({
+      message: "User access updated.",
+      user: {
+        id: user._id,
+        role: user.role,
+        canAccessPatientIdentity: user.canAccessPatientIdentity,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating user access:", error);
+    return res.status(500).json({ message: "Server error" });
   }
 };
 

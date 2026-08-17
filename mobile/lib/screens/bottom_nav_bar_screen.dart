@@ -10,7 +10,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../screens/home_screen.dart';
 import '../screens/map_screen.dart';
 import '../services/api_client.dart';
-import '../services/risk_alert_service.dart';
 import '../services/session.dart';
 import '../widgets/snackbar_widgets.dart';
 import 'account_information_screen.dart';
@@ -47,13 +46,11 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    RiskAlertService.instance.startMonitoring();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    RiskAlertService.instance.stopMonitoring();
     _pageController.dispose();
     super.dispose();
   }

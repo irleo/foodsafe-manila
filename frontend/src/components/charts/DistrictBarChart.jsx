@@ -11,7 +11,7 @@ import { CHART_COLORS } from "../../constants/chartColors.js";
 
 export default function DistrictBarChart({ 
   data = [], 
-  title="Top Cases (by district)",
+  title="Case Distribution by District",
   headerRight = null }) {
   const safeData = Array.isArray(data) ? data : [];
 

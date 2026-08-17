@@ -6,6 +6,7 @@ import {
   updateUserStatus,
   deleteUser,
   getProfile,
+  updateUserAccess,
 } from "../controllers/userController.js";
 import { updateMobileProfile } from "../controllers/mobileUserController.js";
 
@@ -26,6 +27,7 @@ router.get("/stats", verifyToken, verifyRole("admin"), getUserStats);
 // Approve / Reject user
 // Body: { status: "approved" | "rejected" }
 router.patch("/:id/status", verifyToken, verifyRole("admin"), updateUserStatus);
+router.patch("/:id/access", verifyToken, verifyRole("admin"), updateUserAccess);
 
 // Delete user (non-admin only)
 router.delete("/:id", verifyToken, verifyRole("admin"), deleteUser);

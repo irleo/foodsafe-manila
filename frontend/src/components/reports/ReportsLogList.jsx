@@ -1,12 +1,16 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Spinner from "../Spinner.jsx";
+import ReportWorkflowPanel from "./ReportWorkflowPanel.jsx";
+import { formatStatusLabel } from "../../utils/formatStatusLabel";
 import {
   RefreshCw,
   MapPin,
   TriangleAlert,
   ChevronDown,
   ChevronUp,
+  CircleX,
   Clock3,
+  Flag,
 } from "lucide-react";
 
 function formatDistrictKey(value) {
@@ -42,15 +46,25 @@ function formatReportedAt(value) {
 }
 
 function classificationBadge(caseClassification) {
-  const v = String(caseClassification || "suspected").toLowerCase();
-  const label = v.charAt(0).toUpperCase() + v.slice(1);
-  if (v === "confirmed")
+  const rawValue = String(caseClassification || "reported");
+  const v = rawValue
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[\s-]+/g, "_")
+    .toLowerCase();
+  const label = formatStatusLabel(rawValue);
+  if (v === "validated_confirmed" || v === "confirmed")
     return (
       <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
         {label}
       </span>
     );
-  if (v === "probable")
+  if (["ruled_out", "not_suspected"].includes(v))
+    return (
+      <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+        {label}
+      </span>
+    );
+  if (v === "reported" || v === "not_validated" || v === "probable")
     return (
       <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
         {label}
@@ -69,7 +83,8 @@ export default function ReportsLogList({
   loading,
   onRefresh,
   onPageChange,
-  viewerRole,
+  token,
+  canAccessPatientIdentity,
 }) {
   const [expandedId, setExpandedId] = useState(null);
 
@@ -92,44 +107,15 @@ export default function ReportsLogList({
 
   const renderExpandedDetails = (report) => (
     <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+      <h4 className="mb-4 font-semibold text-gray-900">Additional report information</h4>
       <div className="grid gap-4 md:grid-cols-2">
         <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Reporter district
-          </p>
-          <p className="text-sm text-gray-800">
-            {formatDistrictKey(report.location?.district)}
-          </p>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Report ID</p>
+          <p className="break-all font-mono text-sm text-gray-800">{report._id}</p>
         </div>
-
         <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Exposure district
-          </p>
-          <p className="text-sm text-gray-800">
-            {formatDistrictKey(report.exposureDistrict)}
-          </p>
-        </div>
-
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Food source
-          </p>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Food/exposure information</p>
           <p className="text-sm text-gray-800">{report.foodSource || "—"}</p>
-        </div>
-
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Case count
-          </p>
-          <p className="text-sm text-gray-800">{report.caseCount ?? 1}</p>
-        </div>
-
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Case classification
-          </p>
-          <div>{classificationBadge(report.caseClassification)}</div>
         </div>
 
         <div>
@@ -144,10 +130,11 @@ export default function ReportsLogList({
             Submitted by
           </p>
           <p className="text-sm text-gray-800">
-            {formatSubmittedBy(report.reportedBy, viewerRole)}
+            {formatSubmittedBy(report.reportedBy, canAccessPatientIdentity)}
           </p>
         </div>
       </div>
+      <ReportWorkflowPanel report={report} token={token} onUpdated={onRefresh} />
     </div>
   );
 
@@ -199,7 +186,7 @@ export default function ReportsLogList({
               <thead className="bg-gray-50">
                 <tr className="border-y border-gray-200 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                   <th className="px-6 py-3">Reported at</th>
-                  <th className="px-6 py-3">Classification</th>
+                  <th className="px-6 py-3">Current status</th>
                   <th className="px-6 py-3">Location</th>
                   <th className="px-6 py-3">Symptoms</th>
                   <th className="px-6 py-3">Case count</th>
@@ -214,9 +201,8 @@ export default function ReportsLogList({
                   const isExpanded = expandedId === report._id;
 
                   return (
-                    <>
+                    <Fragment key={report._id}>
                       <tr
-                        key={report._id}
                         className="align-top transition hover:bg-gray-50/70"
                       >
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -231,28 +217,36 @@ export default function ReportsLogList({
                           </div>
                         </td>
 
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {classificationBadge(report.caseClassification)}
+                        <td className="px-6 py-4">
+                          {classificationBadge(report.currentStatus || report.caseClassification)}
+                          {decisionIndicator(report)}
                         </td>
 
                         <td className="px-6 py-4">
                           <div className="space-y-2">
                             <div>
                               <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
-                                Reporter district
+                                Reporter location
                               </div>
-                              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-                                <MapPin className="h-3 w-3" />
-                                {formatDistrictKey(report.location?.district)}
+                              <span className="inline-flex max-w-72 items-center gap-1 whitespace-normal rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                                <MapPin className="h-3 w-3 shrink-0" />
+                                {formatActualLocation({
+                                  barangay: report.location?.barangay,
+                                  district: report.location?.district,
+                                })}
                               </span>
                             </div>
 
                             <div>
                               <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
-                                Exposure district
+                                Exposure location
                               </div>
-                              <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-                                {formatDistrictKey(report.exposureDistrict)}
+                              <span className="inline-flex max-w-72 items-center gap-1 whitespace-normal rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                                <MapPin className="h-3 w-3 shrink-0" />
+                                {formatActualLocation({
+                                  barangay: report.exposureBarangay,
+                                  district: report.exposureDistrict,
+                                })}
                               </span>
                             </div>
                           </div>
@@ -313,7 +307,7 @@ export default function ReportsLogList({
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -340,7 +334,8 @@ export default function ReportsLogList({
                       </div>
                       <p className="mt-1 text-sm text-gray-500">{reportedAt.time}</p>
                       <div className="mt-2">
-                        {classificationBadge(report.caseClassification)}
+                        {classificationBadge(report.currentStatus || report.caseClassification)}
+                        {decisionIndicator(report)}
                       </div>
                     </div>
 
@@ -352,20 +347,28 @@ export default function ReportsLogList({
                   <div className="mt-4 space-y-3">
                     <div>
                       <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Reporter district
+                        Reporter location
                       </p>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-                        <MapPin className="h-3 w-3" />
-                        {formatDistrictKey(report.location?.district)}
+                      <span className="inline-flex max-w-full items-center gap-1 whitespace-normal rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        {formatActualLocation({
+                          name: report.location?.name,
+                          barangay: report.location?.barangay,
+                          district: report.location?.district,
+                        })}
                       </span>
                     </div>
 
                     <div>
                       <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Exposure district
+                        Exposure location
                       </p>
-                      <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-                        {formatDistrictKey(report.exposureDistrict)}
+                      <span className="inline-flex max-w-full items-center gap-1 whitespace-normal rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        {formatActualLocation({
+                          barangay: report.exposureBarangay,
+                          district: report.exposureDistrict,
+                        })}
                       </span>
                     </div>
 
@@ -446,6 +449,49 @@ export default function ReportsLogList({
   );
 }
 
+function decisionIndicator(report) {
+  if (!report.suspectedDecision?.markedAt) return null;
+
+  const isRuledOut = ["ruled_out", "not_suspected"].includes(
+    report.suspectedDecision.outcome,
+  );
+  const DecisionIcon = isRuledOut ? CircleX : Flag;
+
+  return (
+    <div
+      className={`mt-2 flex max-w-64 items-start gap-1.5 rounded-md border px-2 py-1.5 text-[11px] leading-tight ${
+        isRuledOut
+          ? "border-red-200 bg-red-50 text-red-800"
+          : "border-amber-200 bg-amber-50 text-amber-800"
+      }`}
+    >
+      <DecisionIcon
+        aria-hidden="true"
+        className={`mt-px h-3 w-3 shrink-0 ${isRuledOut ? "text-red-600" : "fill-amber-200 text-amber-600"}`}
+      />
+      <span>
+        {isRuledOut ? "Ruled Out" : "Marked as Suspected"} by{" "}
+        <strong>{report.suspectedDecision.markedBy?.username || "authorized personnel"}</strong>
+      </span>
+    </div>
+  );
+}
+
+function formatActualLocation({ name, barangay, district } = {}) {
+  const barangayText = String(barangay || "").trim();
+  const parts = [
+    String(name || "").trim(),
+    barangayText && !/^barangay\b/i.test(barangayText)
+      ? `Barangay ${barangayText}`
+      : barangayText,
+    formatDistrictKey(district),
+  ].filter((value) => value && value !== "—");
+  const uniqueParts = parts.filter(
+    (value, index) => parts.findIndex((candidate) => candidate.toLowerCase() === value.toLowerCase()) === index,
+  );
+  return uniqueParts.join(", ") || "—";
+}
+
 function formatSourceLabel(value) {
   const v = String(value || "").trim().toLowerCase();
   if (!v) return "Citizen App";
@@ -457,10 +503,12 @@ function formatSourceLabel(value) {
     .join(" ");
 }
 
-function formatSubmittedBy(reportedBy, viewerRole) {
-  if (viewerRole !== "admin") return "Citizen User";
+function formatSubmittedBy(reportedBy, canAccessPatientIdentity) {
+  if (!canAccessPatientIdentity) return "Restricted";
   if (!reportedBy) return "Citizen User";
   if (typeof reportedBy === "string") return "Citizen User";
-  return reportedBy.username || reportedBy.email || reportedBy._id || "Citizen User";
+  return [reportedBy.username, reportedBy.email, reportedBy.phone_number]
+    .filter(Boolean)
+    .join(" · ") || reportedBy._id || "Citizen User";
 }
 

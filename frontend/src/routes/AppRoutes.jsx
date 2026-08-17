@@ -16,13 +16,14 @@ import Heatmap from "../pages/HeatmapPage";
 import Predictions from "../pages/PredictionsPage";
 import Data from "../pages/DataPage";
 import UserManagement from "../pages/UserManagementPage";
+import ReportLogs from "../pages/ReportLogsPage";
+import Settings from "../pages/SettingsPage";
 
 const protectedRoutes = [
   { path: "dashboard", element: <Dashboard />, key: "dashboard" },
   { path: "analytics", element: <Analytics />, key: "analytics" },
   { path: "heatmap", element: <Heatmap />, key: "heatmap" },
   { path: "predictions", element: <Predictions />, key: "predictions" },
-  { path: "datasets", element: <Data />, key: "datasets" },
 ];
 
 const adminRoutes = [
@@ -51,6 +52,20 @@ function AppRoutes() {
           {protectedRoutes.map(({ key, ...route }) => (
             <Route key={key} {...route} />
           ))}
+
+          <Route element={<PrivateRoute allowedRoles={["admin", "cesu"]} />}>
+            <Route path="datasets" element={<Data />} />
+          </Route>
+
+          <Route element={<PrivateRoute allowedRoles={["admin", "cesu", "surveillance_team"]} />}>
+            <Route path="reports" element={<ReportLogs />} />
+          </Route>
+
+          <Route element={<PrivateRoute allowedRoles={["admin", "cesu"]} />}>
+            <Route path="settings" element={<Settings />} />
+          </Route>
+
+          <Route path="thresholds" element={<Navigate to="/dashboard" replace />} />
 
           <Route element={<PrivateRoute allowedRoles={["admin"]} />}>
             {adminRoutes.map(({ key, ...route }) => (

@@ -1,11 +1,9 @@
 import OfficialCase from "../models/OfficialCase.js";
 import Report from "../models/Report.js";
-import {
-  computeRiskAnalysis,
-  monthsAgoDate,
-} from "../utils/riskUtils.js";
 import { createAsyncTtlCache } from "../utils/asyncTtlCache.js";
 import { getDashboardSummary } from "../services/dashboardSummaryService.js";
+import { getAnalyticalCaseRows } from "../services/analyticalCaseService.js";
+import { calculateLatestSurveillanceThreshold } from "../services/surveillanceThresholdService.js";
 
 const riskSnapshotCache = createAsyncTtlCache({
   name: "mobile-risk-snapshot",
@@ -15,10 +13,20 @@ const nearbyRiskCache = createAsyncTtlCache({
   name: "mobile-nearby-risk",
   defaultTtlMs: 60_000,
 });
+const surveillanceThresholdCache = createAsyncTtlCache({
+  name: "mobile-surveillance-threshold",
+  defaultTtlMs: 60_000,
+});
 
 function positiveInteger(value, fallback) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function monthsAgoDate(months) {
+  const date = new Date();
+  date.setUTCMonth(date.getUTCMonth() - Number(months));
+  return date;
 }
 
 function riskCacheTtlMs() {
@@ -28,8 +36,8 @@ function riskCacheTtlMs() {
 async function aggregateOfficialByBarangay(since, barangayNo = null) {
   const match =
     barangayNo == null
-      ? { barangayNo: { $ne: null } }
-      : { barangayNo: Number(barangayNo) };
+      ? { barangayNo: { $ne: null }, caseClassification: "confirmed" }
+      : { barangayNo: Number(barangayNo), caseClassification: "confirmed" };
   if (since) {
     const startYear = since.getFullYear();
     const startMonth = since.getMonth() + 1;
@@ -59,6 +67,7 @@ async function aggregateReportsByBarangay(since, barangayNo = null) {
     barangayNo == null
       ? {
           isCounted: true,
+          caseClassification: "confirmed",
           $or: [
             { "location.barangayNo": { $ne: null } },
             { exposureBarangayNo: { $ne: null } },
@@ -66,6 +75,7 @@ async function aggregateReportsByBarangay(since, barangayNo = null) {
         }
       : {
           isCounted: true,
+          caseClassification: "confirmed",
           $or: [
             { exposureBarangayNo: Number(barangayNo) },
             {
@@ -85,7 +95,7 @@ async function aggregateReportsByBarangay(since, barangayNo = null) {
           barangay: { $ifNull: ["$exposureBarangay", "$location.barangay"] },
           district: { $ifNull: ["$exposureDistrict", "$location.district"] },
         },
-        suspectedCases: { $sum: "$caseCount" },
+        confirmedReportCases: { $sum: "$caseCount" },
       },
     },
   ]);
@@ -102,7 +112,7 @@ function mergeAreaRows(officialRows, reportRows) {
       barangay: id.barangay,
       district: id.district,
       officialCases: row.officialCases,
-      suspectedCases: 0,
+      confirmedReportCases: 0,
     });
   }
 
@@ -114,27 +124,22 @@ function mergeAreaRows(officialRows, reportRows) {
       barangay: id.barangay,
       district: id.district,
       officialCases: 0,
-      suspectedCases: 0,
+      confirmedReportCases: 0,
     };
-    existing.suspectedCases += row.suspectedCases;
+    existing.confirmedReportCases += row.confirmedReportCases;
     if (!existing.barangay && id.barangay) existing.barangay = id.barangay;
     if (!existing.district && id.district) existing.district = id.district;
     map.set(key, existing);
   }
 
   return [...map.values()].map((area) => {
-    const totalCases = area.officialCases + area.suspectedCases;
-    const risk = computeRiskAnalysis(totalCases);
+    const confirmedCases = area.officialCases + area.confirmedReportCases;
     return {
       ...area,
-      totalCases,
-      riskScore: risk.riskScore,
-      riskLevel: risk.riskLevel,
-      risk: risk.risk,
-      riskLabel: risk.riskLabel,
+      confirmedCases,
       classification: {
         official: area.officialCases,
-        suspected: area.suspectedCases,
+        confirmedSurveillanceReports: area.confirmedReportCases,
       },
     };
   });
@@ -148,16 +153,10 @@ async function buildRiskSnapshot(months) {
   ]);
   const areas = mergeAreaRows(officialRows, reportRows);
   const summary = {
-    critical: areas.filter((a) => a.riskLevel === "critical").length,
-    high: areas.filter((a) => a.riskLevel === "high").length,
-    medium: areas.filter((a) => a.riskLevel === "medium").length,
-    moderate: areas.filter((a) => a.riskLevel === "medium").length,
-    low: areas.filter((a) => a.riskLevel === "low").length,
+    confirmedCases: areas.reduce((sum, area) => sum + area.confirmedCases, 0),
+    barangaysWithConfirmedCases: areas.filter((area) => area.confirmedCases > 0).length,
   };
-  const alerts = areas
-    .filter((a) => a.riskLevel === "high" || a.riskLevel === "critical")
-    .sort((a, b) => b.riskScore - a.riskScore)
-    .slice(0, 10);
+  const alerts = [];
 
   return { areas, summary, alerts };
 }
@@ -185,6 +184,14 @@ function getNearbyAreaRisk(barangayNo, months) {
   );
 }
 
+function getLatestSurveillanceThreshold() {
+  return surveillanceThresholdCache.getOrLoad(
+    "latest",
+    () => calculateLatestSurveillanceThreshold(),
+    { ttlMs: riskCacheTtlMs() },
+  );
+}
+
 // GET /api/dashboard
 export const getMobileDashboard = async (req, res) => {
   try {
@@ -196,18 +203,16 @@ export const getMobileDashboard = async (req, res) => {
             summary.previousYearTotal) *
           100
         : 0;
-    const counts = summary.riskLevelCounts || {};
     const payload = {
       totalCases: summary.totalCases,
-      suspectedReports: summary.suspectedReports,
+      reportedCases: summary.reportedCases,
+      suspectedCases: summary.suspectedCases,
+      confirmedCases: summary.confirmedCases,
+      notValidatedCases: summary.notValidatedCases,
       topDistrict: summary.topDistrict || "N/A",
       topDisease: summary.topDisease || "N/A",
       growth: growth.toFixed(1),
-      criticalRiskDistricts: counts.critical || 0,
-      highRiskDistricts: counts.high || 0,
-      mediumRiskDistricts: counts.medium || 0,
-      moderateRiskDistricts: counts.medium || 0,
-      lowRiskDistricts: counts.low || 0,
+      caseDefinition: summary.totalDefinition,
       year,
       summaryGeneratedAt: summary.generatedAt,
     };
@@ -244,16 +249,36 @@ export const getMobileNearbyRisk = async (req, res) => {
     }
 
     const months = Math.min(24, Math.max(1, parseInt(req.query.months, 10) || 6));
-    const [area, snapshot] = await Promise.all([
+    const [area, snapshot, surveillanceThreshold] = await Promise.all([
       barangayNo ? getNearbyAreaRisk(barangayNo, months) : Promise.resolve(null),
       getRiskSnapshot(months),
+      getLatestSurveillanceThreshold().catch((error) => {
+        console.error("Mobile surveillance threshold error:", error);
+        return null;
+      }),
     ]);
+
+    const hasThresholdSignal = [
+      "alert_threshold_reached",
+      "epidemic_threshold_exceeded",
+    ].includes(surveillanceThreshold?.outcome);
+    const thresholdMessage = surveillanceThreshold?.outcome === "epidemic_threshold_exceeded"
+      ? "The epidemic threshold has been exceeded for the latest evaluated month. Follow official CESU advisories."
+      : surveillanceThreshold?.outcome === "alert_threshold_reached"
+        ? "The alert threshold has been reached for the latest evaluated month. This is an early surveillance signal, not a public risk classification."
+        : surveillanceThreshold?.outcome === "within_expected_level"
+          ? "Confirmed cases are within the expected surveillance level for the latest evaluated month."
+          : "There is not yet enough eligible historical data to calculate a surveillance threshold.";
 
     return res.json({
       success: true,
       area,
-      isHighRisk: area?.riskLevel === "high" || area?.riskLevel === "critical",
+      isHighRisk: false,
+      hasActiveAdvisory: false,
+      hasThresholdSignal,
+      surveillanceThreshold,
       highRiskAreas: snapshot.alerts,
+      message: thresholdMessage,
     });
   } catch (error) {
     console.error("Mobile nearby risk error:", error);
@@ -264,82 +289,32 @@ export const getMobileNearbyRisk = async (req, res) => {
 // GET /api/official-cases/analytics
 export const getMobileOfficialAnalytics = async (req, res) => {
   try {
-    const { year, month, caseClassification } = req.query;
-    const match = {};
-
-    if (year && year !== "all") match.year = parseInt(year, 10);
-    if (month && month !== "all") match.month = parseInt(month, 10);
-    if (caseClassification && caseClassification !== "all") {
-      match.caseClassification = caseClassification;
-    }
-
-    const totalCasesAgg = await OfficialCase.aggregate([
-      { $group: { _id: null, totalCases: { $sum: "$cases" } } },
-    ]);
-    const totalCases = totalCasesAgg.length > 0 ? totalCasesAgg[0].totalCases : 0;
-
-    const topDistrictAgg = await OfficialCase.aggregate([
-      { $group: { _id: "$district", total: { $sum: "$cases" } } },
-      { $sort: { total: -1 } },
-      { $limit: 1 },
-    ]);
-    const topDistrict = topDistrictAgg.length > 0 ? topDistrictAgg[0]._id : "N/A";
-
-    const baseYear =
-      year && year !== "all" ? parseInt(year, 10) : new Date().getFullYear();
-
-    const currentYearAgg = await OfficialCase.aggregate([
-      { $match: { year: baseYear } },
-      { $group: { _id: null, total: { $sum: "$cases" } } },
-    ]);
-    const previousYearAgg = await OfficialCase.aggregate([
-      { $match: { year: baseYear - 1 } },
-      { $group: { _id: null, total: { $sum: "$cases" } } },
-    ]);
-
-    const currentYearTotal = currentYearAgg[0]?.total || 0;
-    const previousYearTotal = previousYearAgg[0]?.total || 0;
-    let growth = 0;
-    if (previousYearTotal > 0) {
-      growth = ((currentYearTotal - previousYearTotal) / previousYearTotal) * 100;
-    }
-
-    const topDiseaseAgg = await OfficialCase.aggregate([
-      { $group: { _id: "$disease", total: { $sum: "$cases" } } },
-      { $sort: { total: -1 } },
-      { $limit: 1 },
-    ]);
-    const topDisease = topDiseaseAgg.length > 0 ? topDiseaseAgg[0]._id : "N/A";
-
-    const districtData = await OfficialCase.aggregate([
-      { $match: match },
-      { $group: { _id: "$district", total: { $sum: "$cases" } } },
-      { $sort: { _id: 1 } },
-    ]);
-
-    const diseaseDistribution = await OfficialCase.aggregate([
-      { $match: match },
-      { $group: { _id: "$disease", total: { $sum: "$cases" } } },
-      { $sort: { total: -1 } },
-      { $limit: 7 },
-    ]);
-
-    let trendGroup;
-    let trendSort;
-
-    if (!year || year === "all") {
-      trendGroup = { _id: "$year", total: { $sum: "$cases" } };
-      trendSort = { _id: 1 };
-    } else {
-      trendGroup = { _id: "$month", total: { $sum: "$cases" } };
-      trendSort = { _id: 1 };
-    }
-
-    const trendData = await OfficialCase.aggregate([
-      { $match: match },
-      { $group: trendGroup },
-      { $sort: trendSort },
-    ]);
+    const selectedYear = req.query.year && req.query.year !== "all" ? Number(req.query.year) : undefined;
+    const selectedMonth = req.query.month && req.query.month !== "all" ? Number(req.query.month) : undefined;
+    const rows = await getAnalyticalCaseRows({ statuses: ["confirmed"] });
+    const filtered = rows.filter((row) =>
+      (selectedYear === undefined || row.year === selectedYear) &&
+      (selectedMonth === undefined || row.month === selectedMonth),
+    );
+    const totalCases = filtered.reduce((sum, row) => sum + Number(row.cases || 0), 0);
+    const group = (items, keySelector) => {
+      const totals = new Map();
+      for (const item of items) {
+        const key = keySelector(item);
+        if (key === undefined || key === null || key === "") continue;
+        totals.set(key, (totals.get(key) || 0) + Number(item.cases || 0));
+      }
+      return [...totals.entries()].map(([_id, total]) => ({ _id, total }));
+    };
+    const districtData = group(filtered, (row) => row.district).sort((a, b) => String(a._id).localeCompare(String(b._id)));
+    const diseaseDistribution = group(filtered, (row) => row.disease).sort((a, b) => b.total - a.total).slice(0, 7);
+    const topDistrict = [...districtData].sort((a, b) => b.total - a.total)[0]?._id || "N/A";
+    const topDisease = diseaseDistribution[0]?._id || "N/A";
+    const baseYear = selectedYear ?? new Date().getFullYear();
+    const currentYearTotal = rows.filter((row) => row.year === baseYear).reduce((sum, row) => sum + Number(row.cases || 0), 0);
+    const previousYearTotal = rows.filter((row) => row.year === baseYear - 1).reduce((sum, row) => sum + Number(row.cases || 0), 0);
+    const growth = previousYearTotal > 0 ? ((currentYearTotal - previousYearTotal) / previousYearTotal) * 100 : 0;
+    const trendData = group(filtered, (row) => selectedYear === undefined ? row.year : row.month).sort((a, b) => Number(a._id) - Number(b._id));
 
     return res.json({
       totalCases,
@@ -349,6 +324,7 @@ export const getMobileOfficialAnalytics = async (req, res) => {
       diseaseDistribution,
       trendData,
       growth: growth.toFixed(1),
+      caseDefinition: "Confirmed cases only; uploaded official cases and confirmed surveillance reports are combined at query time without copying records.",
     });
   } catch (error) {
     console.error("Mobile official analytics error:", error);

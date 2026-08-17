@@ -1,5 +1,5 @@
 import express from "express";
-import { verifyToken, verifyRole } from "../middleware/authMiddleware.js";
+import { verifyToken, verifyRoles } from "../middleware/authMiddleware.js";
 import {
   uploadDataset,
   handleDatasetUploadError,
@@ -17,6 +17,7 @@ router.get("/", verifyToken, listDatasets);
 router.post(
   "/upload",
   verifyToken,
+  verifyRoles("admin", "cesu"),
   datasetUpload.single("file"),
   handleDatasetUploadError,
   uploadDataset
@@ -25,10 +26,10 @@ router.post(
 router.get(
   "/template/official-cases",
   verifyToken,
-  verifyRole("admin"),
+  verifyRoles("admin", "cesu"),
   downloadOfficialCaseTemplate
 );
 
-router.get("/:id/download", verifyToken, verifyRole("admin"), downloadDataset);
+router.get("/:id/download", verifyToken, verifyRoles("admin", "cesu"), downloadDataset);
 
 export default router;

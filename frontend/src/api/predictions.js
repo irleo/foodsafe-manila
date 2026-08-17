@@ -25,7 +25,7 @@ export async function fetchLatestPredictions(
 }
 
 /**
- * Admin-only: refresh predictions now (recompute + persist).
+ * Admin/CESU: refresh predictions now (recompute + persist).
  * @param {string} token
  * @param {{ datasetId?: string, forecastHorizonMonths?: number }} [opts]
  */

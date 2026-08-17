@@ -4,8 +4,6 @@ import '../services/alerts_repository.dart';
 
 import '../services/heatmap_risk_service.dart';
 
-import '../services/risk_alert_service.dart';
-
 import '../widgets/alerts_widgets.dart';
 
 import '../widgets/home_widgets.dart';
@@ -61,28 +59,6 @@ class HomeScreenState extends State<HomeScreen> {
     super.initState();
 
     _loadAll();
-
-    RiskAlertService.instance.latestMessage.addListener(_onLiveRiskUpdate);
-
-  }
-
-
-
-  @override
-
-  void dispose() {
-
-    RiskAlertService.instance.latestMessage.removeListener(_onLiveRiskUpdate);
-
-    super.dispose();
-
-  }
-
-
-
-  void _onLiveRiskUpdate() {
-
-    _loadNearbyAlerts();
 
   }
 

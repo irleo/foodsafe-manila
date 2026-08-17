@@ -6,7 +6,6 @@ import '../screens/signup_screen.dart';
 import 'screens/change_password_screen.dart';
 import 'services/location_service.dart';
 import 'services/notification_service.dart';
-import 'services/risk_alert_service.dart';
 import 'services/api_client.dart';
 import 'services/session.dart';
 
@@ -16,9 +15,6 @@ Future<void> main() async {
   await ApiClient.warmSession();
   await NotificationService.initialize();
   await LocationService.preloadLocation();
-  if (Session.currentUser != null) {
-    RiskAlertService.instance.startMonitoring();
-  }
   runApp(
     MainApp(
       initialRoute: ApiClient.hasAuthenticatedSession ? '/dashboard' : '/login',

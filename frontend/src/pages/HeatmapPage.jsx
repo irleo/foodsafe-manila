@@ -2,8 +2,8 @@ import { useMemo, useState } from "react";
 import "leaflet/dist/leaflet.css";
 
 import {
-  buildRiskStatsFromDistrictPoints,
-  getRiskColor,
+  buildConcentrationStats,
+  getConcentrationColor,
   buildTopDistrictsFromPoints,
 } from "../utils/heatmapCaseBuilders";
 
@@ -48,7 +48,7 @@ export default function Heatmap() {
   const [selectedMonth, setSelectedMonth] = useState("All");
   const [selectedDisease, setSelectedDisease] = useState("All");
   const [selectedCaseClassification, setSelectedCaseClassification] =
-    useState("All");
+    useState("confirmed");
 
   const { points, districtStats, diseaseStats, filterOptions, loading, errorMsg } =
     useHeatmapPoints({
@@ -67,17 +67,11 @@ export default function Heatmap() {
     return ["All", ...years.map(Number).sort((a, b) => a - b)];
   }, [filterOptions]);
 
-  const districtPoints = useMemo(() => {
-    const safe = Array.isArray(points) ? points : [];
-    return safe.map((p) => ({
-      ...p,
-      risk: p.risk,
-    }));
-  }, [points]);
+  const districtPoints = useMemo(() => (Array.isArray(points) ? points : []), [points]);
 
   const stats = useMemo(
-    () => buildRiskStatsFromDistrictPoints(districtStats),
-    [districtStats],
+    () => buildConcentrationStats(districtStats, points, selectedCaseClassification),
+    [districtStats, points, selectedCaseClassification],
   );
 
   const diseaseOptions = useMemo(() => {
@@ -91,18 +85,19 @@ export default function Heatmap() {
     const classes = Array.isArray(filterOptions?.caseClassifications)
       ? filterOptions.caseClassifications.filter(Boolean)
       : [];
-    return ["All", ...classes.sort((a, b) => a.localeCompare(b))];
-  }, [filterOptions]);
+    return [...new Set([selectedCaseClassification, ...classes])]
+      .sort((a, b) => a.localeCompare(b));
+  }, [filterOptions, selectedCaseClassification]);
 
   const title = useMemo(() => {
-    return `Manila Risk Map`;
+    return `Manila Case Concentration Map`;
   }, []);
 
   const showNoData =
     (selectedYear !== "All" ||
       selectedMonth !== "All" ||
       selectedDisease !== "All" ||
-      selectedCaseClassification !== "All") &&
+      selectedCaseClassification !== "confirmed") &&
     districtPoints.length === 0;
 
   const topDistricts = useMemo(
@@ -127,9 +122,9 @@ export default function Heatmap() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Heatmap</h1>
+        <h1 className="text-2xl font-bold">Case Concentration Map</h1>
         <p className="text-gray-600 mt-1">
-          Barangay-level disease burden by month, colored by district average incident risk
+          Barangay-level distribution for one clearly selected case status. Color indicates relative concentration, not an official risk level.
         </p>
       </div>
 
@@ -139,75 +134,58 @@ export default function Heatmap() {
         </div>
       )}
 
-      <HeatmapStatsRow stats={stats} />
+      <HeatmapStatsRow
+        stats={stats}
+        status={selectedCaseClassification}
+        statusOptions={classificationOptions}
+        onStatusChange={setSelectedCaseClassification}
+      />
 
       <div className="grid grid-cols-12 gap-6">
         <HeatmapMapCard
           title={title}
           controls={
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
-              <h2 className="font-semibold text-lg">{title}</h2>
+            <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <label className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                  Year
+                  <select
+                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-normal normal-case tracking-normal text-gray-800"
+                    value={selectedYear}
+                    onChange={(event) => setSelectedYear(event.target.value === "All" ? "All" : Number(event.target.value))}
+                  >
+                    {yearOptions.map((option) => (
+                      <option key={option} value={option}>{option === "All" ? "All Years" : option}</option>
+                    ))}
+                  </select>
+                </label>
 
-              <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                <select
-                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
-                  value={selectedYear}
-                  onChange={(e) =>
-                    setSelectedYear(
-                      e.target.value === "All" ? "All" : Number(e.target.value),
-                    )
-                  }
-                >
-                  {yearOptions.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt === "All" ? "All Years" : opt}
-                    </option>
-                  ))}
-                </select>
+                <label className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                  Month
+                  <select
+                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-normal normal-case tracking-normal text-gray-800"
+                    value={selectedMonth}
+                    onChange={(event) => setSelectedMonth(event.target.value === "All" ? "All" : Number(event.target.value))}
+                  >
+                    <option value="All">All Months</option>
+                    {MONTH_OPTIONS.map((month) => (
+                      <option key={month.value} value={month.value}>{month.label}</option>
+                    ))}
+                  </select>
+                </label>
 
-                <select
-                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
-                  value={selectedMonth}
-                  onChange={(e) =>
-                    setSelectedMonth(
-                      e.target.value === "All" ? "All" : Number(e.target.value),
-                    )
-                  }
-                >
-                  <option value="All">All Months</option>
-
-                  {MONTH_OPTIONS.map((month) => (
-                    <option key={month.value} value={month.value}>
-                      {month.label}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
-                  value={selectedDisease}
-                  onChange={(e) => setSelectedDisease(e.target.value)}
-                >
-                  {diseaseOptions.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt === "All" ? "All Diseases" : opt}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
-                  value={selectedCaseClassification}
-                  onChange={(e) =>
-                    setSelectedCaseClassification(e.target.value)
-                  }
-                >
-                  {classificationOptions.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt === "All" ? "All Classifications" : opt}
-                    </option>
-                  ))}
-                </select>
+                <label className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                  Disease
+                  <select
+                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-normal normal-case tracking-normal text-gray-800"
+                    value={selectedDisease}
+                    onChange={(event) => setSelectedDisease(event.target.value)}
+                  >
+                    {diseaseOptions.map((option) => (
+                      <option key={option} value={option}>{option === "All" ? "All Diseases" : option}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
             </div>
           }
@@ -217,7 +195,7 @@ export default function Heatmap() {
           loadingOverlay={loadingOverlay}
           MANILA_CENTER={MANILA_CENTER}
           MANILA_CITY_BOUNDS={MANILA_CITY_BOUNDS}
-          getRiskColor={getRiskColor}
+          getConcentrationColor={getConcentrationColor}
         />
 
         <div className="col-span-12 lg:col-span-3 space-y-4">

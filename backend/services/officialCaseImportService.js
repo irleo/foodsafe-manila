@@ -127,23 +127,22 @@ function validateTemplateWorkbook(wb, preferredSheetName) {
 }
 
 function minMaxYearMonth(records) {
-  let min = null;
-  let max = null;
+  let coverageStart = null;
+  let coverageEnd = null;
   for (const r of records) {
-    const ym = r.year * 100 + r.month;
-    if (min === null || ym < min) min = ym;
-    if (max === null || ym > max) max = ym;
+    const weeklyStart = r.weekStartDate ? new Date(r.weekStartDate) : null;
+    const rowStart = weeklyStart && !Number.isNaN(weeklyStart.getTime())
+      ? weeklyStart
+      : new Date(Date.UTC(r.year, r.month - 1, 1));
+    const rowEnd = weeklyStart && !Number.isNaN(weeklyStart.getTime())
+      ? new Date(rowStart.getTime() + (6 * 86400000))
+      : new Date(Date.UTC(r.year, r.month, 0));
+    if (!coverageStart || rowStart < coverageStart) coverageStart = rowStart;
+    if (!coverageEnd || rowEnd > coverageEnd) coverageEnd = rowEnd;
   }
-  if (min === null || max === null)
+  if (!coverageStart || !coverageEnd)
     return { coverageStart: null, coverageEnd: null };
-  const minY = Math.floor(min / 100);
-  const minM = min % 100;
-  const maxY = Math.floor(max / 100);
-  const maxM = max % 100;
-  return {
-    coverageStart: new Date(Date.UTC(minY, minM - 1, 1)),
-    coverageEnd: new Date(Date.UTC(maxY, maxM - 1, 1)),
-  };
+  return { coverageStart, coverageEnd };
 }
 
 async function parseCsvRows(filePath) {
@@ -170,6 +169,13 @@ function normalizeTemplateCsvRowKeys(row = {}) {
   return normalized;
 }
 
+function validateCesuCoverage(records, providerType) {
+  if (providerType !== "cesu") return null;
+  return records.some((record) => Number(record.year) < 2022)
+    ? "CESU surveillance data in this project begins in 2022. Records before 2022 cannot be labeled as CESU data."
+    : null;
+}
+
 /**
  * Imports official case XLSX (raw health office or processed template) into OfficialCase (monthly).
  *
@@ -182,6 +188,9 @@ export async function importOfficialCasesXlsx({
   storedFileName,
   mimeType,
   userId,
+  providerType = "cesu",
+  providerName = "CESU",
+  reportingFrequency = "weekly",
 } = {}) {
   if (!filePath) throw new Error("filePath is required");
 
@@ -244,6 +253,8 @@ export async function importOfficialCasesXlsx({
       };
     }
 
+    const cesuCoverageError = validateCesuCoverage(normalized, providerType);
+    if (cesuCoverageError) return { success: false, formatType, reason: cesuCoverageError, validationErrors };
     const { coverageStart, coverageEnd } = minMaxYearMonth(normalized);
 
     const dataset = await Dataset.create({
@@ -252,7 +263,11 @@ export async function importOfficialCasesXlsx({
         path.basename(
           originalFileName || storedFileName || "official_cases.xlsx",
         ),
-      dataSource: "official_xlsx",
+      dataSource: providerName,
+      providerType,
+      providerName,
+      reportingFrequency,
+      ingestionMethod: "excel",
       coverageStart,
       coverageEnd,
       originalFileName: originalFileName || "official_cases.xlsx",
@@ -282,6 +297,8 @@ export async function importOfficialCasesXlsx({
         r.disease,
         r.year,
         r.month,
+        r.epidemiologicalYear,
+        r.epidemiologicalWeek,
         r.caseClassification,
         r.source,
       ].join("|");
@@ -294,6 +311,9 @@ export async function importOfficialCasesXlsx({
     const docs = Array.from(byKey.values()).map((r) => ({
       ...r,
       datasetId: dataset._id,
+      providerType,
+      providerName,
+      reportingFrequency,
     }));
 
     await OfficialCase.deleteMany({ datasetId: dataset._id });
@@ -370,7 +390,18 @@ export async function importOfficialCasesXlsx({
       };
     }
 
+    const cesuCoverageError = validateCesuCoverage(normalized, providerType);
+    if (cesuCoverageError) return { success: false, formatType, reason: cesuCoverageError, validationErrors };
     const { coverageStart, coverageEnd } = minMaxYearMonth(normalized);
+
+    if (reportingFrequency === "weekly" && normalized.some((row) => !row.epidemiologicalWeek)) {
+      return {
+        success: false,
+        formatType,
+        reason: "Weekly datasets require epidemiological_week or a report date for every row.",
+        validationErrors,
+      };
+    }
 
     const dataset = await Dataset.create({
       name:
@@ -378,7 +409,11 @@ export async function importOfficialCasesXlsx({
         path.basename(
           originalFileName || storedFileName || "cleaned_official_cases.xlsx",
         ),
-      dataSource: "official_xlsx",
+      dataSource: providerName,
+      providerType,
+      providerName,
+      reportingFrequency,
+      ingestionMethod: "excel",
       coverageStart,
       coverageEnd,
       originalFileName: originalFileName || "cleaned_official_cases.xlsx",
@@ -408,6 +443,8 @@ export async function importOfficialCasesXlsx({
         r.disease,
         r.year,
         r.month,
+        r.epidemiologicalYear,
+        r.epidemiologicalWeek,
         r.caseClassification,
         r.source,
       ].join("|");
@@ -420,6 +457,9 @@ export async function importOfficialCasesXlsx({
     const docs = Array.from(byKey.values()).map((r) => ({
       ...r,
       datasetId: dataset._id,
+      providerType,
+      providerName,
+      reportingFrequency,
     }));
 
     await OfficialCase.deleteMany({ datasetId: dataset._id });
@@ -460,6 +500,9 @@ export async function importOfficialCasesCsv({
   storedFileName,
   mimeType,
   userId,
+  providerType = "cesu",
+  providerName = "CESU",
+  reportingFrequency = "weekly",
 } = {}) {
   if (!filePath) throw new Error("filePath is required");
 
@@ -534,7 +577,20 @@ export async function importOfficialCasesCsv({
     };
   }
 
+  const cesuCoverageError = validateCesuCoverage(normalized, providerType);
+  if (cesuCoverageError) {
+    return { success: false, formatType: "processed_template_csv", reason: cesuCoverageError, validationErrors };
+  }
   const { coverageStart, coverageEnd } = minMaxYearMonth(normalized);
+
+  if (reportingFrequency === "weekly" && normalized.some((row) => !row.epidemiologicalWeek)) {
+    return {
+      success: false,
+      formatType: "processed_template_csv",
+      reason: "Weekly datasets require epidemiological_week for every row.",
+      validationErrors,
+    };
+  }
 
   const dataset = await Dataset.create({
     name:
@@ -542,7 +598,11 @@ export async function importOfficialCasesCsv({
       path.basename(
         originalFileName || storedFileName || "cleaned_official_cases.csv",
       ),
-    dataSource: "official_csv",
+    dataSource: providerName,
+    providerType,
+    providerName,
+    reportingFrequency,
+    ingestionMethod: "csv",
     coverageStart,
     coverageEnd,
     originalFileName: originalFileName || "cleaned_official_cases.csv",
@@ -569,6 +629,8 @@ export async function importOfficialCasesCsv({
       r.disease,
       r.year,
       r.month,
+      r.epidemiologicalYear,
+      r.epidemiologicalWeek,
       r.caseClassification,
       r.source,
     ].join("|");
@@ -581,6 +643,9 @@ export async function importOfficialCasesCsv({
   const docs = Array.from(byKey.values()).map((r) => ({
     ...r,
     datasetId: dataset._id,
+    providerType,
+    providerName,
+    reportingFrequency,
   }));
 
   await OfficialCase.deleteMany({ datasetId: dataset._id });

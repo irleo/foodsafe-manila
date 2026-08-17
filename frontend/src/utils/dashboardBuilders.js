@@ -1,7 +1,6 @@
 // YEARLY TIMELINE
-export function buildYearlyTimelineData(cases = [], yearsToShow = 5, reports = []) {
+export function buildYearlyTimelineData(cases = [], yearsToShow = 5) {
   const safe = Array.isArray(cases) ? cases : [];
-  const safeReports = Array.isArray(reports) ? reports : [];
 
   // Sum cases per year
   const yearlyMap = {};
@@ -14,24 +13,9 @@ export function buildYearlyTimelineData(cases = [], yearsToShow = 5, reports = [
     if (!Number.isFinite(count) || count < 0) continue;
 
     if (!yearlyMap[year]) {
-      yearlyMap[year] = { officialCases: 0, citizenReports: 0 };
+      yearlyMap[year] = { officialCases: 0 };
     }
     yearlyMap[year].officialCases += count;
-    if (maxYear === null || year > maxYear) maxYear = year;
-  }
-
-  for (const r of safeReports) {
-    const raw = r?.reportedAt ?? r?.reported_at ?? r?.createdAt;
-    const d = raw ? new Date(raw) : null;
-    const year = d && !Number.isNaN(d.getTime()) ? d.getFullYear() : null;
-    const count = Number(r?.caseCount ?? 1);
-    if (!Number.isFinite(year) || year <= 0) continue;
-    if (!Number.isFinite(count) || count < 0) continue;
-
-    if (!yearlyMap[year]) {
-      yearlyMap[year] = { officialCases: 0, citizenReports: 0 };
-    }
-    yearlyMap[year].citizenReports += count;
     if (maxYear === null || year > maxYear) maxYear = year;
   }
 
@@ -46,7 +30,6 @@ export function buildYearlyTimelineData(cases = [], yearsToShow = 5, reports = [
       // keep "date" so the chart can remain mostly the same
       date: `${y}-01-01`,
       officialCases: yearlyMap[y]?.officialCases || 0,
-      citizenReports: yearlyMap[y]?.citizenReports || 0,
       cases: yearlyMap[y]?.officialCases || 0,
     });
   }

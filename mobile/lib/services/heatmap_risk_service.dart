@@ -14,7 +14,7 @@ class HeatmapRiskService {
     String selectedYear = 'All',
     String selectedMonth = 'All',
     String selectedDisease = 'All',
-    String selectedCaseClassification = 'All',
+    String selectedCaseClassification = 'confirmed',
   }) async {
     try {
       _cachedDataset ??= await ApiService.fetchLatestValidatedDataset();

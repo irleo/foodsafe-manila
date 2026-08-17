@@ -15,10 +15,10 @@ export default function LegendCard() {
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <h3 className="mb-4 font-semibold">Legend</h3>
       <div className="space-y-3">
-        <LegendItem color="#22c55e" title="Low Risk" subtitle="0-5 cases" />
-        <LegendItem color="#eab308" title="Medium Risk" subtitle="6-15 cases" />
-        <LegendItem color="#f97316" title="High Risk" subtitle="16-30 cases" />
-        <LegendItem color="#ef4444" title="Critical Risk" subtitle="31+ cases" />
+        <LegendItem color="#bfdbfe" title="Lower concentration" subtitle="Relative to this selection" />
+        <LegendItem color="#60a5fa" title="Moderate concentration" subtitle="Relative to this selection" />
+        <LegendItem color="#2563eb" title="Higher concentration" subtitle="Relative to this selection" />
+        <LegendItem color="#1e3a8a" title="Highest concentration" subtitle="Relative to this selection" />
       </div>
     </div>
   );

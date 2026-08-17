@@ -87,7 +87,7 @@ The backend is the source of truth. Both the React frontend and Flutter app call
 - XLSX upload flow for official case data.
 - Detection of raw health office workbook format and processed template format.
 - Template download endpoint for official case uploads.
-- Normalization into monthly `OfficialCase` rows with city, district, barangay, disease, year, month, classification, cases, and source.
+- Normalization into weekly or explicitly legacy-monthly `OfficialCase` rows with institutional provider, ingestion method, epidemiological year/week, calendar month, classification, and case count.
 - Dataset metadata persistence, including coverage dates, format type, diseases, districts, row counts, validation errors, and status.
 - Dataset list and dataset file download endpoints.
 - Upload success/failure notifications and activity log entries.
@@ -582,3 +582,12 @@ The core Starter-tier safeguards—request caching and coalescing, MongoDB pool 
 - `mobile/linux/*`: Linux Flutter runner and CMake files.
 - `mobile/windows/*`: Windows Flutter runner, resources, manifest, and CMake files.
 - `mobile/web/*`: Flutter web index, manifest, favicon, and web icons.
+
+## Surveillance Data Interpretation
+
+- CESU surveillance records available to this project begin in 2022. Screens and exports must display the actual selected dataset coverage and must not imply complete CESU history before 2022.
+- `reported`, `suspected`, and `confirmed` are separate analytical populations. The UI displays `confirmed` as **Validated / Confirmed** and must not combine statuses under an unlabeled “Total Cases” value.
+- Official uploads record the institutional provider (`hospital`, `health_center`, `cesu`, or `doh`) separately from the ingestion method (`csv`, `excel`, or system integration).
+- Weekly datasets use epidemiological year/week fields. Legacy monthly datasets remain explicitly monthly and must not be presented as weekly observations.
+- Alert and epidemic thresholds require five eligible prior years. The system returns an insufficient-baseline result when five eligible years are unavailable; it does not manufacture missing history.
+- Ordinary analytical charts use a restrained blue palette. Amber and red are reserved for genuine alert-threshold and epidemic-threshold signals.

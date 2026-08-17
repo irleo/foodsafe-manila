@@ -495,7 +495,7 @@ class AnalyticsScreenState extends State<AnalyticsScreen> {
                   icon: LucideIcons.activity,
                   iconBg: const Color(0xFFD1FAE5),
                   iconColor: const Color(0xFF10B981),
-                  title: "Total Cases",
+                  title: "Validated / Confirmed Cases",
                   value: overviewData?['totalCases']?.toString() ?? '0',
                   subtitleWidget: Container(
                     margin: const EdgeInsets.only(top: 8),
@@ -534,7 +534,7 @@ class AnalyticsScreenState extends State<AnalyticsScreen> {
                   icon: LucideIcons.mapPin,
                   iconBg: const Color(0xFFFFF7ED),
                   iconColor: const Color(0xFFF97316),
-                  title: "Top District",
+                  title: "Highest Case Concentration",
                   value: overviewData?['topDistrict'] ?? 'N/A',
                   valueFontSize: 16,
                   subtitleText: "Highest case volume of all",

@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 import PredictionRun from "../models/PredictionRun.js";
 import { refreshMonthlyDistrictPredictions } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
 import Dataset from "../models/Dataset.js";
-import { computeRiskAnalysis } from "../utils/riskUtils.js";
 
 function toDatasetScope(datasetId) {
   if (datasetId && mongoose.Types.ObjectId.isValid(datasetId)) {
@@ -53,25 +52,14 @@ export const getPredictions = async (req, res) => {
             (d) => d.districtKey === districtFilter || d.district === districtFilter,
           )
         : districts;
-    const districtsWithRisk = filtered.map((district) => {
+    const normalizedDistricts = filtered.map((district) => {
       const forecast = Array.isArray(district.forecast)
         ? district.forecast.find((f) => f.isPrimaryTarget) || district.forecast[0]
         : null;
       const nextForecast = district.nextForecast || forecast || null;
-      const predictedCases =
-        nextForecast == null ? null : Number(nextForecast.predictedCases ?? 0);
-      const risk =
-        predictedCases == null || !Number.isFinite(predictedCases)
-          ? null
-          : computeRiskAnalysis(predictedCases);
-
       return {
         ...district,
         nextForecast,
-        riskScore: risk?.riskScore ?? null,
-        riskLevel: risk?.riskLevel ?? "insufficient",
-        risk: risk?.risk ?? "Insufficient",
-        riskLabel: risk?.riskLabel ?? "Insufficient Data",
       };
     });
 
@@ -89,7 +77,7 @@ export const getPredictions = async (req, res) => {
       generatedAt: run.generatedAt,
       trigger: run.trigger,
       status: run.status,
-      payload: { ...payload, districts: districtsWithRisk },
+      payload: { ...payload, districts: normalizedDistricts },
     });
   } catch (err) {
     return res.status(500).json({ message: err?.message || "Server error" });
@@ -108,21 +96,6 @@ export const refreshPredictions = async (req, res) => {
       force: true,
     });
 
-    if (saved?.alreadyUpToDate) {
-      return res.status(200).json({
-        success: true,
-        upToDate: true,
-        message:
-          "Latest prediction already available. Upload a new validated dataset to update forecasts.",
-        predictionRunId: saved?._id ? String(saved._id) : null,
-        granularity: "monthly_district_cases",
-        basisYear: saved?.basisYear ?? null,
-        basisMonth: saved?.basisMonth ?? null,
-        forecastTargetYear: saved?.forecastTargetYear ?? null,
-        forecastTargetMonth: saved?.forecastTargetMonth ?? null,
-      });
-    }
-
     if (saved?.status === "failed") {
       const msg = saved?.errorMessage || "Refresh failed";
       const isSetup =
@@ -133,7 +106,6 @@ export const refreshPredictions = async (req, res) => {
 
     return res.json({
       success: true,
-      upToDate: false,
       predictionRunId: saved?._id ? String(saved._id) : null,
       granularity: saved?.granularity,
       basisDatasetId: saved?.basisDatasetId ? String(saved.basisDatasetId) : null,

@@ -25,6 +25,9 @@ export async function uploadDataset({
   coverageStart,
   coverageEnd,
   dataSource,
+  providerType,
+  providerName,
+  reportingFrequency,
   token,
 }) {
   const formData = new FormData();
@@ -33,6 +36,9 @@ export async function uploadDataset({
   if (coverageStart) formData.append("coverageStart", coverageStart);
   if (coverageEnd) formData.append("coverageEnd", coverageEnd);
   formData.append("dataSource", dataSource);
+  formData.append("providerType", providerType);
+  formData.append("providerName", providerName);
+  formData.append("reportingFrequency", reportingFrequency);
 
   const res = await fetch(`${API_BASE}/api/datasets/upload`, {
     method: "POST",

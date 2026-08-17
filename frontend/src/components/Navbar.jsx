@@ -1,4 +1,5 @@
 import { useAuth } from "../context/AuthContext";
+import { formatStatusLabel } from "../utils/formatStatusLabel";
 import {
   BellIcon,
   UserCircleIcon,
@@ -235,7 +236,7 @@ export default function Navbar() {
 
                   {auth?.role && (
                     <span className="text-xs text-blue-100">
-                      {auth.role}
+                      {formatStatusLabel(auth.role)}
                     </span>
                   )}
                 </div>

@@ -1,25 +1,17 @@
 import { useMemo } from "react";
-// import { useAuth } from "../context/AuthContext";
-// import { mockReports } from "../data/mockReports";
-
 import { useAuth } from "../context/AuthContext";
 import { useLatestDatasetId } from "../hooks/useLatestDatasetId";
 import { useOfficialCases } from "../hooks/useOfficialCases";
-import { useReports } from "../hooks/useReports";
 import { buildAnalyticsCasesViewModel } from "../utils/analyticsCasesViewModel";
-
-// import { useReports } from "../hooks/useReports";
-// import { buildAnalyticsViewModel } from "../utils/analyticsViewModel";
-
 import AnalyticsStats from "../components/analytics/AnalyticsStats";
 import AnalyticsGrid from "../components/analytics/AnalyticsGrid";
-
-const COLORS = ["#ef4444", "#facc15", "#22c55e"];
+import DataCoverageNotice from "../components/DataCoverageNotice";
+import { buildMonthlyTimelineData } from "../utils/analyticsCaseBuilders";
 
 export default function Analytics() {
   const { auth } = useAuth();
   const token = auth?.accessToken;
-  const { datasetId } = useLatestDatasetId(token);
+  const { datasetId, dataset } = useLatestDatasetId(token);
   const {
     items: officialItems,
     loading,
@@ -27,17 +19,9 @@ export default function Analytics() {
   } = useOfficialCases({
     token,
     datasetId,
+    caseClassification: ["reported", "suspected", "confirmed"],
     limit: 5000,
   });
-  const { reports } = useReports(token, { fetchAll: true });
-
-  // // Reports Version
-  // const { reports, loading, errorMsg } = useReports(token);
-  // const finalReports = reports.length ? reports : mockReports;
-  //  const vm = useMemo(
-  //   () => buildAnalyticsViewModel(finalReports),
-  //   [finalReports],
-  // );
 
   const caseRows = useMemo(() => {
     const safe = Array.isArray(officialItems) ? officialItems : [];
@@ -47,13 +31,22 @@ export default function Analytics() {
       disease: r.disease,
       year: Number(r.year),
       month: Number(r.month),
+      caseClassification: r.caseClassification,
       cases: Number(r.cases),
     }));
   }, [officialItems]);
 
+  const confirmedRows = useMemo(
+    () => caseRows.filter((row) => row.caseClassification === "confirmed"),
+    [caseRows],
+  );
+
   const vm = useMemo(
-    () => buildAnalyticsCasesViewModel(caseRows, reports),
-    [caseRows, reports],
+    () => ({
+      ...buildAnalyticsCasesViewModel(confirmedRows),
+      monthlyTimelineData: buildMonthlyTimelineData(caseRows),
+    }),
+    [caseRows, confirmedRows],
   );
 
   const handleExportPdf = () => {
@@ -66,7 +59,7 @@ export default function Analytics() {
         <div>
           <h1 className="text-2xl font-bold">Analytics</h1>
           <p className="mt-1 text-gray-600">
-            Analysis of historical foodborne disease trends and patterns
+            Status-separated trends with validated/confirmed cases used for official distribution summaries
           </p>
         </div>
         {/* EXPORT */}
@@ -96,9 +89,11 @@ export default function Analytics() {
         </button>
       </div>
 
+      <DataCoverageNotice dataset={dataset} />
+
       {errorMsg && (
         <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
-          {errorMsg} (Showing sample data.)
+          {errorMsg}
         </div>
       )}
 
@@ -109,8 +104,9 @@ export default function Analytics() {
       ) : (
         <>
           <AnalyticsStats
-            thisYearCases={vm.thisYearCases}
-            totalCases={vm.totalCases}
+            latestYear={vm.latestYear}
+            latestYearCases={vm.latestYearCases}
+            previousYear={vm.previousYear}
             topDistrict={vm.topDistrict}
             topDisease={vm.topDisease}
             districtsCovered={vm.districtsCovered}
@@ -118,14 +114,12 @@ export default function Analytics() {
           />
 
           <AnalyticsGrid
-            yearlyTimelineData={vm.yearlyTimelineData}
+            monthlyTimelineData={vm.monthlyTimelineData}
             diseaseData={vm.diseaseData}
             districtData={vm.districtData}
             districtStats={vm.districtStats}
-            riskLevelData={vm.riskLevelData}
             diseaseTrendData={vm.diseaseTrendData}
             diseaseTrendKeys={vm.diseaseTrendKeys}
-            colors={COLORS}
           />
         </>
       )}

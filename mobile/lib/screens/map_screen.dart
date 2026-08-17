@@ -35,10 +35,10 @@ class MapScreenState extends State<MapScreen> {
   Map<int, Map<String, dynamic>> casesByBarangay = {};
 
   Map<String, int> riskStats = {
-    'Low': 0,
-    'Medium': 0,
-    'High': 0,
-    'Critical': 0,
+    'Cases': 0,
+    'Districts': 0,
+    'Barangays': 0,
+    'Average': 0,
   };
   List<Map<String, dynamic>> topDistricts = [];
   List<Map<String, dynamic>> topDiseases = [];
@@ -46,7 +46,7 @@ class MapScreenState extends State<MapScreen> {
   String selectedYear = 'All';
   String selectedMonth = 'All';
   String selectedDisease = 'All';
-  String selectedCaseClassification = 'All';
+  String selectedCaseClassification = 'confirmed';
 
   static const _manilaCenter = LatLng(14.5995, 120.9842);
   static final _manilaBounds = LatLngBounds(
@@ -108,7 +108,7 @@ class MapScreenState extends State<MapScreen> {
             .cast<String>()
             .toList()
           ..sort();
-    return ['All', ...classes];
+    return classes;
   }
 
   List<String> get _monthOptionValues => [
@@ -121,7 +121,7 @@ class MapScreenState extends State<MapScreen> {
         selectedYear != 'All' ||
         selectedMonth != 'All' ||
         selectedDisease != 'All' ||
-        selectedCaseClassification != 'All';
+        selectedCaseClassification != 'confirmed';
     return hasActiveFilter && districtPoints.isEmpty;
   }
 
@@ -213,6 +213,12 @@ class MapScreenState extends State<MapScreen> {
     );
     final data = jsonDecode(geoJsonString);
     final polygons = <Polygon<Object>>[];
+    final maximumCases = casesByBarangay.values.fold<num>(
+      1,
+      (maximum, point) => ((point['cases'] as num?) ?? 0) > maximum
+          ? ((point['cases'] as num?) ?? 0)
+          : maximum,
+    );
 
     for (final feature in data['features'] as List<dynamic>) {
       try {
@@ -223,10 +229,8 @@ class MapScreenState extends State<MapScreen> {
         final point = casesByBarangay[barangayNo];
         final cases = (point?['cases'] as num?)?.toInt() ?? 0;
         final hasCases = cases > 0;
-        final avgIncident =
-            (point?['districtAvgIncident'] as num?)?.toDouble() ?? 0;
         final fillColor = hasCases
-            ? HeatmapCaseBuilders.getRiskColor(avgIncident)
+            ? HeatmapCaseBuilders.getConcentrationColor(cases, maximumCases)
             : const Color(0xFFCBD5E1);
         final borderColor = hasCases
             ? const Color(0xFF334166)
@@ -321,9 +325,9 @@ class MapScreenState extends State<MapScreen> {
     final district = point['district']?.toString() ?? '';
     final cases = point['cases'] ?? 0;
     final districtTotal = point['districtTotalCases'] ?? 0;
-    final avgIncident = (point['districtAvgIncident'] as num?)?.toDouble() ?? 0;
-    final risk = point['risk']?.toString() ?? 'No data';
-    final riskColor = HeatmapCaseBuilders.getRiskColor(avgIncident);
+    final concentrationShare = point['districtConcentrationShare'] ?? 0;
+    final maximumCases = casesByBarangay.values.fold<num>(1, (maximum, item) => ((item['cases'] as num?) ?? 0) > maximum ? ((item['cases'] as num?) ?? 0) : maximum);
+    final riskColor = HeatmapCaseBuilders.getConcentrationColor(cases as num, maximumCases);
 
     showDialog(
       context: context,
@@ -380,7 +384,7 @@ class MapScreenState extends State<MapScreen> {
                                 border: Border.all(color: riskColor),
                               ),
                               child: Text(
-                                risk,
+                                'Case concentration',
                                 style: GoogleFonts.inter(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
@@ -410,7 +414,7 @@ class MapScreenState extends State<MapScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: _popupCard(
-                        'District total cases',
+                        'District cases for selected status',
                         '$districtTotal',
                         riskColor,
                       ),
@@ -418,8 +422,8 @@ class MapScreenState extends State<MapScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: _popupCard(
-                        'District avg incident',
-                        avgIncident.toStringAsFixed(2),
+                        'District share',
+                        '$concentrationShare%',
                         riskColor,
                       ),
                     ),
@@ -579,9 +583,9 @@ class MapScreenState extends State<MapScreen> {
                           selectedCaseClassification,
                         )
                         ? selectedCaseClassification
-                        : 'All',
+                        : 'confirmed',
                     items: _classificationOptions.isEmpty
-                        ? const ['All', 'confirmed', 'suspected', 'probable']
+                        ? const ['confirmed', 'suspected', 'reported', 'not_validated']
                         : _classificationOptions,
                     formatItem: _formatFilterItem,
                     onChanged: (value) {
@@ -612,29 +616,29 @@ class MapScreenState extends State<MapScreen> {
                 const SizedBox(height: 12),
                 _legendItem(
                   const Color(0xFF22C55E),
-                  'Low Risk',
-                  '0–5 avg incidents',
+                  'Lower concentration',
+                  'Relative to selection',
                 ),
                 const SizedBox(height: 8),
                 _legendItem(
                   const Color(0xFFEAB308),
-                  'Medium Risk',
-                  '6–15 avg incidents',
+                  'Moderate concentration',
+                  'Relative to selection',
                 ),
                 const SizedBox(height: 8),
                 _legendItem(
                   const Color(0xFFF97316),
-                  'High Risk',
-                  '16–30 avg incidents',
+                  'Higher concentration',
+                  'Relative to selection',
                 ),
                 const SizedBox(height: 8),
                 _legendItem(
                   const Color(0xFFEF4444),
-                  'Critical Risk',
-                  '31+ avg incidents',
+                  'Highest concentration',
+                  'Relative to selection',
                 ),
                 const SizedBox(height: 24),
-                _sectionTitle('Top Districts'),
+                _sectionTitle('Areas with Highest Case Concentration'),
                 const SizedBox(height: 12),
                 if (topDistricts.isEmpty)
                   Text(
@@ -650,7 +654,7 @@ class MapScreenState extends State<MapScreen> {
                     return _rankItem(name, cases, index);
                   }),
                 const SizedBox(height: 12),
-                _sectionTitle('Top Diseases'),
+                _sectionTitle('Conditions with Highest Case Concentration'),
                 const SizedBox(height: 12),
                 if (topDiseases.isEmpty)
                   Text(
@@ -749,33 +753,33 @@ class MapScreenState extends State<MapScreen> {
                         children: [
                           Expanded(
                             child: _statCard(
-                              'Low',
-                              riskStats['Low'] ?? 0,
-                              const Color(0xFF22C55E),
+                              'Cases',
+                              riskStats['Cases'] ?? 0,
+                              const Color(0xFF1E3A8A),
                             ),
                           ),
                           _divider(),
                           Expanded(
                             child: _statCard(
-                              'Medium',
-                              riskStats['Medium'] ?? 0,
-                              const Color(0xFFEAB308),
+                              'Districts',
+                              riskStats['Districts'] ?? 0,
+                              const Color(0xFF2563EB),
                             ),
                           ),
                           _divider(),
                           Expanded(
                             child: _statCard(
-                              'High',
-                              riskStats['High'] ?? 0,
-                              const Color(0xFFF97316),
+                              'Barangays',
+                              riskStats['Barangays'] ?? 0,
+                              const Color(0xFF60A5FA),
                             ),
                           ),
                           _divider(),
                           Expanded(
                             child: _statCard(
-                              'Critical',
-                              riskStats['Critical'] ?? 0,
-                              const Color(0xFFEF4444),
+                              'Avg/district',
+                              riskStats['Average'] ?? 0,
+                              const Color(0xFFBFDBFE),
                             ),
                           ),
                         ],

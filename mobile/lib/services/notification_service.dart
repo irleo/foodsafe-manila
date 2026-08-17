@@ -14,7 +14,7 @@ class NotificationService {
     _initialized = true;
   }
 
-  static Future<void> showHighRiskAlert({
+  static Future<void> showHealthAdvisory({
     required int id,
     required String title,
     required String body,
@@ -23,9 +23,9 @@ class NotificationService {
 
     const details = NotificationDetails(
       android: AndroidNotificationDetails(
-        'high_risk_channel',
-        'High Risk Alerts',
-        channelDescription: 'Alerts when entering high-risk areas in Manila',
+        'health_advisory_channel',
+        'Health Advisories',
+        channelDescription: 'Advisories published by authorized health personnel',
         importance: Importance.high,
         priority: Priority.high,
       ),

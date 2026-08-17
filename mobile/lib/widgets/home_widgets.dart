@@ -258,7 +258,7 @@ class DashboardSummaryCard extends StatelessWidget {
                     border: const Color(0xFFFECACA),
                     icon: LucideIcons.activity,
                     iconColor: const Color(0xFFDC2626),
-                    label: "Total Cases",
+                    label: "Validated / Confirmed Cases",
                     value: totalCases,
                     valueColor: const Color(0xFFB91C1C),
                     growthText: growthText,
@@ -296,7 +296,7 @@ class DashboardSummaryCard extends StatelessWidget {
                     border: const Color(0xFFBFDBFE),
                     icon: LucideIcons.mapPin,
                     iconColor: const Color(0xFF2563EB),
-                    label: "Top District",
+                    label: "Highest Case Concentration",
                     value: topDistrict,
                     valueColor: const Color(0xFF1D4ED8),
                     isSmallValue: true,
@@ -472,10 +472,10 @@ class MapCtaCard extends StatelessWidget {
   });
 
   static const _riskLegend = [
-    (key: 'Low', label: 'Low', color: Color(0xFF22C55E)),
-    (key: 'Medium', label: 'Medium', color: Color(0xFFEAB308)),
-    (key: 'High', label: 'High', color: Color(0xFFF97316)),
-    (key: 'Critical', label: 'Critical', color: Color(0xFFEF4444)),
+    (key: 'Cases', label: 'cases', color: Color(0xFF1E3A8A)),
+    (key: 'Districts', label: 'districts', color: Color(0xFF2563EB)),
+    (key: 'Barangays', label: 'barangays', color: Color(0xFF60A5FA)),
+    (key: 'Average', label: 'avg/district', color: Color(0xFFBFDBFE)),
   ];
 
   @override
@@ -510,7 +510,7 @@ class MapCtaCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Heatmap',
+                          'Case Concentration Map',
                           style: GoogleFonts.inter(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
@@ -519,7 +519,7 @@ class MapCtaCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'View district risk areas',
+                          'View confirmed case distribution',
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: const Color(0xFF6B7280),
@@ -612,17 +612,17 @@ class CurrentRiskCard extends StatelessWidget {
       );
     }
 
-    final low = '${riskStats['Low'] ?? 0}';
-    final medium = '${riskStats['Medium'] ?? 0}';
-    final high = '${riskStats['High'] ?? 0}';
-    final critical = '${riskStats['Critical'] ?? 0}';
+    final cases = '${riskStats['Cases'] ?? 0}';
+    final districts = '${riskStats['Districts'] ?? 0}';
+    final barangays = '${riskStats['Barangays'] ?? 0}';
+    final average = '${riskStats['Average'] ?? 0}';
 
     return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Current Risk Status',
+            'Validated / Confirmed Case Concentration',
             style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 14),
@@ -633,8 +633,8 @@ class CurrentRiskCard extends StatelessWidget {
                   icon: LucideIcons.shield,
                   bg: const Color(0xFFDCFCE7),
                   fg: const Color(0xFF16A34A),
-                  value: low,
-                  label: 'Low',
+                  value: cases,
+                  label: 'Cases',
                 ),
               ),
               Expanded(
@@ -642,8 +642,8 @@ class CurrentRiskCard extends StatelessWidget {
                   icon: LucideIcons.activity,
                   bg: const Color(0xFFFEF9C3),
                   fg: const Color(0xFFCA8A04),
-                  value: medium,
-                  label: 'Medium',
+                  value: districts,
+                  label: 'Districts',
                 ),
               ),
               Expanded(
@@ -651,8 +651,8 @@ class CurrentRiskCard extends StatelessWidget {
                   icon: LucideIcons.trendingUp,
                   bg: const Color(0xFFFFEDD5),
                   fg: const Color(0xFFF97316),
-                  value: high,
-                  label: 'High',
+                  value: barangays,
+                  label: 'Barangays',
                 ),
               ),
               Expanded(
@@ -660,8 +660,8 @@ class CurrentRiskCard extends StatelessWidget {
                   icon: LucideIcons.triangleAlert,
                   bg: const Color(0xFFFEE2E2),
                   fg: const Color(0xFFDC2626),
-                  value: critical,
-                  label: 'Critical',
+                  value: average,
+                  label: 'Avg/district',
                 ),
               ),
             ],
@@ -872,7 +872,7 @@ class NearbyAlertsSection extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'Nearby Alerts',
+                'Health Advisories',
                 style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800),
               ),
             ),
@@ -899,7 +899,7 @@ class NearbyAlertsSection extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'No active risk alerts in your area.',
+                    'No published health advisories.',
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       color: const Color(0xFF6B7280),

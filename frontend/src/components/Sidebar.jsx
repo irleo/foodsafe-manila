@@ -8,6 +8,7 @@ import {
   ChartPieIcon,
   Squares2X2Icon,
   ArrowDownOnSquareIcon,
+  ClipboardDocumentCheckIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "../context/AuthContext";
 import axios from "axios";
@@ -38,15 +39,18 @@ export default function Sidebar({ isOpen }) {
     }
   };
 
-  const links =
-    auth?.role === "admin"
-      ? [
+  const links = [
           { name: "Dashboard", path: "/dashboard", icon: Squares2X2Icon },
-          {
-            name: "Data",
+          ...(["admin", "cesu"].includes(auth?.role) ? [{
+            name: "Data Upload",
             path: "/datasets",
             icon: ArrowDownOnSquareIcon,
-          },
+          }] : []),
+          ...(["admin", "cesu", "surveillance_team"].includes(auth?.role) ? [{
+            name: "Report Logs",
+            path: "/reports",
+            icon: ClipboardDocumentCheckIcon,
+          }] : []),
           { name: "Heatmap", path: "/heatmap", icon: MapIcon },
           { name: "Analytics", path: "/analytics", icon: ChartPieIcon },
           {
@@ -54,26 +58,11 @@ export default function Sidebar({ isOpen }) {
             path: "/predictions",
             icon: ArrowTrendingUpIcon,
           },
-          {
+          ...(auth?.role === "admin" ? [{
             name: "User Management",
             path: "/user-management",
             icon: UserGroupIcon,
-          },
-        ]
-      : [
-          { name: "Dashboard", path: "/dashboard", icon: Squares2X2Icon },
-          {
-            name: "Data",
-            path: "/datasets",
-            icon: ArrowDownOnSquareIcon,
-          },
-          { name: "Heatmap", path: "/heatmap", icon: MapIcon },
-          { name: "Analytics", path: "/analytics", icon: ChartPieIcon },
-          {
-            name: "Predictions",
-            path: "/predictions",
-            icon: ArrowTrendingUpIcon,
-          },
+          }] : []),
         ];
 
   return (

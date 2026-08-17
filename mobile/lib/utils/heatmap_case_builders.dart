@@ -1,44 +1,31 @@
 import 'package:flutter/material.dart';
 
-/// Risk band and heatmap builders aligned with the web dashboard
+/// Case-concentration builders aligned with the web dashboard.
 /// (`frontend/src/utils/heatmapCaseBuilders.js`).
 class HeatmapCaseBuilders {
-  static String getRiskBand(num cases) {
-    if (cases >= 31) return 'Critical';
-    if (cases >= 16) return 'High';
-    if (cases >= 6) return 'Medium';
-    return 'Low';
-  }
-
-  static Color getRiskColor(num cases) {
-    switch (getRiskBand(cases)) {
-      case 'Critical':
-        return const Color(0xFFEF4444);
-      case 'High':
-        return const Color(0xFFF97316);
-      case 'Medium':
-        return const Color(0xFFEAB308);
-      default:
-        return const Color(0xFF22C55E);
-    }
+  static Color getConcentrationColor(num cases, num maximumCases) {
+    final ratio = maximumCases > 0 ? cases / maximumCases : 0;
+    if (ratio >= 0.75) return const Color(0xFF1E3A8A);
+    if (ratio >= 0.5) return const Color(0xFF2563EB);
+    if (ratio >= 0.25) return const Color(0xFF60A5FA);
+    if (ratio > 0) return const Color(0xFFBFDBFE);
+    return const Color(0xFFE5E7EB);
   }
 
   static Map<String, int> buildRiskStatsFromDistrictPoints(
     List<Map<String, dynamic>> points,
   ) {
-    final stats = {'Low': 0, 'Medium': 0, 'High': 0, 'Critical': 0};
+    final stats = {'Cases': 0, 'Districts': 0, 'Barangays': 0, 'Average': 0};
     for (final p in points) {
-      final avg = p['avgIncidentPerBarangay'] ?? p['districtAvgIncident'];
-      final cases = p['cases'];
-      final risk = p['risk']?.toString() ??
-          getRiskBand(
-            (avg is num)
-                ? avg
-                : (cases is num ? cases : 0),
-          );
-      if (stats.containsKey(risk)) {
-        stats[risk] = stats[risk]! + 1;
-      }
+      final cases = p['totalCases'] ?? p['districtTotalCases'] ?? p['cases'];
+      final value = cases is num ? cases.toInt() : int.tryParse('$cases') ?? 0;
+      stats['Cases'] = stats['Cases']! + value;
+      if (value > 0) stats['Districts'] = stats['Districts']! + 1;
+      final barangays = p['barangayCount'];
+      stats['Barangays'] = stats['Barangays']! + (barangays is num ? barangays.toInt() : 0);
+    }
+    if (stats['Districts']! > 0) {
+      stats['Average'] = (stats['Cases']! / stats['Districts']!).round();
     }
     return stats;
   }

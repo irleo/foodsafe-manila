@@ -3,21 +3,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { notify } from "../utils/toast";
 import { fetchLatestPredictions, refreshPredictions } from "../api/predictions";
+import { useLatestDatasetId } from "../hooks/useLatestDatasetId";
+import DataCoverageNotice from "../components/DataCoverageNotice";
 
 import YearlyActualVsPredictedLineChart from "../components/charts/YearlyActualVsPredictedLineChart";
 import YearlyPredictionErrorBarChart from "../components/charts/YearlyPredictionErrorBarChart";
-
-function riskCardClass(level) {
-  if (level === "critical")
-    return "border-2 rounded-xl p-6 bg-red-100 text-red-800 border-red-400";
-  if (level === "high")
-    return "border-2 rounded-xl p-6 bg-orange-100 text-orange-700 border-orange-300";
-  if (level === "medium")
-    return "border-2 rounded-xl p-6 bg-yellow-100 text-yellow-700 border-yellow-300";
-  if (level === "insufficient")
-    return "border-2 rounded-xl p-6 bg-gray-100 text-gray-700 border-gray-300";
-  return "border-2 rounded-xl p-6 bg-green-100 text-green-700 border-green-300";
-}
 
 function formatMonth(value) {
   if (value == null) return "—";
@@ -58,6 +48,7 @@ function getRowLabel(row) {
 }
 
 function toFiniteNumber(value) {
+  if (value == null || value === "") return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
@@ -142,6 +133,7 @@ function addToPeriod(map, year, month, fields) {
   const key = `${year}-${month}`;
   const entry = map.get(key) || { year, month };
   for (const [name, value] of Object.entries(fields)) {
+    if (value == null || value === "") continue;
     const n = Number(value);
     if (Number.isFinite(n)) entry[name] = (entry[name] ?? 0) + n;
   }
@@ -149,11 +141,20 @@ function addToPeriod(map, year, month, fields) {
 }
 
 function buildCityForecast(districts = []) {
+  const safeDistricts = Array.isArray(districts) ? districts : [];
+  const totalDistricts = safeDistricts.length;
+  const completeCityForecast =
+    totalDistricts > 0 &&
+    safeDistricts.every(
+      (district) =>
+        district.status === "success" &&
+        district.forecast?.some((point) => point.isPrimaryTarget),
+    );
   const historical = new Map();
   const backtest = new Map();
   const forecast = new Map();
 
-  for (const district of Array.isArray(districts) ? districts : []) {
+  for (const district of safeDistricts) {
     for (const r of district.historicalSeries || []) {
       addToPeriod(historical, r.year, r.month, { cases: r.cases });
     }
@@ -161,16 +162,14 @@ function buildCityForecast(districts = []) {
       addToPeriod(backtest, r.year, r.month, {
         actualCases: r.actualCases ?? r.actual,
         predictedCases: r.predictedCases ?? r.predicted,
-        lowerBound: r.lowerBound ?? r.lower,
-        upperBound: r.upperBound ?? r.upper,
+        districtCount: 1,
       });
     }
+    if (!completeCityForecast) continue;
     for (const r of district.forecast || []) {
       if (!r.isPrimaryTarget) continue;
       addToPeriod(forecast, r.year, r.month, {
         predictedCases: r.predictedCases ?? r.predicted,
-        lowerBound: r.lowerBound ?? r.lower,
-        upperBound: r.upperBound ?? r.upper,
       });
       const key = `${r.year}-${r.month}`;
       forecast.set(key, { ...forecast.get(key), isPrimaryTarget: true });
@@ -179,27 +178,43 @@ function buildCityForecast(districts = []) {
 
   return {
     historicalSeries: [...historical.values()],
-    backtestSeries: [...backtest.values()],
+    backtestSeries: completeCityForecast
+      ? [...backtest.values()]
+          .filter((row) => row.districtCount === totalDistricts)
+          .map((row) => ({
+            year: row.year,
+            month: row.month,
+            actualCases: row.actualCases,
+            predictedCases: row.predictedCases,
+          }))
+      : [],
     forecast: [...forecast.values()],
+    coverage: { totalDistricts, completeCityForecast },
   };
 }
 
-function calculateMetrics(rows) {
-  const predictionRows = rows.filter(
-    (row) => !row.isForecast && hasPredictionResult(row),
+function calculatePooledMetrics(districts = []) {
+  const predictionRows = (Array.isArray(districts) ? districts : []).flatMap(
+    (district) => district.backtestSeries || [],
   );
   if (!predictionRows.length) return null;
 
   const squaredErrors = [];
+  const absoluteErrors = [];
   const pctErrors = [];
+  let actualTotal = 0;
 
   for (const row of predictionRows) {
-    const actual = Number(row.actual);
-    const predicted = Number(row.predicted);
+    const actual = Number(row.actualCases ?? row.actual);
+    const predicted = Number(row.predictedCases ?? row.predicted);
+    if (!Number.isFinite(actual) || !Number.isFinite(predicted)) continue;
     const error = actual - predicted;
     squaredErrors.push(error * error);
+    absoluteErrors.push(Math.abs(error));
+    actualTotal += Math.max(0, actual);
     if (actual > 0) pctErrors.push(Math.abs(error) / actual);
   }
+  if (!squaredErrors.length) return null;
 
   const rmse = Math.sqrt(
     squaredErrors.reduce((sum, value) => sum + value, 0) / squaredErrors.length,
@@ -211,15 +226,30 @@ function calculateMetrics(rows) {
 
   return {
     rmse: Math.round(rmse),
+    mae: Number(
+      (absoluteErrors.reduce((sum, value) => sum + value, 0) / absoluteErrors.length).toFixed(1),
+    ),
     mape: mape == null ? null : Number(mape.toFixed(1)),
+    wape:
+      actualTotal > 0
+        ? Number(
+            (
+              (absoluteErrors.reduce((sum, value) => sum + value, 0) /
+                actualTotal) *
+              100
+            ).toFixed(1),
+          )
+        : null,
+    sampleSize: squaredErrors.length,
   };
 }
 
 export default function Predictions() {
   const { auth } = useAuth();
   const token = auth?.accessToken;
+  const { dataset } = useLatestDatasetId(token);
   const role = auth?.role;
-  const isAdmin = role === "admin";
+  const canRefresh = ["admin", "cesu"].includes(role);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [run, setRun] = useState(null);
@@ -274,12 +304,12 @@ export default function Predictions() {
   const onRefresh = () => {
     const doRefresh = async () => {
       if (!token) throw new Error("Sign in to refresh predictions.");
-      if (!isAdmin) throw new Error("Admin access required to refresh.");
+      if (!canRefresh) throw new Error("Admin or CESU access is required to refresh.");
 
       setIsGenerating(true);
 
       try {
-        const refreshResult = await refreshPredictions(token);
+        await refreshPredictions(token);
         const data = await fetchLatestPredictions(token);
         if (data?.hasPrediction === false)
           throw new Error(data?.message || "No prediction run created.");
@@ -290,11 +320,7 @@ export default function Predictions() {
 
         setEmptyMsg("");
 
-        return {
-          ...data,
-          upToDate: Boolean(refreshResult?.upToDate),
-          refreshMessage: refreshResult?.message || "",
-        };
+        return data;
       } finally {
         setIsGenerating(false);
       }
@@ -302,11 +328,7 @@ export default function Predictions() {
 
     notify.promise(doRefresh(), {
       loading: "Refreshing saved forecast…",
-      success: (result) =>
-        result?.upToDate
-          ? result?.refreshMessage ||
-            "Latest prediction already available. Upload a new validated dataset to update forecasts."
-          : "Forecast refreshed",
+      success: "Forecast refreshed",
       error: (e) => e?.message || "Failed to refresh forecast",
     });
   };
@@ -334,10 +356,19 @@ export default function Predictions() {
     [run],
   );
 
-  const cityChartRows = useMemo(
-    () => buildRowsFromForecast(cityForecast),
-    [cityForecast],
-  );
+  const cityCoverage = useMemo(() => {
+    if (run?.payload?.coverage) return run.payload.coverage;
+    const totalDistricts = districtForecasts.length;
+    const successfulDistricts = districtForecasts.filter(
+      (district) => district.status === "success" && district.forecast?.length,
+    ).length;
+    return {
+      totalDistricts,
+      successfulDistricts,
+      completeCityForecast:
+        totalDistricts > 0 && successfulDistricts === totalDistricts,
+    };
+  }, [districtForecasts, run]);
 
   const selectedChartScope = useMemo(
     () =>
@@ -446,8 +477,8 @@ export default function Predictions() {
   }, [historyPage, historyTotalPages]);
 
   const metrics = useMemo(
-    () => calculateMetrics(cityChartRows),
-    [cityChartRows],
+    () => calculatePooledMetrics(districtForecasts),
+    [districtForecasts],
   );
 
   const okDistricts = useMemo(() => {
@@ -484,7 +515,7 @@ export default function Predictions() {
       return null;
     }
 
-    return `Official baseline through ${formatYearMonth(
+    return `Confirmed-case baseline through ${formatYearMonth(
       basisY,
       basisM,
     )}. Forecast target month: ${formatYearMonth(
@@ -499,17 +530,15 @@ export default function Predictions() {
         <div>
           <h1 className="text-2xl font-bold space-y-6">Predictions</h1>
           <p className="text-gray-600 mt-1 max-w-3xl">
-            Monthly district forecasts use{" "}
-            <span className="font-medium">Facebook Prophet</span> with official
-            case counts as the baseline target, plus suspected citizen-report
-            features (lag1, lag2, and 3-month average) as supporting signals.
-            Report signals are clipped and aligned to the latest available
-            official month to avoid future-data leakage.
+            Monthly district forecasts use <span className="font-medium">Facebook Prophet</span>.
+            The target contains validated/confirmed cases only: uploaded official cases plus
+            confirmed surveillance reports, combined at query time without copying.
+            Reported, suspected, and not-validated records are excluded.
           </p>
         </div>
 
         <div className="flex items-center gap-4 shrink-0">
-          {isAdmin && (
+          {canRefresh && (
             <button
               type="button"
               className="flex items-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
@@ -539,6 +568,11 @@ export default function Predictions() {
         </div>
       </div>
 
+      <DataCoverageNotice
+        dataset={dataset}
+        fallbackText="Forecasts use only the validated/confirmed records available in this period. No complete CESU history before 2022 is implied."
+      />
+
       {!token && (
         <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
           Sign in to load Prophet forecasts from the server.
@@ -563,7 +597,16 @@ export default function Predictions() {
         </p>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {run && cityCoverage.totalDistricts > 0 && !cityCoverage.completeCityForecast && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          Whole-Manila forecast is unavailable because only{" "}
+          {cityCoverage.successfulDistricts} of {cityCoverage.totalDistricts}{" "}
+          districts produced a valid forecast.
+          District results remain available below.
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -582,7 +625,7 @@ export default function Predictions() {
           </svg>
 
           <p className="text-sm text-gray-600">
-            Manila next month (point estimate)
+            Predicted validated/confirmed cases — not actual cases
           </p>
 
           <p className="text-3xl">
@@ -597,7 +640,7 @@ export default function Predictions() {
 
           {nextForecast?.lower != null && nextForecast?.upper != null && (
             <p className="text-xs text-gray-500 mt-2">
-              95% interval approx.: {nextForecast.lower} – {nextForecast.upper}{" "}
+              95% prediction interval: {nextForecast.lower} – {nextForecast.upper}{" "}
               cases
             </p>
           )}
@@ -614,7 +657,7 @@ export default function Predictions() {
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="w-5 h-5 text-green-500"
+            className="w-5 h-5 text-blue-500"
           >
             <path d="M8 2v4"></path>
             <path d="M16 2v4"></path>
@@ -635,41 +678,10 @@ export default function Predictions() {
           </p>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="w-5 h-5 text-red-500"
-          >
-            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path>
-            <path d="M12 9v4"></path>
-            <path d="M12 17h.01"></path>
-          </svg>
-
-          <p className="text-sm text-gray-600">Backtest error (MAPE / RMSE)</p>
-
-          <p className="text-3xl">
-            {metrics?.mape != null ? `${metrics.mape}%` : "—"} /{" "}
-            {metrics?.rmse != null ? metrics.rmse : "—"}
-          </p>
-
-          <p className="text-sm text-gray-600 mt-2">
-            {metrics?.mape != null
-              ? "Citywide mean absolute % error on periods with enough history to fit Prophet"
-              : "Run a forecast to see metrics"}
-          </p>
-        </div>
       </div>
 
       <YearlyActualVsPredictedLineChart
-        title={`Actual vs Predicted (${selectedChartLabel})`}
+        title={`Historical Confirmed vs Predicted (${selectedChartLabel})`}
         data={chartRows}
         controls={
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center">
@@ -693,6 +705,26 @@ export default function Predictions() {
           </div>
         }
       />
+
+      <div className="pt-2">
+        <h2 className="text-lg font-semibold">Model Evaluation</h2>
+        <p className="text-sm text-gray-500">MAE, RMSE, WAPE, and MAPE evaluate historical backtests; they are not predicted case counts.</p>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <p className="text-sm text-gray-600">Pooled district backtest errors</p>
+        <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div><p className="text-xs text-gray-500">MAE</p><p className="text-2xl">{metrics?.mae ?? "—"}</p></div>
+          <div><p className="text-xs text-gray-500">RMSE</p><p className="text-2xl">{metrics?.rmse ?? "—"}</p></div>
+          <div><p className="text-xs text-gray-500">WAPE</p><p className="text-2xl">{metrics?.wape != null ? `${metrics.wape}%` : "—"}</p></div>
+          <div><p className="text-xs text-gray-500">MAPE</p><p className="text-2xl">{metrics?.mape != null ? `${metrics.mape}%` : "—"}</p></div>
+        </div>
+        <p className="mt-2 text-sm text-gray-600">
+          {metrics
+            ? `${metrics.sampleSize} district-month backtest observations. WAPE remains defined when individual actual values are zero.`
+            : "Run a forecast to see evaluation metrics"}
+        </p>
+      </div>
 
       <YearlyPredictionErrorBarChart
         title={`Prediction Error by Period (${selectedErrorLabel})`}
@@ -725,9 +757,8 @@ export default function Predictions() {
         <div className="flex items-center justify-between mb-6">
           <h2 className="font-semibold text-lg">District next-month outlook</h2>
           <p className="text-sm text-gray-500 max-w-md text-right">
-            Each card uses the same district-level hybrid model (official
-            baseline + suspected-report regressors). Risk score uses the same
-            case-count bands shown on the heatmap.
+            Forecasts are analytical estimates for the stated target month and
+            must not be presented as observed or confirmed case totals.
           </p>
         </div>
 
@@ -738,80 +769,30 @@ export default function Predictions() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {okDistricts.map((d) => (
-              <div key={d.district} className={riskCardClass(d.riskLevel)}>
+              <div key={d.district} className="rounded-xl border border-gray-200 bg-gray-50 p-6 text-gray-800">
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <p className="text-sm text-gray-600">District</p>
                     <p className="font-medium">{d.district}</p>
                   </div>
 
-                  {(d.riskLevel === "high" || d.riskLevel === "critical") && (
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="w-5 h-5 text-red-600"
-                    >
-                      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path>
-                      <path d="M12 9v4"></path>
-                      <path d="M12 17h.01"></path>
-                    </svg>
-                  )}
                 </div>
 
                 <div className="space-y-3">
                   <div>
-                    <p className="text-sm text-gray-600">Risk score</p>
-
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="flex-1 bg-white rounded-full h-2 overflow-hidden">
-                        <div
-                          className="h-full bg-current opacity-80"
-                          style={{ width: `${d.riskScore ?? 0}%` }}
-                        />
-                      </div>
-
-                      <span className="text-sm">
-                        {d.riskScore == null ? "N/A" : `${d.riskScore}%`}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div>
                     <p className="text-sm text-gray-600">
                       {nextForecast
-                        ? `Predicted Cases (${formatYearMonth(nextForecast.year, nextForecast.month)})`
+                        ? `Predicted validated/confirmed cases (${formatYearMonth(nextForecast.year, nextForecast.month)}) — not actual`
                         : "Latest data"}
                     </p>
                     <p className="text-2xl">
                       {d.targetForecast?.predicted ?? "No sufficient data"}
                     </p>
+                    {!d.targetForecast && d.message && (
+                      <p className="mt-1 text-sm text-amber-700">{d.message}</p>
+                    )}
                   </div>
 
-                  <div>
-                    <p className="text-sm text-gray-600">Risk band</p>
-                    <p className="capitalize">
-                      {d.riskLevel === "insufficient"
-                        ? "No sufficient data"
-                        : (d.riskLevel ?? "—")}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-sm text-gray-600">
-                      MAPE / RMSE (backtest)
-                    </p>
-                    <p className="text-sm">
-                      {d.metrics?.mape != null ? `${d.metrics.mape}%` : "—"} /{" "}
-                      {d.metrics?.rmse != null ? d.metrics.rmse : "—"}
-                    </p>
-                  </div>
                 </div>
               </div>
             ))}
@@ -857,10 +838,10 @@ export default function Predictions() {
             <thead>
               <tr className="border-b border-gray-200">
                 <th className="text-left p-3">Period</th>
-                <th className="text-left p-3">Predicted</th>
-                <th className="text-left p-3">Actual</th>
+                <th className="text-left p-3">Predicted (not actual)</th>
+                <th className="text-left p-3">Historical confirmed</th>
                 <th className="text-left p-3">Abs error %</th>
-                <th className="text-left p-3">Interval (95% approx.)</th>
+                <th className="text-left p-3">95% prediction interval</th>
               </tr>
             </thead>
 

@@ -11,13 +11,16 @@ export function useOfficialCases({ token, datasetId, year, month, district, dise
     if (!datasetId) return null;
     const params = new URLSearchParams();
     params.set("page", "1");
-    params.set("limit", String(Math.min(Math.max(Number(limit) || 50, 1), 50)));
+    params.set("limit", String(Math.min(Math.max(Number(limit) || 50, 1), 5000)));
     if (year != null && year !== "All") params.set("year", String(year));
     if (month != null && month !== "All") params.set("month", String(month));
     if (district) params.set("district", district);
     if (disease) params.set("disease", disease);
-    if (caseClassification && caseClassification !== "All")
-      params.set("caseClassification", caseClassification);
+    const classifications = Array.isArray(caseClassification)
+      ? caseClassification.filter(Boolean).join(",")
+      : caseClassification;
+    if (classifications && classifications !== "All")
+      params.set("caseClassification", classifications);
     const qs = params.toString();
     return `${API_BASE}/api/cases/${datasetId}${qs ? `?${qs}` : ""}`;
   }, [datasetId, year, month, district, disease, caseClassification, limit]);

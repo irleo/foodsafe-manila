@@ -367,6 +367,7 @@ export const requestAccess = async (req, res) => {
         username: user.username,
         email: user.email,
         role: user.role,
+        canAccessPatientIdentity: user.canAccessPatientIdentity,
         status: user.status,
       },
     });
@@ -446,6 +447,7 @@ export const login = async (req, res) => {
         username: user.username,
         email: user.email,
         role: user.role,
+        canAccessPatientIdentity: user.canAccessPatientIdentity,
         status: user.status,
       },
     });
@@ -494,6 +496,7 @@ export const refreshToken = async (req, res) => {
         username: user.username,
         email: user.email,
         role: user.role,
+        canAccessPatientIdentity: user.canAccessPatientIdentity,
         status: user.status,
       },
     });
