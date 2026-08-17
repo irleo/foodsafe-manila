@@ -121,7 +121,9 @@ The backend is the source of truth. Both the React frontend and Flutter app call
 
 ### Predictions
 
-- Prophet-backed monthly district case forecast pipeline.
+- Monthly district comparison pipeline for Prophet and Seasonal Naïve.
+- Monthly preprocessing generates every district-month inside the verified dataset coverage period; a covered month without a confirmed record is stored as zero for modeling, while months outside coverage remain missing.
+- Prophet and Seasonal Naïve use the same completed confirmed-case series and comparable rolling-origin backtest targets.
 - Prediction runs stored in MongoDB with model, granularity, dataset scope, basis period, forecast target period, trigger, status, and payload.
 - Manual admin refresh endpoint.
 - Automatic refresh after official upload.
@@ -424,7 +426,7 @@ The core Starter-tier safeguards—request caching and coalescing, MongoDB pool 
 - `backend/models/EmailOtp.js`: OTP storage schema for email verification flows.
 - `backend/models/Notification.js`: Notification schema.
 - `backend/models/OfficialCase.js`: Monthly official case schema with district, barangay, disease, classification, and cases.
-- `backend/models/PredictionRun.js`: Stored Prophet prediction run schema.
+- `backend/models/PredictionRun.js`: Stored monthly comparison run containing Prophet, Seasonal Naïve, rolling-origin metrics, and district model selection.
 - `backend/models/Report.js`: Citizen suspected illness report schema.
 - `backend/models/WebUser.js`: Web/admin account schema stored in `web_users`.
 
@@ -492,7 +494,7 @@ The core Starter-tier safeguards—request caching and coalescing, MongoDB pool 
 - `frontend/src/pages/ForgotPasswordPage.jsx`: Web forgot-password OTP request flow.
 - `frontend/src/pages/HeatmapPage.jsx`: Heatmap dashboard.
 - `frontend/src/pages/LoginPage.jsx`: Web login screen.
-- `frontend/src/pages/PredictionsPage.jsx`: Prophet forecast dashboard and admin refresh.
+- `frontend/src/pages/PredictionsPage.jsx`: Page-wide Best Model / Prophet / Seasonal Naïve forecast dashboard and comparison refresh.
 - `frontend/src/pages/RequestAccessPage.jsx`: Web access-request and OTP flow.
 - `frontend/src/pages/ResetPasswordPage.jsx`: Web password reset completion.
 - `frontend/src/pages/UserManagementPage.jsx`: Admin user approval/rejection/deletion page.

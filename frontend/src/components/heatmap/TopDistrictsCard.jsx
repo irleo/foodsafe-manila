@@ -1,8 +1,12 @@
-export default function TopDistrictsCard({ items }) {
+export default function TopDistrictsCard({
+  items,
+  title = "Areas with Highest Case Concentration",
+  subtitle = "Distribution within the selected status and period.",
+}) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <h3 className="mb-4 font-semibold">Areas with Highest Case Concentration</h3>
-      <p className="text-xs text-gray-500 mb-4">Distribution within the selected status and period.</p>
+      <h3 className="font-semibold">{title}</h3>
+      <p className="mb-4 mt-1 text-xs text-gray-500">{subtitle}</p>
 
       <div className="space-y-3">
         {items?.length ? (
@@ -16,7 +20,7 @@ export default function TopDistrictsCard({ items }) {
                   </p>
                 </div>
               </div>
-              <span className="text-sm px-2 py-1 rounded bg-red-100 text-red-700">
+              <span className="rounded bg-blue-50 px-2 py-1 text-sm font-medium text-blue-700">
                 {d.cases}
               </span>
             </div>

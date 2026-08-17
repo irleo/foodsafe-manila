@@ -1,4 +1,7 @@
-export default function DistrictStatisticsTable({ data = [] }) {
+export default function DistrictStatisticsTable({
+  data = [],
+  caseStatusLabel = "Validated / Confirmed",
+}) {
   const safeData = Array.isArray(data) ? data : [];
 
   const tableData = [...safeData].sort(
@@ -7,7 +10,9 @@ export default function DistrictStatisticsTable({ data = [] }) {
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <h2 className="font-semibold mb-4">Validated / Confirmed Case Distribution Summary</h2>
+      <h2 className="font-semibold mb-4">
+        {caseStatusLabel} Case Distribution Summary
+      </h2>
 
       {tableData.length === 0 ? (
         <div className="text-sm text-gray-500">No district statistics available.</div>
@@ -17,7 +22,7 @@ export default function DistrictStatisticsTable({ data = [] }) {
             <thead>
               <tr className="border-b border-gray-100">
                 <th className="text-left p-3">District</th>
-                <th className="text-left p-3">Validated / Confirmed Cases</th>
+                <th className="text-left p-3">{caseStatusLabel} Cases</th>
                 <th className="text-left p-3">Years Covered</th>
                 <th className="text-left p-3">Average / Year</th>
               </tr>

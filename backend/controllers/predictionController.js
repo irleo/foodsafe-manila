@@ -101,7 +101,11 @@ export const refreshPredictions = async (req, res) => {
       const isSetup =
         /Prophet|Python|prophet_import|pip install/i.test(msg) ||
         msg.includes("PYTHON_BIN");
-      return res.status(isSetup ? 503 : 500).json({ message: msg });
+      const isEligibility = /required continuous|complete monthly observations|missing months|No monthly confirmed case data/i.test(msg);
+      return res.status(isSetup ? 503 : isEligibility ? 422 : 500).json({
+        message: msg,
+        code: isEligibility ? "INSUFFICIENT_FORECAST_HISTORY" : "FORECAST_REFRESH_FAILED",
+      });
     }
 
     return res.json({
@@ -120,6 +124,10 @@ export const refreshPredictions = async (req, res) => {
     const isSetup =
       /Prophet|Python|prophet_import|pip install/i.test(msg) ||
       msg.includes("PYTHON_BIN");
-    return res.status(isSetup ? 503 : 500).json({ message: msg });
+    const isEligibility = /required continuous|complete monthly observations|missing months|No monthly confirmed case data/i.test(msg);
+    return res.status(isSetup ? 503 : isEligibility ? 422 : 500).json({
+      message: msg,
+      code: isEligibility ? "INSUFFICIENT_FORECAST_HISTORY" : "FORECAST_REFRESH_FAILED",
+    });
   }
 };

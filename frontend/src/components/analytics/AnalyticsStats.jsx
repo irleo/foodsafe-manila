@@ -5,6 +5,7 @@ import {
 } from "@heroicons/react/24/outline";
 
 export default function AnalyticsStats({
+  caseStatusLabel,
   latestYear,
   latestYearCases,
   previousYear,
@@ -20,7 +21,9 @@ export default function AnalyticsStats({
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 analytics-print-block">
         <div className="flex items-center justify-between mb-2">
           <p className="text-sm text-gray-600">
-            {latestYear ? `Validated / Confirmed Cases in ${latestYear}` : "Validated / Confirmed Cases"}
+            {latestYear
+              ? `${caseStatusLabel} Cases in ${latestYear}`
+              : `${caseStatusLabel} Cases`}
           </p>
           <ArrowTrendingUpIcon height={20} width={20} />
         </div>
@@ -56,7 +59,9 @@ export default function AnalyticsStats({
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 analytics-print-block">
         <p className="text-sm text-gray-600 mb-2">Most Recorded Condition</p>
         <p className="text-2xl font-semibold">{topDisease}</p>
-        <p className="text-sm text-gray-600 mt-2">Largest confirmed case total</p>
+        <p className="text-sm text-gray-600 mt-2">
+          Largest {caseStatusLabel.toLowerCase()} case total
+        </p>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 analytics-print-block">

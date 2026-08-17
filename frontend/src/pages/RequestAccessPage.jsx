@@ -326,13 +326,17 @@ const RequestAccess = () => {
                     name="email"
                     type="email"
                     className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all border-gray-300"
-                    placeholder="your.email@organization.gov.ph"
+                    placeholder="your.email@agency.gov.ph or institution.edu.ph"
                     value={form.email}
                     onChange={setField("email")}
                     disabled={loading}
                     required
                   />
                 </div>
+                <p className="mt-2 text-xs text-gray-500">
+                  Government or institutional email is preferred. Other verified
+                  addresses require manual affiliation review by an administrator.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 -mb-3">

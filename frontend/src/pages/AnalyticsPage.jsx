@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useLatestDatasetId } from "../hooks/useLatestDatasetId";
 import { useOfficialCases } from "../hooks/useOfficialCases";
@@ -7,8 +7,12 @@ import AnalyticsStats from "../components/analytics/AnalyticsStats";
 import AnalyticsGrid from "../components/analytics/AnalyticsGrid";
 import DataCoverageNotice from "../components/DataCoverageNotice";
 import { buildMonthlyTimelineData } from "../utils/analyticsCaseBuilders";
+import { formatStatusLabel } from "../utils/formatStatusLabel";
+
+const CASE_STATUS_OPTIONS = ["reported", "suspected", "confirmed"];
 
 export default function Analytics() {
+  const [selectedCaseStatus, setSelectedCaseStatus] = useState("confirmed");
   const { auth } = useAuth();
   const token = auth?.accessToken;
   const { datasetId, dataset } = useLatestDatasetId(token);
@@ -36,18 +40,23 @@ export default function Analytics() {
     }));
   }, [officialItems]);
 
-  const confirmedRows = useMemo(
-    () => caseRows.filter((row) => row.caseClassification === "confirmed"),
-    [caseRows],
+  const selectedRows = useMemo(
+    () =>
+      caseRows.filter(
+        (row) => row.caseClassification === selectedCaseStatus,
+      ),
+    [caseRows, selectedCaseStatus],
   );
 
   const vm = useMemo(
     () => ({
-      ...buildAnalyticsCasesViewModel(confirmedRows),
-      monthlyTimelineData: buildMonthlyTimelineData(caseRows),
+      ...buildAnalyticsCasesViewModel(selectedRows),
+      monthlyTimelineData: buildMonthlyTimelineData(selectedRows),
     }),
-    [caseRows, confirmedRows],
+    [selectedRows],
   );
+
+  const selectedStatusLabel = formatStatusLabel(selectedCaseStatus);
 
   const handleExportPdf = () => {
     window.print();
@@ -59,7 +68,7 @@ export default function Analytics() {
         <div>
           <h1 className="text-2xl font-bold">Analytics</h1>
           <p className="mt-1 text-gray-600">
-            Status-separated trends with validated/confirmed cases used for official distribution summaries
+            Explore status-specific case patterns across all analytics views
           </p>
         </div>
         {/* EXPORT */}
@@ -91,6 +100,34 @@ export default function Analytics() {
 
       <DataCoverageNotice dataset={dataset} />
 
+      <section className="no-print rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <label
+              htmlFor="analytics-case-status"
+              className="text-sm font-semibold text-gray-900"
+            >
+              Case Status
+            </label>
+            <p className="mt-1 text-sm text-gray-600">
+              This selection updates every statistic, chart, and district summary below.
+            </p>
+          </div>
+          <select
+            id="analytics-case-status"
+            value={selectedCaseStatus}
+            onChange={(event) => setSelectedCaseStatus(event.target.value)}
+            className="min-h-11 w-full rounded-lg border border-blue-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:w-64"
+          >
+            {CASE_STATUS_OPTIONS.map((status) => (
+              <option key={status} value={status}>
+                {formatStatusLabel(status)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </section>
+
       {errorMsg && (
         <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
           {errorMsg}
@@ -104,6 +141,7 @@ export default function Analytics() {
       ) : (
         <>
           <AnalyticsStats
+            caseStatusLabel={selectedStatusLabel}
             latestYear={vm.latestYear}
             latestYearCases={vm.latestYearCases}
             previousYear={vm.previousYear}
@@ -114,6 +152,8 @@ export default function Analytics() {
           />
 
           <AnalyticsGrid
+            selectedCaseStatus={selectedCaseStatus}
+            caseStatusLabel={selectedStatusLabel}
             monthlyTimelineData={vm.monthlyTimelineData}
             diseaseData={vm.diseaseData}
             districtData={vm.districtData}

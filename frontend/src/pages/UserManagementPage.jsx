@@ -191,6 +191,17 @@ export default function UserManagement() {
       .join("");
 
   const updateStatus = async (userId, nextStatus) => {
+    const targetUser = users.find((user) => user._id === userId);
+    if (
+      nextStatus === "approved" &&
+      targetUser?.emailReviewStatus === "manual_review_required" &&
+      !window.confirm(
+        "This email does not use a .gov.ph domain. Confirm that you manually verified the applicant's organization, position, and authorization before approving access.",
+      )
+    ) {
+      return;
+    }
+
     try {
       setActionLoadingId(userId);
 
@@ -200,7 +211,13 @@ export default function UserManagement() {
       };
       await axiosPrivate.patch(`/api/users/${userId}/status`, {
         status: nextStatus,
-        ...(nextStatus === "approved" ? selectedAccess : {}),
+        ...(nextStatus === "approved"
+          ? {
+              ...selectedAccess,
+              manualAffiliationConfirmed:
+                targetUser?.emailReviewStatus === "manual_review_required",
+            }
+          : {}),
       });
 
       setUsers((prev) => {
@@ -251,10 +268,24 @@ export default function UserManagement() {
   };
 
   const updateApprovedAccess = async (user) => {
+    const access = selectedAccessFor(user);
+    const requiresManualConfirmation =
+      user.emailReviewStatus === "manual_review_required";
+    if (
+      requiresManualConfirmation &&
+      !window.confirm(
+        "This account does not use a .gov.ph domain. Confirm that its affiliation and authorization remain valid before changing access.",
+      )
+    ) {
+      return;
+    }
+
     try {
       setActionLoadingId(user._id);
-      const access = selectedAccessFor(user);
-      await axiosPrivate.patch(`/api/users/${user._id}/access`, access);
+      await axiosPrivate.patch(`/api/users/${user._id}/access`, {
+        ...access,
+        manualAffiliationConfirmed: requiresManualConfirmation,
+      });
       await fetchApprovedUsers();
       setError(null);
       setInfoMsg("User access updated successfully.");
@@ -478,6 +509,15 @@ export default function UserManagement() {
                               admin
                             </span>
                           )}
+                          {u.emailReviewStatus === "government_domain" ? (
+                            <span className="px-3 py-1 rounded-full text-xs border bg-emerald-50 text-emerald-700 border-emerald-200">
+                              .gov.ph domain
+                            </span>
+                          ) : (
+                            <span className="px-3 py-1 rounded-full text-xs border bg-amber-50 text-amber-800 border-amber-200">
+                              Manual affiliation review
+                            </span>
+                          )}
                         </div>
 
                         <div className="space-y-1 text-sm text-gray-600">
@@ -490,6 +530,14 @@ export default function UserManagement() {
                               {u.email}
                             </a>
                           </div>
+
+                          {u.emailReviewStatus === "manual_review_required" && (
+                            <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                              This is not a <span className="font-semibold">.gov.ph</span>{" "}
+                              address. Verify the applicant&apos;s organization,
+                              position, and authorization before approval.
+                            </div>
+                          )}
 
                           {u.organization && (
                             <div>
@@ -703,6 +751,15 @@ export default function UserManagement() {
                           {u.canAccessPatientIdentity && (
                             <span className="px-3 py-1 rounded-full text-xs border bg-violet-50 text-violet-700 border-violet-200">
                               Patient identity authorized
+                            </span>
+                          )}
+                          {u.emailReviewStatus === "government_domain" ? (
+                            <span className="px-3 py-1 rounded-full text-xs border bg-emerald-50 text-emerald-700 border-emerald-200">
+                              .gov.ph domain
+                            </span>
+                          ) : (
+                            <span className="px-3 py-1 rounded-full text-xs border bg-amber-50 text-amber-800 border-amber-200">
+                              Manually reviewed affiliation
                             </span>
                           )}
                         </div>

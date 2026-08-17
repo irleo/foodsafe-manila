@@ -4,6 +4,17 @@ import { logActivity } from "../utils/logActivity.js";
 const ASSIGNABLE_ROLES = new Set(["cesu", "surveillance_team"]);
 const GOVERNMENT_EMAIL_PATTERN = /^[^\s@]+@(?:[a-z0-9-]+\.)*gov\.ph$/i;
 
+function withEmailDomainReview(user) {
+  const isGovernmentEmail = GOVERNMENT_EMAIL_PATTERN.test(user?.email || "");
+  return {
+    ...user,
+    isGovernmentEmail,
+    emailReviewStatus: isGovernmentEmail
+      ? "government_domain"
+      : "manual_review_required",
+  };
+}
+
 /**
  * GET /api/users?page=1&limit=6&status=pending&search=juan
  * status: pending | approved | rejected | all (default: all)
@@ -38,10 +49,11 @@ export const getUsers = async (req, res) => {
       .select("-password")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .lean();
 
     res.status(200).json({
-      users,
+      users: users.map(withEmailDomainReview),
       total,
       totalPages: Math.ceil(total / limit) || 1,
       currentPage: page,
@@ -77,7 +89,12 @@ export const getUserStats = async (req, res) => {
  */
 export const updateUserStatus = async (req, res) => {
   try {
-    const { status, role, canAccessPatientIdentity = false } = req.body;
+    const {
+      status,
+      role,
+      canAccessPatientIdentity = false,
+      manualAffiliationConfirmed = false,
+    } = req.body;
 
     if (!["approved", "rejected"].includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
@@ -95,8 +112,14 @@ export const updateUserStatus = async (req, res) => {
       if (!ASSIGNABLE_ROLES.has(role)) {
         return res.status(400).json({ message: "Assign either the CESU or Surveillance Team role before approval." });
       }
-      if (!GOVERNMENT_EMAIL_PATTERN.test(user.email)) {
-        return res.status(400).json({ message: "Only verified government email addresses ending in .gov.ph can be approved." });
+      if (
+        !GOVERNMENT_EMAIL_PATTERN.test(user.email) &&
+        manualAffiliationConfirmed !== true
+      ) {
+        return res.status(400).json({
+          message:
+            "Confirm that the applicant's affiliation was manually reviewed before approving a non-.gov.ph email.",
+        });
       }
       user.role = role;
       user.canAccessPatientIdentity =
@@ -118,7 +141,17 @@ export const updateUserStatus = async (req, res) => {
       actionType: status === "approved" ? "user_approved" : "user_rejected",
       title: status === "approved" ? "User approved" : "User rejected",
       subtitle: `${user.username} (${user.email}) was ${status}.`,
-      metadata: { userId: user._id, status, role: user.role },
+      metadata: {
+        userId: user._id,
+        status,
+        role: user.role,
+        emailReviewStatus: GOVERNMENT_EMAIL_PATTERN.test(user.email)
+          ? "government_domain"
+          : "manual_review_required",
+        manualAffiliationConfirmed:
+          !GOVERNMENT_EMAIL_PATTERN.test(user.email) &&
+          manualAffiliationConfirmed === true,
+      },
     });
 
     res.status(200).json({
@@ -130,6 +163,7 @@ export const updateUserStatus = async (req, res) => {
         status: user.status,
         role: user.role,
         canAccessPatientIdentity: user.canAccessPatientIdentity,
+        isGovernmentEmail: GOVERNMENT_EMAIL_PATTERN.test(user.email),
       },
     });
   } catch (error) {
@@ -140,7 +174,11 @@ export const updateUserStatus = async (req, res) => {
 
 export const updateUserAccess = async (req, res) => {
   try {
-    const { role, canAccessPatientIdentity = false } = req.body;
+    const {
+      role,
+      canAccessPatientIdentity = false,
+      manualAffiliationConfirmed = false,
+    } = req.body;
     if (!ASSIGNABLE_ROLES.has(role)) {
       return res.status(400).json({ message: "Role must be CESU or Surveillance Team." });
     }
@@ -148,10 +186,15 @@ export const updateUserAccess = async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
     if (user.role === "admin") return res.status(403).json({ message: "Admin access cannot be changed here." });
     if (user.status !== "approved") return res.status(409).json({ message: "Only approved users can have access updated." });
-    if (!GOVERNMENT_EMAIL_PATTERN.test(user.email)) {
-      return res.status(400).json({ message: "Only verified government email addresses ending in .gov.ph can receive system access." });
+    if (
+      !GOVERNMENT_EMAIL_PATTERN.test(user.email) &&
+      manualAffiliationConfirmed !== true
+    ) {
+      return res.status(400).json({
+        message:
+          "Confirm that the user's affiliation was manually reviewed before changing access for a non-.gov.ph email.",
+      });
     }
-
     user.role = role;
     user.canAccessPatientIdentity =
       role === "surveillance_team" && canAccessPatientIdentity === true;
@@ -161,7 +204,17 @@ export const updateUserAccess = async (req, res) => {
       actionType: "user_access_updated",
       title: "User access updated",
       subtitle: `${user.username} was assigned to ${role}.`,
-      metadata: { userId: user._id, role, canAccessPatientIdentity: user.canAccessPatientIdentity },
+      metadata: {
+        userId: user._id,
+        role,
+        canAccessPatientIdentity: user.canAccessPatientIdentity,
+        emailReviewStatus: GOVERNMENT_EMAIL_PATTERN.test(user.email)
+          ? "government_domain"
+          : "manual_review_required",
+        manualAffiliationConfirmed:
+          !GOVERNMENT_EMAIL_PATTERN.test(user.email) &&
+          manualAffiliationConfirmed === true,
+      },
     });
     return res.json({
       message: "User access updated.",
@@ -169,6 +222,7 @@ export const updateUserAccess = async (req, res) => {
         id: user._id,
         role: user.role,
         canAccessPatientIdentity: user.canAccessPatientIdentity,
+        isGovernmentEmail: GOVERNMENT_EMAIL_PATTERN.test(user.email),
       },
     });
   } catch (error) {
