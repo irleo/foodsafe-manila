@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
-import OfficialCase from "../models/OfficialCase.js";
+import { paginationMeta, parsePagination } from "../utils/pagination.js";
+import { getAnalyticalCasePage } from "../services/analyticalCaseService.js";
 
 export const listCasesByDataset = async (req, res) => {
   try {
@@ -8,22 +9,20 @@ export const listCasesByDataset = async (req, res) => {
       return res.status(400).json({ message: "Invalid datasetId" });
     }
 
-    const limit = Math.min(Number(req.query.limit ?? 200), 1000);
-    const skip = Math.max(Number(req.query.skip ?? 0), 0);
-
-    const query = { datasetId: new mongoose.Types.ObjectId(datasetId) };
+    const { page, limit, skip } = parsePagination(req.query, { maxLimit: 5000 });
+    const filters = { datasetId };
     if (req.query.year !== undefined && req.query.year !== "") {
       const y = Number(req.query.year);
       if (!Number.isFinite(y))
         return res.status(400).json({ message: "Invalid year" });
-      query.year = y;
+      filters.year = y;
     }
 
     if (req.query.month !== undefined && req.query.month !== "") {
       const m = Number(req.query.month);
       if (!Number.isFinite(m) || m < 1 || m > 12)
         return res.status(400).json({ message: "Invalid month" });
-      query.month = m;
+      filters.month = m;
     }
 
     if (req.query.barangayNo !== undefined && req.query.barangayNo !== "") {
@@ -31,44 +30,61 @@ export const listCasesByDataset = async (req, res) => {
       if (!Number.isFinite(b)) {
         return res.status(400).json({ message: "Invalid barangayNo" });
       }
-      query.barangayNo = b;
+      filters.barangayNo = b;
     }
 
-    if (req.query.district) query.district = String(req.query.district).trim();
+    if (req.query.district) filters.district = String(req.query.district).trim();
 
-    if (req.query.disease) query.disease = String(req.query.disease).trim();
+    if (req.query.disease) filters.disease = String(req.query.disease).trim();
 
-    if (req.query.caseClassification)
-      query.caseClassification = String(req.query.caseClassification)
-        .trim()
-        .toLowerCase();
-
-    const [items, total] = await Promise.all([
-      OfficialCase.find(query)
-        .select(
-          "city district barangay barangayNo disease year month caseClassification cases source datasetId",
-        )
-        .sort({
-          year: 1,
-          month: 1,
-          district: 1,
-          disease: 1,
-          caseClassification: 1,
-        })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      OfficialCase.countDocuments(query),
+    const allowedStatuses = new Set([
+      "reported",
+      "suspected",
+      "confirmed",
+      "not_validated",
     ]);
+    const selectedStatuses = String(
+      req.query.caseClassification || "confirmed",
+    )
+      .split(",")
+      .map((status) => status.trim().toLowerCase())
+      .filter(Boolean);
+    if (
+      selectedStatuses.length === 0 ||
+      selectedStatuses.some((status) => !allowedStatuses.has(status))
+    ) {
+      return res.status(400).json({ message: "Invalid caseClassification" });
+    }
+    const { items, total } = await getAnalyticalCasePage({
+      ...filters,
+      statuses: [...new Set(selectedStatuses)],
+      skip,
+      limit,
+    });
 
     return res.json({
       datasetId,
       total,
       limit,
       skip,
+      page,
+      pagination: paginationMeta({ page, limit, total }),
       items,
+      caseDefinition: {
+        selectedStatuses: [...new Set(selectedStatuses)],
+        includes: [
+          "official_upload",
+          ...(selectedStatuses.some((status) => status !== "confirmed")
+            ? ["surveillance_report"]
+            : []),
+          ...(selectedStatuses.includes("confirmed")
+            ? ["confirmed_surveillance_report"]
+            : []),
+        ],
+        unionStrategy: "query_time_no_copy",
+      },
     });
   } catch (err) {
-    return res.status(500).json({ message: err?.message || "Server error" });
+    return res.status(err?.status || 500).json({ message: err?.message || "Server error" });
   }
 };

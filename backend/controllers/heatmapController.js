@@ -1,291 +1,143 @@
 import mongoose from "mongoose";
 import OfficialCase from "../models/OfficialCase.js";
 import Report from "../models/Report.js";
-import PredictionRun from "../models/PredictionRun.js";
 import { normalizeDistrictKey } from "../constants/manilaDistrictCoords.js";
-import { computeRiskAnalysis } from "../utils/riskUtils.js";
+import { getAnalyticalCaseRows } from "../services/analyticalCaseService.js";
+
+const ALLOWED_STATUSES = new Set(["reported", "suspected", "confirmed", "not_validated"]);
 
 function getBarangayNo(value, fallback) {
   const direct = Number(value);
   if (Number.isFinite(direct)) return direct;
-
   const match = String(fallback || "").match(/\d+/);
   const parsed = match ? Number(match[0]) : NaN;
   return Number.isFinite(parsed) ? parsed : null;
 }
 
 function isLikelyDiseaseName(value) {
-  const v = String(value || "").trim();
-  if (!v) return false;
-  const normalized = v.toLowerCase();
-  const blocked = new Set([
-    "all",
-    "total",
-    "grand total",
-    "unknown",
-    "n/a",
-    "na",
-    "none",
-    "others",
-    "other",
-    "undefined",
-    "null",
-  ]);
-  if (blocked.has(normalized)) return false;
-  if (normalized.includes("classification")) return false;
-  if (normalized.includes("district")) return false;
-  if (normalized.includes("barangay")) return false;
-  return true;
+  const normalized = String(value || "").trim().toLowerCase();
+  return Boolean(normalized) && !new Set([
+    "all", "total", "grand total", "unknown", "n/a", "na", "none",
+    "others", "other", "undefined", "null",
+  ]).has(normalized);
 }
 
 export const getDistrictHeatmap = async (req, res) => {
   try {
-    const { datasetId, year, month, disease, caseClassification } = req.query;
-
-    if (!datasetId || !mongoose.Types.ObjectId.isValid(datasetId)) {
+    const { datasetId, year, month, disease } = req.query;
+    if (!datasetId || !mongoose.isValidObjectId(datasetId)) {
       return res.status(400).json({ message: "Invalid datasetId" });
     }
 
-    const match = { datasetId: new mongoose.Types.ObjectId(datasetId) };
-
-    if (year !== undefined && year !== "") {
-      const y = Number(year);
-      if (!Number.isFinite(y)) return res.status(400).json({ message: "Invalid year" });
-      match.year = y;
+    const selectedStatus = String(req.query.caseClassification || "confirmed")
+      .trim()
+      .toLowerCase();
+    if (!ALLOWED_STATUSES.has(selectedStatus)) {
+      return res.status(400).json({ message: "Select one valid case status; statuses are not combined automatically" });
+    }
+    const selectedYear = year === undefined || year === "" ? undefined : Number(year);
+    const selectedMonth = month === undefined || month === "" ? undefined : Number(month);
+    if (selectedYear !== undefined && !Number.isInteger(selectedYear)) {
+      return res.status(400).json({ message: "Invalid year" });
+    }
+    if (selectedMonth !== undefined && (!Number.isInteger(selectedMonth) || selectedMonth < 1 || selectedMonth > 12)) {
+      return res.status(400).json({ message: "Invalid month" });
     }
 
-    if (month !== undefined && month !== "") {
-      const m = Number(month);
-      if (!Number.isFinite(m) || m < 1 || m > 12)
-        return res.status(400).json({ message: "Invalid month" });
-      match.month = m;
-    }
+    const analyticalRows = await getAnalyticalCaseRows({
+      datasetId,
+      statuses: [selectedStatus],
+      year: selectedYear,
+      month: selectedMonth,
+      disease: disease ? String(disease).trim() : undefined,
+    });
 
-    if (disease) {
-      match.disease = String(disease).trim();
-    }
-
-    if (caseClassification) {
-      match.caseClassification = String(caseClassification).trim().toLowerCase();
-    }
-
-    const rows = await OfficialCase.aggregate([
-      { $match: match },
-      {
-        $group: {
-          _id: {
-            barangayNo: "$barangayNo",
-            barangay: "$barangay",
-            district: "$district",
-          },
-          totalCases: { $sum: "$cases" },
-        },
-      },
-      { $sort: { totalCases: -1 } },
-    ]);
-
-    const reportMatch = { isCounted: true, source: "citizen_app" };
-    if (year !== undefined && year !== "") {
-      const y = Number(year);
-      reportMatch.reportedAt = {
-        ...(reportMatch.reportedAt || {}),
-        $gte: new Date(Date.UTC(y, 0, 1)),
-        $lte: new Date(Date.UTC(y, 11, 31, 23, 59, 59, 999)),
-      };
-    }
-    if (month !== undefined && month !== "") {
-      const m = Number(month);
-      const y =
-        year !== undefined && year !== "" ? Number(year) : new Date().getUTCFullYear();
-      reportMatch.reportedAt = {
-        ...(reportMatch.reportedAt || {}),
-        $gte: new Date(Date.UTC(y, m - 1, 1)),
-        $lte: new Date(Date.UTC(y, m, 0, 23, 59, 59, 999)),
-      };
-    }
-    if (caseClassification) {
-      reportMatch.caseClassification = String(caseClassification).trim().toLowerCase();
-    }
-
-    // Reports have no disease field. To avoid misleading disease-filtered views,
-    // we include report counts only when disease is not filtered.
-    const reportRows = disease
-      ? []
-      : await Report.aggregate([
-          { $match: reportMatch },
-          {
-            $project: {
-              barangayNo: { $ifNull: ["$exposureBarangayNo", "$location.barangayNo"] },
-              barangay: { $ifNull: ["$exposureBarangay", "$location.barangay"] },
-              district: { $ifNull: ["$exposureDistrict", "$location.district"] },
-              totalCases: { $ifNull: ["$caseCount", 1] },
-            },
-          },
-          {
-            $group: {
-              _id: {
-                barangayNo: "$barangayNo",
-                barangay: "$barangay",
-                district: "$district",
-              },
-              totalCases: { $sum: "$totalCases" },
-            },
-          },
-          { $sort: { totalCases: -1 } },
-        ]);
-
-    const mergedRows = [...rows, ...reportRows];
-
-    const districtTotals = new Map();
+    const barangayTotals = new Map();
+    const diseaseTotals = new Map();
     const skippedBarangays = [];
-
-    for (const r of mergedRows) {
-      const district = String(r._id?.district || "").trim();
-      const districtKey = normalizeDistrictKey(district);
-      const barangayNo = getBarangayNo(r._id?.barangayNo, r._id?.barangay);
-      const cases = Number(r.totalCases ?? 0);
+    for (const row of analyticalRows) {
+      const barangayNo = getBarangayNo(row.barangayNo, row.barangay);
       if (barangayNo == null) {
-        skippedBarangays.push(r._id);
+        skippedBarangays.push({ barangay: row.barangay, district: row.district });
         continue;
       }
-
-      if (!districtTotals.has(districtKey)) {
-        districtTotals.set(districtKey, {
-          district,
-          totalCases: 0,
-          barangays: new Set(),
-        });
+      const district = String(row.district || "").trim();
+      const districtKey = normalizeDistrictKey(district);
+      const key = `${barangayNo}:${districtKey}`;
+      const current = barangayTotals.get(key) || {
+        barangay: row.barangay || `Barangay ${barangayNo}`,
+        barangayNo,
+        district,
+        districtKey,
+        cases: 0,
+      };
+      current.cases += Number(row.cases || 0);
+      barangayTotals.set(key, current);
+      if (isLikelyDiseaseName(row.disease)) {
+        diseaseTotals.set(row.disease, (diseaseTotals.get(row.disease) || 0) + Number(row.cases || 0));
       }
-      const entry = districtTotals.get(districtKey);
-      entry.totalCases += cases;
-      entry.barangays.add(barangayNo);
     }
 
-    const predictionRun = await PredictionRun.findOne({
-      model: "prophet",
-      granularity: "monthly_district_cases",
-      datasetScope: new mongoose.Types.ObjectId(datasetId),
-      status: "success",
-    })
-      .sort({ generatedAt: -1, createdAt: -1 })
-      .select("forecastTargetYear forecastTargetMonth payload")
-      .lean();
-
-    const forecastsByDistrict = new Map();
-    for (const district of predictionRun?.payload?.districts || []) {
-      const forecast =
-        (Array.isArray(district.forecast)
-          ? district.forecast.find((f) => f.isPrimaryTarget) || district.forecast[0]
-          : null) || district.nextForecast;
-      if (!forecast) continue;
-      forecastsByDistrict.set(district.districtKey || normalizeDistrictKey(district.district), {
-        year: forecast.year,
-        month: forecast.month,
-        predictedCases: Number(forecast.predictedCases ?? 0),
-        lowerBound: forecast.lowerBound,
-        upperBound: forecast.upperBound,
-      });
+    const districtTotals = new Map();
+    for (const point of barangayTotals.values()) {
+      const current = districtTotals.get(point.districtKey) || {
+        district: point.district,
+        districtKey: point.districtKey,
+        totalCases: 0,
+        barangayCount: 0,
+      };
+      current.totalCases += point.cases;
+      current.barangayCount += 1;
+      districtTotals.set(point.districtKey, current);
     }
+    const grandTotal = [...districtTotals.values()].reduce((sum, item) => sum + item.totalCases, 0);
+    const districtStats = [...districtTotals.values()]
+      .map((item) => ({
+        ...item,
+        avgCasesPerBarangay: Number((item.totalCases / Math.max(1, item.barangayCount)).toFixed(2)),
+        concentrationShare: grandTotal > 0 ? Number(((item.totalCases / grandTotal) * 100).toFixed(1)) : 0,
+      }))
+      .sort((a, b) => b.totalCases - a.totalCases);
+    const statsByDistrict = new Map(districtStats.map((item) => [item.districtKey, item]));
+    const points = [...barangayTotals.values()].map((point) => ({
+      ...point,
+      weight: point.cases,
+      districtTotalCases: statsByDistrict.get(point.districtKey)?.totalCases || point.cases,
+      districtConcentrationShare: statsByDistrict.get(point.districtKey)?.concentrationShare || 0,
+    }));
 
-    const districtStats = new Map(
-      [...districtTotals.entries()].map(([districtKey, entry]) => {
-        const barangayCount = Math.max(1, entry.barangays.size);
-        const avgIncidentPerBarangay = Number(
-          (entry.totalCases / barangayCount).toFixed(2),
-        );
-        const risk = computeRiskAnalysis(entry.totalCases);
-        const forecast = forecastsByDistrict.get(districtKey) || null;
-        const forecastRisk = forecast
-          ? computeRiskAnalysis(forecast.predictedCases)
-          : null;
-        return [
-          districtKey,
-          {
-            district: entry.district,
-            districtKey,
-            totalCases: entry.totalCases,
-            barangayCount,
-            avgIncidentPerBarangay,
-            ...risk,
-            forecast,
-            forecastRisk,
-          },
-        ];
-      }),
-    );
-
-    const points = mergedRows
-      .map((r) => {
-        const district = String(r._id?.district || "").trim();
-        const districtKey = normalizeDistrictKey(district);
-        const barangayNo = getBarangayNo(r._id?.barangayNo, r._id?.barangay);
-        if (barangayNo == null) return null;
-        const districtStat = districtStats.get(districtKey);
-        const cases = Number(r.totalCases ?? 0);
-        return {
-          barangay: r._id?.barangay || `Barangay ${barangayNo}`,
-          barangayNo,
-          district,
-          districtKey,
-          cases,
-          weight: cases,
-          districtAvgIncident: districtStat?.avgIncidentPerBarangay ?? 0,
-          districtTotalCases: districtStat?.totalCases ?? cases,
-          risk: districtStat?.risk ?? computeRiskAnalysis(0).risk,
-          riskLevel: districtStat?.riskLevel ?? "low",
-          riskScore: districtStat?.riskScore ?? 0,
-          forecast: districtStat?.forecast ?? null,
-          forecastRisk: districtStat?.forecastRisk ?? null,
-        };
-      })
-      .filter(Boolean);
-
-    const [filterOptions, diseaseStats] = await Promise.all([
+    const [officialOptions, reportOptions] = await Promise.all([
       OfficialCase.aggregate([
         { $match: { datasetId: new mongoose.Types.ObjectId(datasetId) } },
-        {
-          $group: {
-            _id: null,
-            years: { $addToSet: "$year" },
-            months: { $addToSet: "$month" },
-            diseases: { $addToSet: "$disease" },
-            caseClassifications: { $addToSet: "$caseClassification" },
-          },
-        },
+        { $group: { _id: null, years: { $addToSet: "$year" }, months: { $addToSet: "$month" }, diseases: { $addToSet: "$disease" } } },
       ]),
-      OfficialCase.aggregate([
-        { $match: match },
-        {
-          $group: {
-            _id: "$disease",
-            cases: { $sum: "$cases" },
-          },
-        },
-        { $sort: { cases: -1 } },
+      Report.aggregate([
+        { $match: { isCounted: true, caseClassification: "confirmed" } },
+        { $project: { year: { $year: "$reportedAt" }, month: { $month: "$reportedAt" }, disease: "$validation.condition" } },
+        { $group: { _id: null, years: { $addToSet: "$year" }, months: { $addToSet: "$month" }, diseases: { $addToSet: "$disease" } } },
       ]),
     ]);
-
-    if (skippedBarangays.length) {
-      console.warn("Heatmap skipped barangays (missing barangayNo):", skippedBarangays);
-    }
+    const officialFilterOptions = officialOptions[0] || {};
+    const reportFilterOptions = reportOptions[0] || {};
 
     return res.json({
       points,
-      districtStats: [...districtStats.values()].sort(
-        (a, b) => b.avgIncidentPerBarangay - a.avgIncidentPerBarangay,
-      ),
-      diseaseStats: diseaseStats
-        .filter((d) => isLikelyDiseaseName(d?._id))
-        .map((d) => ({ name: String(d._id).trim(), cases: Number(d.cases || 0) })),
+      districtStats,
+      diseaseStats: [...diseaseTotals.entries()]
+        .map(([name, cases]) => ({ name, cases }))
+        .sort((a, b) => b.cases - a.cases),
       skippedBarangays,
-      filterOptions: filterOptions[0] || {
-        years: [],
-        months: [],
-        diseases: [],
-        caseClassifications: [],
+      selectedCaseStatus: selectedStatus,
+      caseDefinition: `${selectedStatus.replace("_", " ")} cases only; statuses are kept separate. Confirmed results combine uploaded official cases and confirmed surveillance reports at query time without copying records.`,
+      metricDefinition: "Map color and ordering represent case concentration, not an official risk classification.",
+      filterOptions: {
+        years: [...new Set([...(officialFilterOptions.years || []), ...(reportFilterOptions.years || [])])],
+        months: [...new Set([...(officialFilterOptions.months || []), ...(reportFilterOptions.months || [])])],
+        diseases: [...new Set([...(officialFilterOptions.diseases || []), ...(reportFilterOptions.diseases || [])])].filter(Boolean),
+        caseClassifications: [...ALLOWED_STATUSES],
       },
     });
-  } catch (err) {
-    return res.status(500).json({ message: err?.message || "Server error" });
+  } catch (error) {
+    return res.status(error?.status || 500).json({ message: error?.message || "Server error" });
   }
 };

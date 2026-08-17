@@ -3,14 +3,13 @@ import {
   getPredictions,
   refreshPredictions,
 } from "../controllers/predictionController.js";
-import { verifyToken, verifyRole } from "../middleware/authMiddleware.js";
+import { verifyToken, verifyRoles } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 // DB-backed: returns latest saved payload (no recomputation)
 router.get("/", verifyToken, getPredictions);
 
-// Admin-only: manual refresh (recomputes + persists)
-router.post("/refresh", verifyToken, verifyRole("admin"), refreshPredictions);
+router.post("/refresh", verifyToken, verifyRoles("admin", "cesu"), refreshPredictions);
 
 export default router;

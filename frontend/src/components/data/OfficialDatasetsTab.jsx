@@ -19,7 +19,9 @@ export default function OfficialDatasetsTab() {
   const [datasetName, setDatasetName] = useState("");
   const [coverageStart, setCoverageStart] = useState("");
   const [coverageEnd, setCoverageEnd] = useState("");
-  const [dataSource, setDataSource] = useState("Manila Health Department (MHD)");
+  const [providerType, setProviderType] = useState("cesu");
+  const [providerName, setProviderName] = useState("CESU");
+  const [reportingFrequency, setReportingFrequency] = useState("weekly");
 
   const [validating, setValidating] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -30,19 +32,25 @@ export default function OfficialDatasetsTab() {
   const [showFailed, setShowFailed] = useState(false);
   const statusFilter = showFailed ? "validated,failed" : "validated";
 
-  const { recent, loadingRecent, fetchRecent, upload, download, downloadTemplate } = useDatasets(
-    token,
-    statusFilter,
-  );
+  const {
+    recent,
+    pagination,
+    loadingRecent,
+    fetchRecent,
+    upload,
+    download,
+    downloadTemplate,
+  } = useDatasets(token, statusFilter);
 
   const canValidate = useMemo(() => {
     if (!file) return false;
     if (!datasetName.trim()) return false;
+    if (!providerType || !providerName.trim()) return false;
     // Coverage dates are optional for XLSX (backend derives coverage). Keep optional for better UX.
     if (coverageStart && coverageEnd && new Date(coverageStart) > new Date(coverageEnd))
       return false;
     return true;
-  }, [file, datasetName, coverageStart, coverageEnd]);
+  }, [file, datasetName, coverageStart, coverageEnd, providerType, providerName]);
 
   const resetMessages = () => {
     setErrorMsg("");
@@ -100,7 +108,10 @@ export default function OfficialDatasetsTab() {
           name: datasetName.trim(),
           coverageStart,
           coverageEnd,
-          dataSource,
+          dataSource: providerName.trim(),
+          providerType,
+          providerName: providerName.trim(),
+          reportingFrequency,
         }),
         {
           success: (res) =>
@@ -189,7 +200,7 @@ export default function OfficialDatasetsTab() {
                 <span className="font-medium">OfficialCaseTemplate XLSX</span>: one sheet (prefer “processed data”) with standardized columns.
               </li>
               <li>
-                <span className="font-medium">OfficialCaseTemplate CSV</span>: columns should match the OfficialCaseTemplate XLSX (city, district, barangay, disease, year, month, case_classification, cases; source optional).
+                <span className="font-medium">OfficialCaseTemplate CSV</span>: columns should match the OfficialCaseTemplate XLSX, including epidemiological year/week for weekly data.
               </li>
             </ul>
           </div>
@@ -255,14 +266,31 @@ export default function OfficialDatasetsTab() {
               Coverage dates are optional for XLSX imports (the system derives coverage from the data).
             </p>
 
-            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-              <p className="text-sm font-medium">Data source</p>
-              <input
-                type="text"
-                value={dataSource}
-                onChange={(e) => setDataSource(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
-              />
+            <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-4">
+              <p className="text-sm font-semibold text-blue-950">Source and reporting details</p>
+              <p className="mt-1 text-xs text-blue-700">These fields identify where the health data came from, independently of the uploaded file type.</p>
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="text-sm text-gray-700">
+                  Source type
+                  <select value={providerType} onChange={(event) => setProviderType(event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm">
+                    <option value="hospital">Hospital</option>
+                    <option value="health_center">Health Center</option>
+                    <option value="cesu">CESU</option>
+                    <option value="doh">DOH</option>
+                  </select>
+                </label>
+                <label className="text-sm text-gray-700">
+                  Provider or facility name
+                  <input required value={providerName} onChange={(event) => setProviderName(event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm" placeholder="e.g. Tondo Health Center" />
+                </label>
+                <label className="text-sm text-gray-700 md:col-span-2">
+                  Reporting frequency
+                  <select value={reportingFrequency} onChange={(event) => setReportingFrequency(event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm">
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly historical aggregate</option>
+                  </select>
+                </label>
+              </div>
             </div>
           </div>
 
@@ -302,8 +330,10 @@ export default function OfficialDatasetsTab() {
       <div className="space-y-6">
         <RecentDatasetsList
           recent={recent}
+          pagination={pagination}
           loading={loadingRecent}
           onRefresh={fetchRecent}
+          onPageChange={fetchRecent}
           onDownload={downloadDataset}
           showFailed={showFailed}
           onShowFailedChange={setShowFailed}

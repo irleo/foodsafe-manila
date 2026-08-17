@@ -1,13 +1,7 @@
 export const CHART_COLORS = [
-  "#ef4444", // red
-  "#facc15", // yellow
-  "#22c55e", // green
-  "#60a5fa", // blue
-  "#a855f7", // purple
+  "#1d4ed8",
+  "#2563eb",
+  "#3b82f6",
+  "#60a5fa",
+  "#93c5fd",
 ];
-
-export const SEVERITY_COLORS = {
-  High: "#ef4444",
-  Moderate: "#facc15",
-  Low: "#22c55e",
-};

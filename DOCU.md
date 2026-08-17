@@ -87,7 +87,7 @@ The backend is the source of truth. Both the React frontend and Flutter app call
 - XLSX upload flow for official case data.
 - Detection of raw health office workbook format and processed template format.
 - Template download endpoint for official case uploads.
-- Normalization into monthly `OfficialCase` rows with city, district, barangay, disease, year, month, classification, cases, and source.
+- Normalization into weekly or explicitly legacy-monthly `OfficialCase` rows with institutional provider, ingestion method, epidemiological year/week, calendar month, classification, and case count.
 - Dataset metadata persistence, including coverage dates, format type, diseases, districts, row counts, validation errors, and status.
 - Dataset list and dataset file download endpoints.
 - Upload success/failure notifications and activity log entries.
@@ -121,7 +121,9 @@ The backend is the source of truth. Both the React frontend and Flutter app call
 
 ### Predictions
 
-- Prophet-backed monthly district case forecast pipeline.
+- Monthly district comparison pipeline for Prophet and Seasonal Naïve.
+- Monthly preprocessing generates every district-month inside the verified dataset coverage period; a covered month without a confirmed record is stored as zero for modeling, while months outside coverage remain missing.
+- Prophet and Seasonal Naïve use the same completed confirmed-case series and comparable rolling-origin backtest targets.
 - Prediction runs stored in MongoDB with model, granularity, dataset scope, basis period, forecast target period, trigger, status, and payload.
 - Manual admin refresh endpoint.
 - Automatic refresh after official upload.
@@ -351,17 +353,14 @@ The core Starter-tier safeguards—request caching and coalescing, MongoDB pool 
 - [ ] Split the large frontend JavaScript bundle into lazily loaded routes or feature chunks to reduce its current initial download and parsing cost.
 - [ ] Configure Render health checks and deployment-after-CI behavior, then test a failed-release rollback before production rollout.
 - [ ] Review the final environment variables and secrets in Render, deploy the verified revision, and monitor the service during the pilot period.
-- [ ] Track this documentation file in Git if it should be included in the repository, then review, commit, and push the completed changes.
 
-## Other Task
+
+## Other Tasks
 
 - [ ] User/device-based rate-limit changes
 - [ ] Report-model index modifications
 - [ ] Firebase token storage and FCM integration
-- [x] Semaphore regular-SMS integration for backend-generated mobile OTPs
 - [ ] Authentication pagination
-- [x] Mobile OTP API contract changes
-- [x] Rename user models and collections to `WebUser`/`web_users` and `MobileUser`/`mobile_users`
 - [ ] Dataset-file deletion
 - [ ] Moving forecasting to a separate Render service
 - [ ] Increasing the mobile polling interval beyond 45 seconds
@@ -427,7 +426,7 @@ The core Starter-tier safeguards—request caching and coalescing, MongoDB pool 
 - `backend/models/EmailOtp.js`: OTP storage schema for email verification flows.
 - `backend/models/Notification.js`: Notification schema.
 - `backend/models/OfficialCase.js`: Monthly official case schema with district, barangay, disease, classification, and cases.
-- `backend/models/PredictionRun.js`: Stored Prophet prediction run schema.
+- `backend/models/PredictionRun.js`: Stored monthly comparison run containing Prophet, Seasonal Naïve, rolling-origin metrics, and district model selection.
 - `backend/models/Report.js`: Citizen suspected illness report schema.
 - `backend/models/WebUser.js`: Web/admin account schema stored in `web_users`.
 
@@ -495,7 +494,7 @@ The core Starter-tier safeguards—request caching and coalescing, MongoDB pool 
 - `frontend/src/pages/ForgotPasswordPage.jsx`: Web forgot-password OTP request flow.
 - `frontend/src/pages/HeatmapPage.jsx`: Heatmap dashboard.
 - `frontend/src/pages/LoginPage.jsx`: Web login screen.
-- `frontend/src/pages/PredictionsPage.jsx`: Prophet forecast dashboard and admin refresh.
+- `frontend/src/pages/PredictionsPage.jsx`: Page-wide Best Model / Prophet / Seasonal Naïve forecast dashboard and comparison refresh.
 - `frontend/src/pages/RequestAccessPage.jsx`: Web access-request and OTP flow.
 - `frontend/src/pages/ResetPasswordPage.jsx`: Web password reset completion.
 - `frontend/src/pages/UserManagementPage.jsx`: Admin user approval/rejection/deletion page.
@@ -585,3 +584,12 @@ The core Starter-tier safeguards—request caching and coalescing, MongoDB pool 
 - `mobile/linux/*`: Linux Flutter runner and CMake files.
 - `mobile/windows/*`: Windows Flutter runner, resources, manifest, and CMake files.
 - `mobile/web/*`: Flutter web index, manifest, favicon, and web icons.
+
+## Surveillance Data Interpretation
+
+- CESU surveillance records available to this project begin in 2022. Screens and exports must display the actual selected dataset coverage and must not imply complete CESU history before 2022.
+- `reported`, `suspected`, and `confirmed` are separate analytical populations. The UI displays `confirmed` as **Validated / Confirmed** and must not combine statuses under an unlabeled “Total Cases” value.
+- Official uploads record the institutional provider (`hospital`, `health_center`, `cesu`, or `doh`) separately from the ingestion method (`csv`, `excel`, or system integration).
+- Weekly datasets use epidemiological year/week fields. Legacy monthly datasets remain explicitly monthly and must not be presented as weekly observations.
+- Alert and epidemic thresholds require five eligible prior years. The system returns an insufficient-baseline result when five eligible years are unavailable; it does not manufacture missing history.
+- Ordinary analytical charts use a restrained blue palette. Amber and red are reserved for genuine alert-threshold and epidemic-threshold signals.

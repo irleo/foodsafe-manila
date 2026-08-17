@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:foodsafe_manila/screens/alerts_screen.dart';
 import 'package:foodsafe_manila/screens/analytics_screen.dart';
@@ -9,9 +10,10 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../screens/home_screen.dart';
 import '../screens/map_screen.dart';
 import '../services/api_client.dart';
-import '../services/risk_alert_service.dart';
 import '../services/session.dart';
-import 'personal_info_screen.dart';
+import '../widgets/snackbar_widgets.dart';
+import 'account_information_screen.dart';
+import 'change_password_screen.dart';
 import 'package:flutter/foundation.dart';
 import '../screens/debug_location_screen.dart';
 
@@ -35,17 +37,20 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
   int _selectedIndex = 0;
   final PageController _pageController = PageController();
 
+  final bool _enableDebugTools = true;
+
+  bool backPressedOnce = false;
+  DateTime? currentBackPressTime;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    RiskAlertService.instance.startMonitoring();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    RiskAlertService.instance.stopMonitoring();
     _pageController.dispose();
     super.dispose();
   }
@@ -161,18 +166,25 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
               _buildMenuTile(
                 icon: LucideIcons.user,
                 gradientColors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
-                title: "Personal Information",
+                title: "Account information",
                 subtitle: "Update your account details",
-                page: const PersonalInfoScreen(),
+                page: const AccountInformationScreen(),
+              ),
+              _buildMenuTile(
+                icon: LucideIcons.lock,
+                gradientColors: [Color(0xFFEF4444), Color(0xFFDC2626)],
+                title: "Change password",
+                subtitle: "Update your account password",
+                page: const ChangePasswordScreen(),
               ),
               _buildMenuTile(
                 icon: LucideIcons.clipboardList,
                 gradientColors: [Color(0xFF10B981), Color(0xFF059669)],
-                title: "My Reports",
+                title: "My reports",
                 subtitle: "View and manage your submitted reports",
                 page: const ReportHistoryScreen(),
               ),
-              if (kDebugMode) ...[
+              if (kDebugMode && _enableDebugTools) ...[
                     _buildMenuTile(
                       icon: Icons.location_searching,
                       gradientColors: const [
@@ -304,27 +316,54 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
           ),
         ),
       ),
-      body: PageView(
-        physics: const NeverScrollableScrollPhysics(),
-        controller: _pageController,
-        children: <Widget>[
-          HomeScreen(
-            key: _homeKey,
-            onProfileTap: () {
-              _scaffoldKey.currentState?.openEndDrawer();
-            },
-            onNavigateToAlerts: () => _onTappedBar(3),
-            onNavigateToMap: () => _onTappedBar(1),
-          ),
-          MapScreen(key: _mapKey),
-          AnalyticsScreen(key: _analyticsKey),
-          AlertsScreen(key: _alertsKey),
-        ],
-        onPageChanged: (page) {
-          setState(() {
-            _selectedIndex = page;
-          });
+      body: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) async {
+          if (didPop) return;
+
+          if (backPressedOnce) {
+            await SystemNavigator.pop();
+          } else {
+            setState(() {
+              backPressedOnce = true;
+            });
+
+            SnackbarWidgets.error(
+              context,
+              'If you are trying to exit the app, please try again',
+            );
+
+            Future.delayed(const Duration(seconds: 2), () {
+              if (mounted) {
+                setState(() {
+                  backPressedOnce = false;
+                });
+              }
+            });
+          }
         },
+        child: PageView(
+          physics: const NeverScrollableScrollPhysics(),
+          controller: _pageController,
+          children: <Widget>[
+            HomeScreen(
+              key: _homeKey,
+              onProfileTap: () {
+                _scaffoldKey.currentState?.openEndDrawer();
+              },
+              onNavigateToAlerts: () => _onTappedBar(3),
+              onNavigateToMap: () => _onTappedBar(1),
+            ),
+            MapScreen(key: _mapKey),
+            AnalyticsScreen(key: _analyticsKey),
+            AlertsScreen(key: _alertsKey),
+          ],
+          onPageChanged: (page) {
+            setState(() {
+              _selectedIndex = page;
+            });
+          },
+        ),
       ),
       bottomNavigationBar: SafeArea(
         child: Container(

@@ -9,12 +9,14 @@ import {
 export function useDatasets(token, status = "validated") {
   const [recent, setRecent] = useState([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
+  const [pagination, setPagination] = useState(null);
 
-  const fetchRecent = useCallback(async () => {
+  const fetchRecent = useCallback(async (page = 1) => {
     setLoadingRecent(true);
     try {
-      const data = await fetchDatasets({ token, status });
-      setRecent(data);
+      const data = await fetchDatasets({ token, status, page, limit: 5 });
+      setRecent(data.items);
+      setPagination(data.pagination);
     } finally {
       setLoadingRecent(false);
     }
@@ -42,5 +44,13 @@ export function useDatasets(token, status = "validated") {
     return downloadOfficialCaseTemplate({ token });
   }, [token]);
 
-  return { recent, loadingRecent, fetchRecent, upload, download, downloadTemplate };
+  return {
+    recent,
+    pagination,
+    loadingRecent,
+    fetchRecent,
+    upload,
+    download,
+    downloadTemplate,
+  };
 }

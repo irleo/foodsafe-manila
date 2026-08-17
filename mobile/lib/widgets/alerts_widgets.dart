@@ -387,7 +387,7 @@ class AlertDetailSheet extends StatelessWidget {
                           const SizedBox(height: 12),
                           _detailRow(
                             LucideIcons.landmark,
-                            'District total cases',
+                            'District cases for selected status',
                             districtTotal.toString(),
                           ),
                         ],

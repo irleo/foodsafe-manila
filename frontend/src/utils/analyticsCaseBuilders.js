@@ -1,4 +1,4 @@
-export function buildYearlyTimelineData(casesRows = [], reportRows = []) {
+export function buildMonthlyTimelineData(casesRows = []) {
   const map = {};
 
   const ensureMonthBucket = (year, month) => {
@@ -7,8 +7,9 @@ export function buildYearlyTimelineData(casesRows = [], reportRows = []) {
       map[key] = {
         year,
         month,
-        officialCases: 0,
-        citizenReports: 0,
+        reportedCases: 0,
+        suspectedCases: 0,
+        confirmedCases: 0,
       };
     }
     return key;
@@ -21,23 +22,17 @@ export function buildYearlyTimelineData(casesRows = [], reportRows = []) {
     if (!Number.isFinite(year) || year <= 0) continue;
     if (!Number.isFinite(month) || month < 1 || month > 12) continue;
     if (!Number.isFinite(cases) || cases < 0) continue;
+    const classification = String(r?.caseClassification || "")
+      .trim()
+      .toLowerCase();
+    const seriesKey = {
+      reported: "reportedCases",
+      suspected: "suspectedCases",
+      confirmed: "confirmedCases",
+    }[classification];
+    if (!seriesKey) continue;
     const key = ensureMonthBucket(year, month);
-    map[key].officialCases += cases;
-  }
-
-  for (const r of reportRows) {
-    const rawDate = r?.reportedAt ?? r?.reported_at ?? r?.createdAt;
-    const date = rawDate ? new Date(rawDate) : null;
-    const year = date && !Number.isNaN(date.getTime()) ? date.getFullYear() : null;
-    const month = date && !Number.isNaN(date.getTime()) ? date.getMonth() + 1 : null;
-    const cases = Number(r?.caseCount ?? 1);
-
-    if (!Number.isFinite(year) || year <= 0) continue;
-    if (!Number.isFinite(month) || month < 1 || month > 12) continue;
-    if (!Number.isFinite(cases) || cases < 0) continue;
-
-    const key = ensureMonthBucket(year, month);
-    map[key].citizenReports += cases;
+    map[key][seriesKey] += cases;
   }
 
   const buckets = Object.values(map);
@@ -57,12 +52,18 @@ export function buildYearlyTimelineData(casesRows = [], reportRows = []) {
     const year = Math.floor(idx / 12);
     const month = (idx % 12) + 1;
     const key = `${year}-${month}`;
-    const totals = byMonthKey.get(key) || { officialCases: 0, citizenReports: 0 };
+    const totals = byMonthKey.get(key) || {
+      reportedCases: 0,
+      suspectedCases: 0,
+      confirmedCases: 0,
+    };
+    const totalCases =
+      totals.reportedCases + totals.suspectedCases + totals.confirmedCases;
     rows.push({
       date: `${year}-${String(month).padStart(2, "0")}-01`,
-      officialCases: totals.officialCases,
-      citizenReports: totals.citizenReports,
-      cases: totals.officialCases,
+      ...totals,
+      totalCases,
+      cases: totalCases,
     });
   }
   return rows;

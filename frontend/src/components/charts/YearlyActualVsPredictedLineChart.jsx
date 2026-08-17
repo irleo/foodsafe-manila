@@ -186,8 +186,8 @@ export default function YearlyActualVsPredictedLineChart({
               <Tooltip
                 formatter={(value, name) => {
                   const labels = {
-                    actualLine: "Actual",
-                    predictedLine: "Predicted",
+                    actualLine: "Historical confirmed",
+                    predictedLine: "Predicted (not actual)",
                     lowerBound: "Lower Bound",
                     upperBound: "Upper Bound",
                   };
@@ -199,8 +199,8 @@ export default function YearlyActualVsPredictedLineChart({
               <Legend
                 formatter={(value) => {
                   const labels = {
-                    actualLine: "Actual",
-                    predictedLine: "Prediction",
+                    actualLine: "Historical confirmed",
+                    predictedLine: "Predicted (not actual)",
                     confidenceBand: "Prediction Range",
                   };
 
@@ -237,9 +237,9 @@ export default function YearlyActualVsPredictedLineChart({
                 type="monotone"
                 dataKey="actualLine"
                 name="actualLine"
-                stroke="#22c55e"
+                stroke="#60a5fa"
                 strokeWidth={2.5}
-                dot={<HollowDot stroke="#22c55e" />}
+                dot={<HollowDot stroke="#60a5fa" />}
                 activeDot={{ r: 5 }}
                 connectNulls={false}
               />

@@ -8,6 +8,14 @@ files
 .agents
 backend/scripts
 
+# Keep source-controlled operational review artifacts.
+!docs/
+docs/*
+!docs/index-review.md
+!backend/scripts/
+backend/scripts/*
+!backend/scripts/reviewIndexes.js
+
 # Logs
 logs
 *.log

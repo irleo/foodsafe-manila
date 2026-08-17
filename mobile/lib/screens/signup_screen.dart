@@ -300,9 +300,6 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  String? _required(String? v) =>
-      (v == null || v.isEmpty) ? "Required field" : null;
-
   Widget _sectionTitle(String title, String subtitle) => Padding(
     padding: const EdgeInsets.only(bottom: 16),
     child: Column(
@@ -355,7 +352,13 @@ class _SignupScreenState extends State<SignupScreen> {
           child: TextFormField(
             controller: _usernameCtrl,
             textInputAction: TextInputAction.next,
-            validator: _required,
+            validator: (v) {
+              return (v == null ||
+                      v.isEmpty ||
+                      v.trim().isEmpty)
+                  ? "Name is required"
+                  : null;
+            },
             style: GoogleFonts.inter(),
             decoration: InputDecoration(
               hintText: "Enter name",

@@ -59,19 +59,38 @@ function formatMonthLabel(dateKey) {
   return date.toLocaleString(undefined, { month: "short", year: "numeric" });
 }
 
-function getSeriesValue(row) {
-  return Number(row?.officialCases || 0) + Number(row?.citizenReports || 0);
-}
+const STATUS_SERIES = {
+  reported: {
+    dataKey: "reportedCases",
+    label: "Reported Cases",
+    stroke: "#60a5fa",
+    fill: "#93c5fd",
+  },
+  suspected: {
+    dataKey: "suspectedCases",
+    label: "Suspected Cases",
+    stroke: "#2563eb",
+    fill: "#60a5fa",
+  },
+  confirmed: {
+    dataKey: "confirmedCases",
+    label: "Validated / Confirmed Cases",
+    stroke: "#1d4ed8",
+    fill: "#3b82f6",
+  },
+};
 
 export default function SwitchableYearlyChart({
   data = [],
   title = "Cases Over Time",
   height = 380,
+  selectedStatus = "confirmed",
 }) {
   const [chartType, setChartType] = useState("line");
   const [rangeMonths, setRangeMonths] = useState(6);
   const [showMa3, setShowMa3] = useState(false);
   const [showMa6, setShowMa6] = useState(false);
+  const activeSeries = STATUS_SERIES[selectedStatus] || STATUS_SERIES.confirmed;
 
   const chartData = useMemo(() => {
     const safeData = Array.isArray(data) ? data : [];
@@ -80,38 +99,33 @@ export default function SwitchableYearlyChart({
     );
 
     return filtered.map((row, index) => {
-      const displayCases = getSeriesValue(row);
       const window3 = filtered
         .slice(Math.max(0, index - 2), index + 1)
-        .map((x) => getSeriesValue(x));
+        .map((x) => Number(x?.[activeSeries.dataKey] || 0));
       const window6 = filtered
         .slice(Math.max(0, index - 5), index + 1)
-        .map((x) => getSeriesValue(x));
+        .map((x) => Number(x?.[activeSeries.dataKey] || 0));
 
       const ma3 = window3.reduce((sum, v) => sum + v, 0) / window3.length;
       const ma6 = window6.reduce((sum, v) => sum + v, 0) / window6.length;
 
       return {
         ...row,
-        displayCases,
         ma3: Number(ma3.toFixed(2)),
         ma6: Number(ma6.toFixed(2)),
       };
     });
-  }, [data, rangeMonths]);
-
-  const hasOfficialSeries = chartData.some((row) => Number(row?.officialCases || 0) > 0);
-  const hasReportSeries = chartData.some((row) => Number(row?.citizenReports || 0) > 0);
+  }, [activeSeries.dataKey, data, rangeMonths]);
 
   const commonTooltip = {
     labelFormatter: (label) => String(formatMonthLabel(label)),
     formatter: (value, name) => {
       const labels = {
-        officialCases: "Official Cases",
-        citizenReports: "Citizen Reports",
-        displayCases: "Cases",
-        ma3: "MA 3",
-        ma6: "MA 6",
+        reportedCases: "Reported Cases",
+        suspectedCases: "Suspected Cases",
+        confirmedCases: "Validated / Confirmed Cases",
+        ma3: `${activeSeries.label} MA 3`,
+        ma6: `${activeSeries.label} MA 6`,
       };
       return [Number(value || 0), labels[name] || name];
     },
@@ -158,7 +172,7 @@ export default function SwitchableYearlyChart({
               type="button"
               onClick={() => setShowMa3((v) => !v)}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                showMa3 ? "bg-amber-500 text-white shadow-sm" : "text-gray-600 hover:bg-white"
+                showMa3 ? "bg-slate-600 text-white shadow-sm" : "text-gray-600 hover:bg-white"
               }`}
             >
               MA 3
@@ -167,7 +181,7 @@ export default function SwitchableYearlyChart({
               type="button"
               onClick={() => setShowMa6((v) => !v)}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                showMa6 ? "bg-pink-600 text-white shadow-sm" : "text-gray-600 hover:bg-white"
+                showMa6 ? "bg-blue-800 text-white shadow-sm" : "text-gray-600 hover:bg-white"
               }`}
             >
               MA 6
@@ -176,7 +190,7 @@ export default function SwitchableYearlyChart({
           <div className="group relative inline-flex items-center justify-center h-6 w-6 rounded-full border border-gray-300 bg-white text-gray-500">
             <span className="text-xs font-semibold">i</span>
             <div className="pointer-events-none absolute -bottom-12 right-0 z-10 hidden w-72 rounded-md bg-gray-900 px-3 py-2 text-xs text-white shadow-lg group-hover:block">
-              MA3 and MA6 overlays are visible only in Line view.
+              MA3 and MA6 show moving averages for the selected case status and are visible only in Line view.
             </div>
           </div>
         </div>
@@ -194,17 +208,9 @@ export default function SwitchableYearlyChart({
                 <YAxis allowDecimals={false} />
                 <Tooltip {...commonTooltip} />
                 <Legend />
-                {hasOfficialSeries && (
-                  <Line type="monotone" dataKey="officialCases" stroke="#2563eb" strokeWidth={2} dot={<HollowDot stroke="#2563eb" />} activeDot={{ r: 5 }} name="Official Cases" />
-                )}
-                {hasReportSeries && (
-                  <Line type="monotone" dataKey="citizenReports" stroke="#16a34a" strokeWidth={2} dot={<HollowDot stroke="#16a34a" />} activeDot={{ r: 5 }} name="Citizen Reports" />
-                )}
-                {!hasOfficialSeries && !hasReportSeries && (
-                  <Line type="monotone" dataKey="displayCases" stroke="#2563eb" strokeWidth={2} dot={<HollowDot stroke="#2563eb" />} activeDot={{ r: 5 }} name="Cases" />
-                )}
-                {showMa3 && <Line type="monotone" dataKey="ma3" stroke="#f59e0b" strokeWidth={2} strokeDasharray="6 4" dot={false} name="MA 3" />}
-                {showMa6 && <Line type="monotone" dataKey="ma6" stroke="#db2777" strokeWidth={2} strokeDasharray="2 4" dot={false} name="MA 6" />}
+                <Line type="monotone" dataKey={activeSeries.dataKey} stroke={activeSeries.stroke} strokeWidth={2.5} dot={<HollowDot stroke={activeSeries.stroke} />} activeDot={{ r: 5 }} name={activeSeries.label} />
+                {showMa3 && <Line type="monotone" dataKey="ma3" stroke="#475569" strokeWidth={2} strokeDasharray="6 4" dot={false} name={`${activeSeries.label} MA 3`} />}
+                {showMa6 && <Line type="monotone" dataKey="ma6" stroke="#64748b" strokeWidth={2} strokeDasharray="2 4" dot={false} name={`${activeSeries.label} MA 6`} />}
               </LineChart>
             )}
 
@@ -215,9 +221,7 @@ export default function SwitchableYearlyChart({
                 <YAxis allowDecimals={false} />
                 <Tooltip {...commonTooltip} />
                 <Legend />
-                {hasOfficialSeries && <Bar dataKey="officialCases" fill="#2563eb" name="Official Cases" />}
-                {hasReportSeries && <Bar dataKey="citizenReports" fill="#16a34a" name="Citizen Reports" />}
-                {!hasOfficialSeries && !hasReportSeries && <Bar dataKey="displayCases" fill="#2563eb" name="Cases" />}
+                <Bar dataKey={activeSeries.dataKey} fill={activeSeries.fill} name={activeSeries.label} />
               </BarChart>
             )}
 
@@ -228,9 +232,7 @@ export default function SwitchableYearlyChart({
                 <YAxis allowDecimals={false} />
                 <Tooltip {...commonTooltip} />
                 <Legend />
-                {hasOfficialSeries && <Area type="monotone" dataKey="officialCases" stroke="#2563eb" fill="#93c5fd" fillOpacity={0.45} name="Official Cases" />}
-                {hasReportSeries && <Area type="monotone" dataKey="citizenReports" stroke="#16a34a" fill="#86efac" fillOpacity={0.35} name="Citizen Reports" />}
-                {!hasOfficialSeries && !hasReportSeries && <Area type="monotone" dataKey="displayCases" stroke="#2563eb" fill="#93c5fd" name="Cases" />}
+                <Area type="monotone" dataKey={activeSeries.dataKey} stroke={activeSeries.stroke} fill={activeSeries.fill} fillOpacity={0.55} name={activeSeries.label} />
               </AreaChart>
             )}
           </ResponsiveContainer>

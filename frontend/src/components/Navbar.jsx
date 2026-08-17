@@ -1,4 +1,5 @@
 import { useAuth } from "../context/AuthContext";
+import { formatStatusLabel } from "../utils/formatStatusLabel";
 import {
   BellIcon,
   UserCircleIcon,
@@ -23,18 +24,19 @@ export default function Navbar() {
   const [notifications, setNotifications] = useState([]);
   const unusualSeenRef = useRef(new Set());
   const unusualBootstrappedRef = useRef(false);
+  const notificationsRef = useRef(null);
   const token = auth?.accessToken;
   const hasUnread = notifications.some((n) => n?.unread);
 
   const fetchNotifications = async () => {
     if (!token) return;
-    const res = await fetch(`${API_BASE}/api/notifications?limit=20`, {
+    const res = await fetch(`${API_BASE}/api/notifications?page=1&limit=10`, {
       headers: { Authorization: `Bearer ${token}` },
       credentials: "include",
     });
     if (!res.ok) throw new Error("Failed to fetch notifications");
     const data = await res.json();
-    setNotifications(Array.isArray(data) ? data : []);
+    setNotifications(Array.isArray(data?.items) ? data.items : []);
   };
 
   useEffect(() => {
@@ -49,14 +51,14 @@ export default function Navbar() {
       if (document.visibilityState !== "visible" || requestInFlight) return;
       requestInFlight = true;
       try {
-        const res = await fetch(`${API_BASE}/api/notifications?limit=20`, {
+        const res = await fetch(`${API_BASE}/api/notifications?page=1&limit=10`, {
           headers: { Authorization: `Bearer ${token}` },
           credentials: "include",
         });
         if (!res.ok) throw new Error("Failed to fetch notifications");
         const data = await res.json();
         if (!isMounted) return;
-        setNotifications(Array.isArray(data) ? data : []);
+        setNotifications(Array.isArray(data?.items) ? data.items : []);
       } catch {
         if (!isMounted) return;
       } finally {
@@ -79,20 +81,38 @@ export default function Navbar() {
   }, [token]);
 
   useEffect(() => {
+    if (!open) return;
+
+    const handleOutsideInteraction = (event) => {
+      if (!notificationsRef.current?.contains(event.target)) setOpen(false);
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handleOutsideInteraction);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsideInteraction);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
     if (!open || !token) return;
 
     let isMounted = true;
 
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/notifications?limit=20`, {
+        const res = await fetch(`${API_BASE}/api/notifications?page=1&limit=10`, {
           headers: { Authorization: `Bearer ${token}` },
           credentials: "include",
         });
         if (!res.ok) throw new Error("Failed to fetch notifications");
         const data = await res.json();
         if (!isMounted) return;
-        setNotifications(Array.isArray(data) ? data : []);
+        setNotifications(Array.isArray(data?.items) ? data.items : []);
       } catch {
         if (!isMounted) return;
         setNotifications([]);
@@ -176,10 +196,13 @@ export default function Navbar() {
           <div className="flex items-center gap-2 sm:gap-4">
 
             {/* Notifications */}
-            <div className="relative">
+            <div className="relative" ref={notificationsRef}>
               <button
+                type="button"
+                aria-label="Toggle notifications"
+                aria-expanded={open}
                 onClick={() => setOpen((o) => !o)}
-                className={`p-2 rounded-lg transition ${
+                className={`p-2.5 rounded-lg transition ${
                   hasUnread
                     ? "bg-blue-500/30 ring-1 ring-blue-300 hover:bg-blue-500/40"
                     : "hover:bg-blue-600"
@@ -213,7 +236,7 @@ export default function Navbar() {
 
                   {auth?.role && (
                     <span className="text-xs text-blue-100">
-                      {auth.role}
+                      {formatStatusLabel(auth.role)}
                     </span>
                   )}
                 </div>

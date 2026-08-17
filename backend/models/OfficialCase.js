@@ -47,6 +47,23 @@ const officialCaseSchema = new mongoose.Schema(
 
     month: { type: Number, required: true, min: 1, max: 12 },
 
+    epidemiologicalYear: { type: Number, default: null, min: 2015, max: 2100 },
+    epidemiologicalWeek: { type: Number, default: null, min: 1, max: 53 },
+    weekStartDate: { type: Date, default: null },
+    reportingFrequency: {
+      type: String,
+      enum: ["weekly", "monthly"],
+      default: "monthly",
+      required: true,
+    },
+    providerType: {
+      type: String,
+      enum: ["hospital", "health_center", "cesu", "doh", "citizen_patient_report"],
+      default: "cesu",
+      required: true,
+    },
+    providerName: { type: String, default: "CESU", trim: true, maxlength: 200 },
+
     caseClassification: {
       type: String,
       enum: ["confirmed", "suspected", "probable"],
@@ -67,6 +84,7 @@ const officialCaseSchema = new mongoose.Schema(
 );
 
 officialCaseSchema.index({ year: 1, month: 1 });
+officialCaseSchema.index({ epidemiologicalYear: 1, epidemiologicalWeek: 1, caseClassification: 1 });
 officialCaseSchema.index({ district: 1, year: 1, month: 1 });
 officialCaseSchema.index({ barangayNo: 1, year: 1, month: 1 });
 officialCaseSchema.index({ disease: 1, year: 1, month: 1 });
@@ -80,10 +98,13 @@ officialCaseSchema.index(
     disease: 1,
     year: 1,
     month: 1,
+    epidemiologicalYear: 1,
+    epidemiologicalWeek: 1,
+    reportingFrequency: 1,
     caseClassification: 1,
     source: 1,
   },
-  { unique: true }
+  { unique: true, name: "official_case_period_unique" }
 );
 
 export default mongoose.model("OfficialCase", officialCaseSchema);

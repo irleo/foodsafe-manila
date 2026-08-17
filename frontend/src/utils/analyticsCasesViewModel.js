@@ -1,5 +1,5 @@
 import {
-  buildYearlyTimelineData,
+  buildMonthlyTimelineData,
   buildDiseaseData,
   buildDistrictDataFromCases,
   buildDiseaseTrendByYear,
@@ -8,39 +8,25 @@ import {
 import {
   buildDistrictStatisticsFromCases,
   buildYoYCaseStatsFromCases,
-  buildRiskLevelDonutDataFromDistrictStats,
 } from "./statisticsCaseBuilders";
 
-export function buildAnalyticsCasesViewModel(caseRows = [], reportRows = []) {
-  const yearlyTimelineData = buildYearlyTimelineData(caseRows, reportRows);
+export function buildAnalyticsCasesViewModel(caseRows = []) {
+  const monthlyTimelineData = buildMonthlyTimelineData(caseRows);
   const diseaseData = buildDiseaseData(caseRows);
   const districtData = buildDistrictDataFromCases(caseRows);
   const districtStats = buildDistrictStatisticsFromCases(caseRows);
-  const riskLevelData = buildRiskLevelDonutDataFromDistrictStats(districtStats);
   const yoy = buildYoYCaseStatsFromCases(caseRows);
   const diseaseTrend = buildDiseaseTrendByYear(caseRows, 5, 5);
-
-  const totalCases = caseRows.reduce(
-    (sum, r) => sum + (Number(r?.cases) || 0),
-    0,
-  );
-
-  const thisYearCases = (() => {
-    const currentYear = new Date().getFullYear();
-    return caseRows
-      .filter((r) => Number(r?.year) === currentYear)
-      .reduce((sum, r) => sum + (Number(r?.cases) || 0), 0);
-  })();
 
   const topDistrict = districtStats[0]?.district ?? "—";
   const topDisease = diseaseData[0]?.disease ?? "—";
 
   return {
-    totalCases,
-    thisYearCases,
+    latestYear: yoy?.thisYear ?? null,
+    latestYearCases: yoy?.thisYearCases ?? 0,
+    previousYear: yoy?.lastYear ?? null,
     topDistrict,
     topDisease,
-    riskLevelData,
     districtsCovered: districtStats.length,
     yoyPct: yoy?.yoyPct ?? null,
 
@@ -51,7 +37,7 @@ export function buildAnalyticsCasesViewModel(caseRows = [], reportRows = []) {
     diseaseTrendData: diseaseTrend.data,
     diseaseTrendKeys: diseaseTrend.keys,
 
-    yearlyTimelineData,
+    monthlyTimelineData,
 
     // dailyTimelineData: [], // not supported
     // monthlyTrendData: [], // not supported

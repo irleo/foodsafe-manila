@@ -5,14 +5,18 @@ async function parseError(res) {
   return j?.message || j?.reason || `Request failed (${res.status})`;
 }
 
-export async function fetchDatasets({ token, status } = {}) {
-  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
-  const res = await fetch(`${API_BASE}/api/datasets${qs}`, {
+export async function fetchDatasets({ token, status, page = 1, limit = 20 } = {}) {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (status) params.set("status", status);
+  const res = await fetch(`${API_BASE}/api/datasets?${params.toString()}`, {
     headers: { Authorization: token ? `Bearer ${token}` : "" },
   });
   if (!res.ok) throw new Error(await parseError(res));
   const data = await res.json();
-  return Array.isArray(data) ? data : [];
+  return {
+    items: Array.isArray(data?.items) ? data.items : [],
+    pagination: data?.pagination || null,
+  };
 }
 
 export async function uploadDataset({
@@ -21,6 +25,9 @@ export async function uploadDataset({
   coverageStart,
   coverageEnd,
   dataSource,
+  providerType,
+  providerName,
+  reportingFrequency,
   token,
 }) {
   const formData = new FormData();
@@ -29,6 +36,9 @@ export async function uploadDataset({
   if (coverageStart) formData.append("coverageStart", coverageStart);
   if (coverageEnd) formData.append("coverageEnd", coverageEnd);
   formData.append("dataSource", dataSource);
+  formData.append("providerType", providerType);
+  formData.append("providerName", providerName);
+  formData.append("reportingFrequency", reportingFrequency);
 
   const res = await fetch(`${API_BASE}/api/datasets/upload`, {
     method: "POST",

@@ -30,7 +30,7 @@ export const requestAccess = async (req, res) => {
       position,
       reason,
       status: "pending",
-      role: "user",
+      role: "unassigned",
     });
 
     await user.save();

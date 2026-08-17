@@ -44,6 +44,8 @@ import traceback
 
 import pandas as pd
 
+MIN_TRAINING_MONTHS = 24
+
 logging.basicConfig(level=logging.ERROR)
 logging.getLogger("cmdstanpy").setLevel(logging.ERROR)
 logging.getLogger("cmdstanpy").propagate = False
@@ -71,6 +73,7 @@ def _make_model() -> Prophet:
         weekly_seasonality=False,
         daily_seasonality=False,
         seasonality_mode="additive",
+        interval_width=0.95,
     )
     model.add_regressor("lag1", standardize=False)
     model.add_regressor("lag2", standardize=False)
@@ -120,8 +123,8 @@ def run_forecast(series: list, horizon_months: int, future_regressors: list | No
         )
     rows.sort(key=lambda x: (x["year"], x["month"]))
 
-    if len(rows) < 3:
-        raise ValueError("need_at_least_three_months")
+    if len(rows) < MIN_TRAINING_MONTHS:
+        raise ValueError(f"need_at_least_{MIN_TRAINING_MONTHS}_months")
     if horizon_months < 1 or horizon_months > 36:
         raise ValueError("invalid_horizonMonths")
 
@@ -136,7 +139,7 @@ def run_forecast(series: list, horizon_months: int, future_regressors: list | No
     )
 
     backtest = []
-    backtest_start = max(3, len(rows) - 12)
+    backtest_start = max(MIN_TRAINING_MONTHS, len(rows) - 12)
     for i in range(backtest_start, len(rows)):
         rolling_train_df = pd.DataFrame(
             {

@@ -22,6 +22,29 @@ export function parseExcelDate(v) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+export function getIsoWeekData(input) {
+  const date = new Date(input);
+  if (Number.isNaN(date.getTime())) return null;
+  const utcDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = utcDate.getUTCDay() || 7;
+  utcDate.setUTCDate(utcDate.getUTCDate() + 4 - day);
+  const epidemiologicalYear = utcDate.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(epidemiologicalYear, 0, 1));
+  const epidemiologicalWeek = Math.ceil((((utcDate - yearStart) / 86400000) + 1) / 7);
+  const weekStartDate = new Date(utcDate);
+  weekStartDate.setUTCDate(utcDate.getUTCDate() - ((utcDate.getUTCDay() || 7) - 1));
+  return { epidemiologicalYear, epidemiologicalWeek, weekStartDate };
+}
+
+function isoWeekStartDate(year, week) {
+  const januaryFourth = new Date(Date.UTC(year, 0, 4));
+  const day = januaryFourth.getUTCDay() || 7;
+  const firstMonday = new Date(januaryFourth);
+  firstMonday.setUTCDate(januaryFourth.getUTCDate() - day + 1);
+  firstMonday.setUTCDate(firstMonday.getUTCDate() + (week - 1) * 7);
+  return firstMonday;
+}
+
 export function normalizeCaseClassification(input = "") {
   const v = String(input || "")
     .trim()
@@ -100,6 +123,7 @@ export function normalizeRawHealthOfficeRow({ sheetName, row }) {
 
   const year = reportedAt.getUTCFullYear();
   const month = reportedAt.getUTCMonth() + 1;
+  const weekData = getIsoWeekData(reportedAt);
 
   return {
     ok: true,
@@ -111,6 +135,9 @@ export function normalizeRawHealthOfficeRow({ sheetName, row }) {
       disease: normalizeDisease(sheetName),
       year,
       month,
+      epidemiologicalYear: weekData.epidemiologicalYear,
+      epidemiologicalWeek: weekData.epidemiologicalWeek,
+      weekStartDate: weekData.weekStartDate,
       caseClassification: cls,
       cases: 1,
       source: "official",
@@ -127,6 +154,15 @@ export function normalizeTemplateRow(row = {}) {
   const disease = normalizeDisease(row.disease);
   const year = parseNumber(row.year);
   const month = parseNumber(row.month);
+  const epidemiologicalWeek = parseNumber(
+    row.epidemiological_week ?? row.epidemiologicalWeek,
+  );
+  const epidemiologicalYear = parseNumber(
+    row.epidemiological_year ?? row.epidemiologicalYear ?? row.year,
+  );
+  const suppliedWeekStartDate = parseExcelDate(
+    row.week_start_date ?? row.weekStartDate,
+  );
   const cls = normalizeCaseClassification(
     row.case_classification ?? row.caseClassification,
   );
@@ -142,6 +178,13 @@ export function normalizeTemplateRow(row = {}) {
     return { ok: false, field: "year", message: "Year must be numeric." };
   if (!Number.isFinite(month) || month < 1 || month > 12)
     return { ok: false, field: "month", message: "Month must be 1–12." };
+  if (
+    row.epidemiological_week !== undefined
+    && row.epidemiological_week !== ""
+    && (!Number.isFinite(epidemiologicalWeek) || epidemiologicalWeek < 1 || epidemiologicalWeek > 53)
+  ) {
+    return { ok: false, field: "epidemiologicalWeek", message: "Epidemiological week must be 1–53." };
+  }
   if (!cls)
     return {
       ok: false,
@@ -165,6 +208,16 @@ export function normalizeTemplateRow(row = {}) {
       disease,
       year: Math.trunc(year),
       month: Math.trunc(month),
+      epidemiologicalYear: Number.isFinite(epidemiologicalWeek)
+        ? Math.trunc(epidemiologicalYear)
+        : null,
+      epidemiologicalWeek: Number.isFinite(epidemiologicalWeek)
+        ? Math.trunc(epidemiologicalWeek)
+        : null,
+      weekStartDate: suppliedWeekStartDate
+        || (Number.isFinite(epidemiologicalWeek)
+          ? isoWeekStartDate(Math.trunc(epidemiologicalYear), Math.trunc(epidemiologicalWeek))
+          : null),
       caseClassification: cls,
       cases: Math.trunc(cases),
       source,

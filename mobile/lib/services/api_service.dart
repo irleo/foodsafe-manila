@@ -158,7 +158,6 @@ class ApiService {
         'exposureDistrict': exposureDistrict,
         'exposureBarangay': exposureBarangay,
         'exposureBarangayNo': exposureBarangayNo,
-        'caseClassification': 'suspected',
         'location': location,
       },
     );
@@ -174,14 +173,21 @@ class ApiService {
     return false;
   }
 
-  static Future<List<Map<String, dynamic>>> getUserReports(
-    String userId,
-  ) async {
-    final response = await ApiClient.get('/reports/user/$userId');
+  static Future<Map<String, dynamic>> getUserReports(
+    String userId, {
+    int page = 1,
+    int limit = 10,
+  }) async {
+    final response = await ApiClient.get(
+      '/reports/user/$userId',
+      query: {'page': '$page', 'limit': '$limit'},
+    );
 
-    if (response.statusCode != 200) return [];
+    if (response.statusCode != 200) {
+      return {'items': <Map<String, dynamic>>[], 'pagination': null};
+    }
 
-    return ApiClient.decodeList(response);
+    return ApiClient.decodeMap(response);
   }
 
   static Future<DateTime?> getLastReportTime(String userId) async {
@@ -264,11 +270,18 @@ class ApiService {
   static Future<Map<String, dynamic>?> fetchLatestValidatedDataset() async {
     final response = await ApiClient.get(
       '/datasets',
-      query: {'status': 'validated'},
+      query: {'status': 'validated', 'page': '1', 'limit': '1'},
     );
     if (response.statusCode != 200) return null;
 
-    final rows = ApiClient.decodeList(response);
+    final data = ApiClient.decodeMap(response);
+    final rawItems = data['items'];
+    final rows = rawItems is List
+        ? rawItems
+              .whereType<Map>()
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList()
+        : <Map<String, dynamic>>[];
     if (rows.isEmpty) return null;
 
     final row = rows.first;
@@ -283,22 +296,35 @@ class ApiService {
   /// Official case rows for a dataset (no classification filter = all types).
   static Future<List<Map<String, dynamic>>> fetchOfficialCasesByDataset(
     String datasetId, {
-    int limit = 1000,
+    int limit = 50,
   }) async {
-    final response = await ApiClient.get(
-      '/cases/$datasetId',
-      query: {'limit': '$limit'},
-    );
-    if (response.statusCode != 200) return [];
+    final pageSize = limit.clamp(1, 50);
+    final rows = <Map<String, dynamic>>[];
+    var page = 1;
+    var totalPages = 1;
 
-    final data = ApiClient.decodeMap(response);
-    final items = data['items'];
-    if (items is! List) return [];
+    do {
+      final response = await ApiClient.get(
+        '/cases/$datasetId',
+        query: {'page': '$page', 'limit': '$pageSize'},
+      );
+      if (response.statusCode != 200) return rows;
 
-    return items
-        .whereType<Map>()
-        .map((row) => Map<String, dynamic>.from(row))
-        .toList();
+      final data = ApiClient.decodeMap(response);
+      final items = data['items'];
+      if (items is List) {
+        rows.addAll(
+          items.whereType<Map>().map((row) => Map<String, dynamic>.from(row)),
+        );
+      }
+      final pagination = data['pagination'];
+      totalPages = pagination is Map
+          ? (pagination['totalPages'] as num?)?.toInt() ?? 1
+          : 1;
+      page += 1;
+    } while (page <= totalPages);
+
+    return rows;
   }
 
   /// District/barangay heatmap — mirrors web `GET /api/heatmap/districts`.
@@ -307,7 +333,7 @@ class ApiService {
     String selectedYear = 'All',
     String selectedMonth = 'All',
     String selectedDisease = 'All',
-    String selectedCaseClassification = 'All',
+    String selectedCaseClassification = 'confirmed',
   }) async {
     final query = <String, String>{'datasetId': datasetId};
     if (selectedYear != 'All') query['year'] = selectedYear;

@@ -9,6 +9,7 @@ import {
   ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import { FilterIcon } from "lucide-react";
+import { formatStatusLabel } from "../utils/formatStatusLabel";
 
 const LIMIT = 3;
 
@@ -37,6 +38,7 @@ export default function UserManagement() {
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [accessSelections, setAccessSelections] = useState({});
 
   const buildParams = useCallback(({ pageNum, status }) => {
     const params = new URLSearchParams();
@@ -189,11 +191,33 @@ export default function UserManagement() {
       .join("");
 
   const updateStatus = async (userId, nextStatus) => {
+    const targetUser = users.find((user) => user._id === userId);
+    if (
+      nextStatus === "approved" &&
+      targetUser?.emailReviewStatus === "manual_review_required" &&
+      !window.confirm(
+        "This email does not use a .gov.ph domain. Confirm that you manually verified the applicant's organization, position, and authorization before approving access.",
+      )
+    ) {
+      return;
+    }
+
     try {
       setActionLoadingId(userId);
 
+      const selectedAccess = accessSelections[userId] || {
+        role: "cesu",
+        canAccessPatientIdentity: false,
+      };
       await axiosPrivate.patch(`/api/users/${userId}/status`, {
         status: nextStatus,
+        ...(nextStatus === "approved"
+          ? {
+              ...selectedAccess,
+              manualAffiliationConfirmed:
+                targetUser?.emailReviewStatus === "manual_review_required",
+            }
+          : {}),
       });
 
       setUsers((prev) => {
@@ -221,6 +245,52 @@ export default function UserManagement() {
       );
     } catch (e) {
       setError(e?.response?.data?.message || "Failed to update user status");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const selectedAccessFor = (user) =>
+    accessSelections[user._id] || {
+      role: ["cesu", "surveillance_team"].includes(user.role) ? user.role : "cesu",
+      canAccessPatientIdentity: user.canAccessPatientIdentity === true,
+    };
+
+  const setSelectedAccess = (userId, changes) => {
+    const user =
+      users.find((item) => item._id === userId) ||
+      approvedUsers.find((item) => item._id === userId);
+    const current = selectedAccessFor(user || { _id: userId });
+    setAccessSelections((previous) => ({
+      ...previous,
+      [userId]: { ...current, ...changes },
+    }));
+  };
+
+  const updateApprovedAccess = async (user) => {
+    const access = selectedAccessFor(user);
+    const requiresManualConfirmation =
+      user.emailReviewStatus === "manual_review_required";
+    if (
+      requiresManualConfirmation &&
+      !window.confirm(
+        "This account does not use a .gov.ph domain. Confirm that its affiliation and authorization remain valid before changing access.",
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setActionLoadingId(user._id);
+      await axiosPrivate.patch(`/api/users/${user._id}/access`, {
+        ...access,
+        manualAffiliationConfirmed: requiresManualConfirmation,
+      });
+      await fetchApprovedUsers();
+      setError(null);
+      setInfoMsg("User access updated successfully.");
+    } catch (e) {
+      setError(e?.response?.data?.message || "Failed to update user access");
     } finally {
       setActionLoadingId(null);
     }
@@ -431,12 +501,21 @@ export default function UserManagement() {
                               u.status,
                             )}`}
                           >
-                            {u.status}
+                            {formatStatusLabel(u.status)}
                           </span>
 
                           {isAdminUser(u) && (
                             <span className="px-3 py-1 rounded-full text-xs border bg-indigo-50 text-indigo-700 border-indigo-200">
                               admin
+                            </span>
+                          )}
+                          {u.emailReviewStatus === "government_domain" ? (
+                            <span className="px-3 py-1 rounded-full text-xs border bg-emerald-50 text-emerald-700 border-emerald-200">
+                              .gov.ph domain
+                            </span>
+                          ) : (
+                            <span className="px-3 py-1 rounded-full text-xs border bg-amber-50 text-amber-800 border-amber-200">
+                              Manual affiliation review
                             </span>
                           )}
                         </div>
@@ -451,6 +530,14 @@ export default function UserManagement() {
                               {u.email}
                             </a>
                           </div>
+
+                          {u.emailReviewStatus === "manual_review_required" && (
+                            <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                              This is not a <span className="font-semibold">.gov.ph</span>{" "}
+                              address. Verify the applicant&apos;s organization,
+                              position, and authorization before approval.
+                            </div>
+                          )}
 
                           {u.organization && (
                             <div>
@@ -481,6 +568,47 @@ export default function UserManagement() {
                               ? new Date(u.createdAt).toLocaleDateString()
                               : "-"}
                           </div>
+
+                          {(showPendingActions(u) || showRejectedActions(u)) && (
+                            <div className="mt-4 grid grid-cols-1 gap-3 rounded-lg border border-blue-100 bg-blue-50/50 p-3 sm:grid-cols-2">
+                              <label className="text-sm font-medium text-gray-700">
+                                Assigned role
+                                <select
+                                  value={selectedAccessFor(u).role}
+                                  onChange={(event) =>
+                                    setSelectedAccess(u._id, {
+                                      role: event.target.value,
+                                      canAccessPatientIdentity:
+                                        event.target.value === "surveillance_team"
+                                          ? selectedAccessFor(u).canAccessPatientIdentity
+                                          : false,
+                                    })
+                                  }
+                                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5"
+                                >
+                                  <option value="cesu">CESU</option>
+                                  <option value="surveillance_team">Surveillance Team</option>
+                                </select>
+                              </label>
+
+                              <label className="flex min-h-11 items-center gap-2 self-end rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
+                                <input
+                                  type="checkbox"
+                                  disabled={selectedAccessFor(u).role !== "surveillance_team"}
+                                  checked={
+                                    selectedAccessFor(u).role === "surveillance_team" &&
+                                    selectedAccessFor(u).canAccessPatientIdentity
+                                  }
+                                  onChange={(event) =>
+                                    setSelectedAccess(u._id, {
+                                      canAccessPatientIdentity: event.target.checked,
+                                    })
+                                  }
+                                />
+                                Allow patient-identifiable information
+                              </label>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -611,6 +739,29 @@ export default function UserManagement() {
                               admin
                             </span>
                           )}
+                          {!isAdminUser(u) && (
+                            <span className="px-3 py-1 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200">
+                              {u.role === "surveillance_team"
+                                ? "Surveillance Team"
+                                : u.role === "cesu"
+                                  ? "CESU"
+                                  : "Unassigned"}
+                            </span>
+                          )}
+                          {u.canAccessPatientIdentity && (
+                            <span className="px-3 py-1 rounded-full text-xs border bg-violet-50 text-violet-700 border-violet-200">
+                              Patient identity authorized
+                            </span>
+                          )}
+                          {u.emailReviewStatus === "government_domain" ? (
+                            <span className="px-3 py-1 rounded-full text-xs border bg-emerald-50 text-emerald-700 border-emerald-200">
+                              .gov.ph domain
+                            </span>
+                          ) : (
+                            <span className="px-3 py-1 rounded-full text-xs border bg-amber-50 text-amber-800 border-amber-200">
+                              Manually reviewed affiliation
+                            </span>
+                          )}
                         </div>
 
                         <div className="text-sm text-gray-600">
@@ -636,18 +787,61 @@ export default function UserManagement() {
                             {u.position}
                           </div>
                         )}
+                        {!isAdminUser(u) && (
+                          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <label className="text-sm font-medium text-gray-700">
+                              Role
+                              <select
+                                value={selectedAccessFor(u).role}
+                                onChange={(event) =>
+                                  setSelectedAccess(u._id, {
+                                    role: event.target.value,
+                                    canAccessPatientIdentity:
+                                      event.target.value === "surveillance_team"
+                                        ? selectedAccessFor(u).canAccessPatientIdentity
+                                        : false,
+                                  })
+                                }
+                                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5"
+                              >
+                                <option value="cesu">CESU</option>
+                                <option value="surveillance_team">Surveillance Team</option>
+                              </select>
+                            </label>
+                            <label className="flex min-h-11 items-center gap-2 self-end rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700">
+                              <input
+                                type="checkbox"
+                                disabled={selectedAccessFor(u).role !== "surveillance_team"}
+                                checked={selectedAccessFor(u).role === "surveillance_team" && selectedAccessFor(u).canAccessPatientIdentity}
+                                onChange={(event) => setSelectedAccess(u._id, { canAccessPatientIdentity: event.target.checked })}
+                              />
+                              Patient identity access
+                            </label>
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    <button
-                      className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-                      onClick={() => openDeleteModal(u)}
-                      disabled={!canDeleteUser(u)}
-                      title={getDeleteTitle(u)}
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                      Delete
-                    </button>
+                    <div className="flex flex-col gap-2">
+                      {!isAdminUser(u) && (
+                        <button
+                          className="min-h-11 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                          onClick={() => updateApprovedAccess(u)}
+                          disabled={actionLoadingId === u._id}
+                        >
+                          {actionLoadingId === u._id ? "Saving…" : "Save access"}
+                        </button>
+                      )}
+                      <button
+                        className="flex min-h-11 items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-white hover:bg-red-700 disabled:opacity-50"
+                        onClick={() => openDeleteModal(u)}
+                        disabled={!canDeleteUser(u)}
+                        title={getDeleteTitle(u)}
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

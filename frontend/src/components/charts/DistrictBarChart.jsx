@@ -11,12 +11,13 @@ import { CHART_COLORS } from "../../constants/chartColors.js";
 
 export default function DistrictBarChart({ 
   data = [], 
-  title="Top Cases (by district)",
+  title="Case Distribution by District",
   headerRight = null }) {
   const safeData = Array.isArray(data) ? data : [];
 
   // Sort by cases desc and show top 6
   const chartData = [...safeData]
+    .filter((item) => Number(item?.cases) > 0)
     .sort((a, b) => (b.cases || 0) - (a.cases || 0))
     .slice(0, 6);
 
@@ -28,7 +29,7 @@ export default function DistrictBarChart({
       </div>
 
       {chartData.length === 0 ? (
-        <div className="text-sm text-gray-500">No district data available.</div>
+        <p className="text-sm text-gray-500">No district data available.</p>
       ) : (
         <div className="w-full h-[350px]">
           <ResponsiveContainer width="100%" height="100%">

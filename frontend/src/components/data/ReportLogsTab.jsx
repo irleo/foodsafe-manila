@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MapPin, Info } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useReports } from "../../hooks/useReports.js";
 import ReportsLogList from "../reports/ReportsLogList";
@@ -25,20 +25,23 @@ const DISTRICT_OPTIONS = [
 export default function ReportLogsTab() {
   const { auth } = useAuth();
   const token = auth?.accessToken;
-  const viewerRole = auth?.role || "user";
 
   const [reportDistrict, setReportDistrict] = useState("");
-  const { reports, loading, errorMsg, fetchReports } = useReports(token);
+  const { reports, pagination, permissions, loading, errorMsg, fetchReports } =
+    useReports(token, { autoFetch: false });
 
   const [onlyCounted] = useState(false);
 
   const loadReports = async ({
     district = reportDistrict,
     counted = onlyCounted,
+    page = 1,
   } = {}) => {
     await fetchReports({
       district: district || undefined,
       onlyCounted: counted,
+      page,
+      limit: 10,
     });
   };
 
@@ -70,7 +73,7 @@ export default function ReportLogsTab() {
               <select
                 value={reportDistrict}
                 onChange={(e) => setReportDistrict(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {DISTRICT_OPTIONS.map((option) => (
                   <option key={option.value || "all"} value={option.value}>
@@ -130,9 +133,12 @@ export default function ReportLogsTab() {
 
       <ReportsLogList
         reports={reports}
+        pagination={pagination}
         loading={loading}
         onRefresh={loadReports}
-        viewerRole={viewerRole}
+        onPageChange={(page) => loadReports({ page })}
+        token={token}
+        canAccessPatientIdentity={permissions.canAccessPatientIdentity}
       />
     </div>
   );

@@ -6,12 +6,14 @@ import { fetchDatasets } from "../api/datasets";
  */
 export function useLatestDatasetId(token) {
   const [datasetId, setDatasetId] = useState(null);
+  const [dataset, setDataset] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
     if (!token) {
       setDatasetId(null);
+      setDataset(null);
       setLoading(false);
       return;
     }
@@ -20,12 +22,19 @@ export function useLatestDatasetId(token) {
       try {
         setLoading(true);
         setErrorMsg("");
-        const rows = await fetchDatasets({ token, status: "validated" });
+        const { items } = await fetchDatasets({
+          token,
+          status: "validated",
+          page: 1,
+          limit: 1,
+        });
         if (!isMounted) return;
-        setDatasetId(rows?.[0]?._id || null);
+        setDatasetId(items?.[0]?._id || null);
+        setDataset(items?.[0] || null);
       } catch (e) {
         if (!isMounted) return;
         setDatasetId(null);
+        setDataset(null);
         setErrorMsg(e?.message || "Failed to load datasets");
       } finally {
         if (isMounted) setLoading(false);
@@ -37,8 +46,8 @@ export function useLatestDatasetId(token) {
   }, [token]);
 
   return useMemo(
-    () => ({ datasetId, loading, errorMsg }),
-    [datasetId, loading, errorMsg],
+    () => ({ datasetId, dataset, loading, errorMsg }),
+    [datasetId, dataset, loading, errorMsg],
   );
 }
 

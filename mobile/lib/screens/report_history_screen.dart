@@ -19,6 +19,8 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
 
   int _currentPage = 0;
   final int _itemsPerPage = 10;
+  int _totalReportCount = 0;
+  int _serverTotalPages = 1;
   final ScrollController _scrollController = ScrollController();
   bool _showPagination = false;
   bool _showFirstPageInput = false;
@@ -129,12 +131,22 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
   String _normalizeDistrictLabel(String? value) {
     final raw = (value ?? '').trim();
     if (raw.isEmpty) return 'Unknown';
-    final cleaned = raw.replaceAll(RegExp(r'[_-]+'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-    final match = RegExp(r'^district\s*(\d+)$', caseSensitive: false).firstMatch(cleaned);
+    final cleaned = raw
+        .replaceAll(RegExp(r'[_-]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    final match = RegExp(
+      r'^district\s*(\d+)$',
+      caseSensitive: false,
+    ).firstMatch(cleaned);
     if (match != null) return 'District ${match.group(1)}';
     return cleaned
         .split(' ')
-        .map((part) => part.isEmpty ? part : '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}')
+        .map(
+          (part) => part.isEmpty
+              ? part
+              : '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}',
+        )
         .join(' ');
   }
 
@@ -151,31 +163,54 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
       return;
     }
 
-    final reports = await ApiService.getUserReports(userId);
-
-    reports.sort((a, b) {
-      final aDate = DateTime.tryParse(a['reported_at'] as String? ?? '');
-      final bDate = DateTime.tryParse(b['reported_at'] as String? ?? '');
-
-      if (aDate == null || bDate == null) return 0;
-      return bDate.compareTo(aDate); // descending
-    });
+    final data = await ApiService.getUserReports(
+      userId,
+      page: _currentPage + 1,
+      limit: _itemsPerPage,
+    );
+    final rawItems = data['items'];
+    final reports = rawItems is List
+        ? rawItems
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList()
+        : <Map<String, dynamic>>[];
+    final pagination = data['pagination'];
 
     setState(() {
       _reports = reports;
+      _totalReportCount = pagination is Map
+          ? (pagination['total'] as num?)?.toInt() ?? reports.length
+          : reports.length;
+      _serverTotalPages = pagination is Map
+          ? (pagination['totalPages'] as num?)?.toInt() ?? 1
+          : 1;
       _isLoading = false;
     });
   }
 
+  Future<void> _goToPage(int pageIndex) async {
+    if (pageIndex < 0 ||
+        pageIndex >= _totalPages ||
+        pageIndex == _currentPage) {
+      return;
+    }
+    setState(() {
+      _currentPage = pageIndex;
+      _isLoading = true;
+      _showFirstPageInput = false;
+      _showSecondPageInput = false;
+    });
+    await _fetchReports();
+    if (_scrollController.hasClients) _scrollController.jumpTo(0);
+  }
+
   List<Map<String, dynamic>> get _paginatedReports {
-    return _reports
-        .skip(_currentPage * _itemsPerPage)
-        .take(_itemsPerPage)
-        .toList();
+    return _reports;
   }
 
   int get _totalPages {
-    return (_reports.length / _itemsPerPage).ceil();
+    return _serverTotalPages;
   }
 
   List<dynamic> _buildPageModel() {
@@ -271,7 +306,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                       icon: LucideIcons.fileText,
                       iconBg: const Color(0xFFDBEAFE),
                       iconColor: const Color(0xFF2563EB),
-                      value: _formatNumber(_reports.length),
+                      value: _formatNumber(_totalReportCount),
                       label: 'Total Reports',
                     ),
                   ),
@@ -282,7 +317,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                       iconBg: const Color(0xFFF3E8FF),
                       iconColor: const Color(0xFF9333EA),
                       value: _formatNumber(_totalSymptoms),
-                      label: 'Symptoms',
+                      label: 'Page Symptoms',
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -292,7 +327,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                       iconBg: const Color(0xFFD1FAE5),
                       iconColor: const Color(0xFF059669),
                       value: _formatNumber(_totalDistrictsReported),
-                      label: 'Districts',
+                      label: 'Page Areas',
                     ),
                   ),
                 ],
@@ -369,8 +404,12 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                                   symptomsList.addAll(
                                     FormatHelpers.formatSymptoms(
                                       symptomsValue
-                                          .map((item) => item?.toString().trim())
-                                          .where((s) => s != null && s.isNotEmpty)
+                                          .map(
+                                            (item) => item?.toString().trim(),
+                                          )
+                                          .where(
+                                            (s) => s != null && s.isNotEmpty,
+                                          )
                                           .cast<String>(),
                                     ),
                                   );
@@ -378,13 +417,15 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
 
                                 final location =
                                     report['location'] as Map<String, dynamic>?;
-                                final rawReportLocation = (report['report_location'] as String?) ??
+                                final rawReportLocation =
+                                    (report['report_location'] as String?) ??
                                     (location?['district'] as String?) ??
                                     (location?['name'] as String?) ??
                                     'Unknown';
-                                final reportLocationBase = _normalizeDistrictLabel(
-                                  rawReportLocation.split(',').first.trim(),
-                                );
+                                final reportLocationBase =
+                                    _normalizeDistrictLabel(
+                                      rawReportLocation.split(',').first.trim(),
+                                    );
 
                                 final reportBarangayNo =
                                     (location?['barangayNo'] as num?)?.toInt();
@@ -392,30 +433,33 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                                     location?['barangay'] as String?;
                                 final reportLocationDisplay =
                                     FormatHelpers.formatLocationDisplay(
-                                  district: reportLocationBase,
-                                  barangayNo: reportBarangayNo,
-                                  barangayName: reportBarangay,
-                                );
+                                      district: reportLocationBase,
+                                      barangayNo: reportBarangayNo,
+                                      barangayName: reportBarangay,
+                                    );
 
-                                final rawExposureSite = (report['food_location'] as String?) ??
+                                final rawExposureSite =
+                                    (report['food_location'] as String?) ??
                                     (report['exposureDistrict'] as String?) ??
                                     (location?['name'] as String?) ??
                                     'Unknown';
-                                final exposureSiteBase = _normalizeDistrictLabel(
-                                  rawExposureSite.split(',').first.trim(),
-                                );
+                                final exposureSiteBase =
+                                    _normalizeDistrictLabel(
+                                      rawExposureSite.split(',').first.trim(),
+                                    );
 
                                 final exposureBarangayNo =
-                                    (report['exposureBarangayNo'] as num?)?.toInt();
+                                    (report['exposureBarangayNo'] as num?)
+                                        ?.toInt();
                                 final exposureBarangay =
                                     report['exposureBarangay'] as String? ??
                                     location?['barangay'] as String?;
                                 final exposureLocationDisplay =
                                     FormatHelpers.formatLocationDisplay(
-                                  district: exposureSiteBase,
-                                  barangayNo: exposureBarangayNo,
-                                  barangayName: exposureBarangay,
-                                );
+                                      district: exposureSiteBase,
+                                      barangayNo: exposureBarangayNo,
+                                      barangayName: exposureBarangay,
+                                    );
 
                                 final foodSource =
                                     (report['food_source'] as String?) ??
@@ -541,9 +585,6 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
             onSubmitted: (value) {
               final page = int.tryParse(value);
               setState(() {
-                if (page != null && page >= 1 && page <= _totalPages) {
-                  _currentPage = page - 1;
-                }
                 if (dotIndex == 1) {
                   _showFirstPageInput = false;
                 } else {
@@ -551,7 +592,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                 }
               });
               if (page != null && page >= 1 && page <= _totalPages) {
-                _scrollController.jumpTo(0);
+                _goToPage(page - 1);
               }
               controller.clear();
             },
@@ -622,10 +663,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
             onSubmitted: (value) {
               final page = int.tryParse(value);
               if (page != null && page >= 1 && page <= _totalPages) {
-                setState(() {
-                  _currentPage = page - 1;
-                });
-                _scrollController.jumpTo(0);
+                _goToPage(page - 1);
               }
               setState(() {
                 _showFirstPageInput = false;
@@ -741,12 +779,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
           TextButton(
             onPressed: _currentPage > 0
                 ? () {
-                    setState(() {
-                      _currentPage--;
-                      _showFirstPageInput = false;
-                      _showSecondPageInput = false;
-                    });
-                    _scrollController.jumpTo(0);
+                    _goToPage(_currentPage - 1);
                   }
                 : null,
             child: Text(
@@ -773,12 +806,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                         isActive: p == _currentPage + 1,
                         isDisabled: false,
                         onPressed: () {
-                          setState(() {
-                            _currentPage = p - 1;
-                            _showFirstPageInput = false;
-                            _showSecondPageInput = false;
-                          });
-                          _scrollController.jumpTo(0);
+                          _goToPage(p - 1);
                         },
                       ),
                     ),
@@ -791,12 +819,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
           TextButton(
             onPressed: _currentPage < _totalPages - 1
                 ? () {
-                    setState(() {
-                      _currentPage++;
-                      _showFirstPageInput = false;
-                      _showSecondPageInput = false;
-                    });
-                    _scrollController.jumpTo(0);
+                    _goToPage(_currentPage + 1);
                   }
                 : null,
             child: Text(

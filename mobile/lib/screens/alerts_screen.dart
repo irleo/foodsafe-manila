@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../services/alerts_read_store.dart';
 import '../services/alerts_repository.dart';
-import '../services/risk_alert_service.dart';
 import '../widgets/alerts_widgets.dart';
 import '../widgets/app_loading.dart';
 
@@ -16,7 +15,6 @@ class AlertsScreen extends StatefulWidget {
 
 class AlertsScreenState extends State<AlertsScreen> {
   Set<String> readIds = {};
-  RiskLevel? selectedFilter;
   bool isLoading = true;
   String? errorMessage;
   List<AlertItem> alerts = [];
@@ -27,17 +25,6 @@ class AlertsScreenState extends State<AlertsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadAlerts();
-    RiskAlertService.instance.latestMessage.addListener(_onRiskMessage);
-  }
-
-  @override
-  void dispose() {
-    RiskAlertService.instance.latestMessage.removeListener(_onRiskMessage);
-    super.dispose();
-  }
-
-  void _onRiskMessage() {
     _loadAlerts();
   }
 
@@ -85,10 +72,7 @@ class AlertsScreenState extends State<AlertsScreen> {
     setState(() => readIds = {...readIds, item.id});
   }
 
-  List<AlertItem> get filteredAlerts {
-    if (selectedFilter == null) return alerts;
-    return alerts.where((a) => a.risk == selectedFilter).toList();
-  }
+  List<AlertItem> get filteredAlerts => alerts;
 
   @override
   Widget build(BuildContext context) {
@@ -98,35 +82,15 @@ class AlertsScreenState extends State<AlertsScreen> {
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
         title: Text(
-          'Alerts',
+          'Health Advisories',
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
           ),
         ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(44),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Row(
-              children: [
-                _filterChip('All', null),
-                const SizedBox(width: 8),
-                _filterChip('Critical', RiskLevel.critical),
-                const SizedBox(width: 8),
-                _filterChip('High', RiskLevel.high),
-                const SizedBox(width: 8),
-                _filterChip('Moderate', RiskLevel.moderate),
-                const SizedBox(width: 8),
-                _filterChip('Low', RiskLevel.low),
-              ],
-            ),
-          ),
-        ),
       ),
       body: isLoading
-          ? const AppLoadingCenter(message: 'Loading alerts…')
+          ? const AppLoadingCenter(message: 'Loading advisories…')
           : errorMessage != null
               ? _buildErrorState()
               : SafeArea(
@@ -224,7 +188,7 @@ class AlertsScreenState extends State<AlertsScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            'No alerts available',
+            'No published health advisories',
             style: GoogleFonts.inter(
               fontSize: 18,
               color: Colors.grey.shade500,
@@ -232,7 +196,7 @@ class AlertsScreenState extends State<AlertsScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Risk alerts from the heatmap will appear here when cases are reported',
+            'Only advisories published by authorized health personnel will appear here.',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
               fontSize: 14,
@@ -275,23 +239,4 @@ class AlertsScreenState extends State<AlertsScreen> {
     );
   }
 
-  Widget _filterChip(String label, RiskLevel? level) {
-    final selected = selectedFilter == level;
-    return FilterChip(
-      label: Text(
-        label,
-        style: GoogleFonts.inter(
-          color: selected ? Colors.white : Colors.black87,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-      selected: selected,
-      checkmarkColor: Colors.white,
-      selectedColor: const Color(0xFF2563EB),
-      backgroundColor: const Color(0xFFF3F4F6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      side: BorderSide.none,
-      onSelected: (_) => setState(() => selectedFilter = level),
-    );
-  }
 }
