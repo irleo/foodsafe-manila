@@ -194,7 +194,7 @@ export default function Dashboard() {
                 <>
                   <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
                     {[
-                      ["Observed validated / confirmed", thresholdResult.observedConfirmedCases],
+                      ["Observed confirmed", thresholdResult.observedConfirmedCases],
                       ["Historical mean", thresholdResult.baselineMean ?? "Insufficient data"],
                       ["Alert threshold", thresholdResult.alertThreshold ?? "—"],
                       ["Epidemic threshold", thresholdResult.epidemicThreshold ?? "—"],
@@ -223,15 +223,15 @@ export default function Dashboard() {
       {/* cards + charts (same for both roles) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <YearlyLineChart
-          title={`Validated / Confirmed Cases${formatCoverageRange(dataset) ? ` (${formatCoverageRange(dataset)})` : " — Available Period"}`}
+          title={`Confirmed Cases${formatCoverageRange(dataset) ? ` (${formatCoverageRange(dataset)})` : " — Available Period"}`}
           data={yearlyData}
         />
 
         <DistrictBarChartVertical
           title={
             selectedYear === "all"
-              ? "Validated / Confirmed Case Distribution by District (All Years)"
-              : `Validated / Confirmed Case Distribution by District (${selectedYear})`
+              ? "Confirmed Case Distribution by District (All Years)"
+              : `Confirmed Case Distribution by District (${selectedYear})`
           }
           data={districtData}
           headerRight={

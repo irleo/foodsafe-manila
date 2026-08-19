@@ -10,17 +10,21 @@ const userSchema = new mongoose.Schema(
       default: "unassigned",
       enum: ["unassigned", "admin", "cesu", "surveillance_team"],
     },
+    requestedRole: {
+      type: String,
+      enum: ["cesu", "surveillance_team"],
+    },
     canAccessPatientIdentity: { type: Boolean, default: false },
 
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
+      enum: ["pending", "approved", "rejected", "suspended"],
       default: "pending",
       index: true,
     },
     organization: { type: String, trim: true },
     position: { type: String, trim: true },
-    reason: { type: String, trim: true, maxlength: 500 },
+    lastLoginAt: { type: Date },
 
     // optional audit fields
     approvedAt: { type: Date },

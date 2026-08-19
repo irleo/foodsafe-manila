@@ -1,915 +1,323 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  CheckIcon,
+  MagnifyingGlassIcon,
+  PencilSquareIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 import { useAuth } from "../context/AuthContext";
 import useAxiosPrivate from "../hooks/useAxiosPrivate";
-import {
-  MagnifyingGlassIcon,
-  CheckIcon,
-  XMarkIcon,
-  TrashIcon,
-  ArrowPathIcon,
-} from "@heroicons/react/24/outline";
-import { FilterIcon } from "lucide-react";
 import { formatStatusLabel } from "../utils/formatStatusLabel";
 
-const LIMIT = 3;
+const PAGE_LIMIT = 10;
+const ASSIGNABLE_ROLES = new Set(["cesu", "surveillance_team"]);
+
+function statusBadgeClass(status) {
+  if (status === "approved") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "suspended") return "border-gray-300 bg-gray-100 text-gray-700";
+  if (status === "rejected") return "border-red-200 bg-red-50 text-red-700";
+  return "border-amber-200 bg-amber-50 text-amber-800";
+}
+
+function formatLastLogin(value) {
+  if (!value) return "Never";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Never";
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function Pagination({ page, totalPages, onChange }) {
+  return (
+    <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-5 py-4">
+      <button type="button" disabled={page <= 1} onClick={() => onChange(page - 1)} className="min-h-10 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40">
+        Previous
+      </button>
+      <span className="px-2 text-sm text-gray-600">Page {page} of {totalPages}</span>
+      <button type="button" disabled={page >= totalPages} onClick={() => onChange(page + 1)} className="min-h-10 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40">
+        Next
+      </button>
+    </div>
+  );
+}
 
 export default function UserManagement() {
   const { auth } = useAuth();
   const axiosPrivate = useAxiosPrivate();
-
-  const [users, setUsers] = useState([]);
-  const [approvedUsers, setApprovedUsers] = useState([]);
-  const [stats, setStats] = useState({ pending: 0, approved: 0, rejected: 0 });
-
-  const [loading, setLoading] = useState(true);
-  const [approvedLoading, setApprovedLoading] = useState(true);
-  const [actionLoadingId, setActionLoadingId] = useState(null);
-  const [error, setError] = useState(null);
-  const [infoMsg, setInfoMsg] = useState("");
-
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-
-  const [approvedPage, setApprovedPage] = useState(1);
-  const [approvedTotalPages, setApprovedTotalPages] = useState(1);
-
-  const [statusFilter, setStatusFilter] = useState("pending");
+  const [requests, setRequests] = useState([]);
+  const [managedUsers, setManagedUsers] = useState([]);
+  const [stats, setStats] = useState({ pending: 0, approved: 0, rejected: 0, suspended: 0 });
+  const [requestStatus, setRequestStatus] = useState("pending");
+  const [requestPage, setRequestPage] = useState(1);
+  const [requestTotalPages, setRequestTotalPages] = useState(1);
+  const [usersPage, setUsersPage] = useState(1);
+  const [usersTotalPages, setUsersTotalPages] = useState(1);
   const [search, setSearch] = useState("");
-
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleting, setDeleting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [error, setError] = useState("");
+  const [infoMessage, setInfoMessage] = useState("");
   const [accessSelections, setAccessSelections] = useState({});
+  const [editTarget, setEditTarget] = useState(null);
 
-  const buildParams = useCallback(({ pageNum, status }) => {
-    const params = new URLSearchParams();
-    params.set("page", String(pageNum));
-    params.set("limit", String(LIMIT));
-    params.set("status", status);
-    return params;
-  }, []);
+  const fetchRequests = useCallback(async () => {
+    const params = new URLSearchParams({ page: String(requestPage), limit: String(PAGE_LIMIT), status: requestStatus });
+    const response = await axiosPrivate.get(`/api/users?${params.toString()}`);
+    setRequests(response.data.users || []);
+    setRequestTotalPages(response.data.totalPages || 1);
+  }, [axiosPrivate, requestPage, requestStatus]);
+
+  const fetchManagedUsers = useCallback(async () => {
+    const params = new URLSearchParams({ page: String(usersPage), limit: String(PAGE_LIMIT), status: "managed" });
+    const response = await axiosPrivate.get(`/api/users?${params.toString()}`);
+    setManagedUsers(response.data.users || []);
+    setUsersTotalPages(response.data.totalPages || 1);
+  }, [axiosPrivate, usersPage]);
 
   const fetchStats = useCallback(async () => {
-    const res = await axiosPrivate.get("/api/users/stats");
-    setStats(res.data);
+    const response = await axiosPrivate.get("/api/users/stats");
+    setStats(response.data);
   }, [axiosPrivate]);
 
-  const fetchUsers = useCallback(async () => {
+  const refreshAll = useCallback(async () => {
     setLoading(true);
-
     try {
-      const params = buildParams({
-        pageNum: page,
-        status: statusFilter,
-      });
-
-      const res = await axiosPrivate.get(`/api/users?${params.toString()}`);
-
-      setUsers(res.data.users || []);
-      setTotalPages(res.data.totalPages || 1);
-      setError(null);
-    } catch (e) {
-      setError(e?.response?.data?.message || "Failed to load users");
+      await Promise.all([fetchRequests(), fetchManagedUsers(), fetchStats()]);
+      setError("");
+    } catch (requestError) {
+      setError(requestError?.response?.data?.message || "Failed to load users.");
     } finally {
       setLoading(false);
     }
-  }, [axiosPrivate, buildParams, page, statusFilter]);
-
-  const fetchApprovedUsers = useCallback(async () => {
-    setApprovedLoading(true);
-
-    try {
-      const params = buildParams({
-        pageNum: approvedPage,
-        status: "approved",
-      });
-
-      const res = await axiosPrivate.get(`/api/users?${params.toString()}`);
-
-      setApprovedUsers(res.data.users || []);
-      setApprovedTotalPages(res.data.totalPages || 1);
-      setError(null);
-    } catch (e) {
-      setError(e?.response?.data?.message || "Failed to load approved users");
-    } finally {
-      setApprovedLoading(false);
-    }
-  }, [axiosPrivate, buildParams, approvedPage]);
-
-  const refreshAll = useCallback(async () => {
-    await Promise.all([fetchUsers(), fetchApprovedUsers(), fetchStats()]);
-  }, [fetchUsers, fetchApprovedUsers, fetchStats]);
+  }, [fetchManagedUsers, fetchRequests, fetchStats]);
 
   useEffect(() => {
-    if (!auth?.accessToken) return;
-    fetchUsers();
-  }, [auth?.accessToken, fetchUsers]);
+    if (auth?.accessToken) refreshAll();
+  }, [auth?.accessToken, refreshAll]);
 
-  useEffect(() => {
-    if (!auth?.accessToken) return;
-    fetchApprovedUsers();
-  }, [auth?.accessToken, fetchApprovedUsers]);
-
-  useEffect(() => {
-    if (!auth?.accessToken) return;
-
-    const loadStats = async () => {
-      try {
-        await fetchStats();
-      } catch {
-        // no-op
-      }
-    };
-
-    loadStats();
-  }, [auth?.accessToken, fetchStats]);
-
-  const filteredUsers = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return users;
-
-    return users.filter((u) => {
-      const haystack = [
-        u.username,
-        u.email,
-        u.organization,
-        u.position,
-        u.reason,
-        u.status,
-        u.role,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return haystack.includes(term);
-    });
-  }, [users, search]);
-
-  const filteredApprovedUsers = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return approvedUsers;
-
-    return approvedUsers.filter((u) => {
-      const haystack = [u.username, u.email, u.organization, u.position, u.role]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return haystack.includes(term);
-    });
-  }, [approvedUsers, search]);
-
-  const isAdminUser = (user) => user?.role === "admin";
-  const isPendingUser = (user) => user?.status === "pending";
-  const isRejectedUser = (user) => user?.status === "rejected";
-  const isApprovedUser = (user) => user?.status === "approved";
-
-  const showPendingActions = (user) => isPendingUser(user);
-  const showRejectedActions = (user) => isRejectedUser(user);
-
-  const canDeleteUser = (user) => user?.role !== "admin";
-
-  const getDeleteTitle = (user) =>
-    isAdminUser(user) ? "Admin users cannot be deleted" : "Delete user";
-
-  const badgeClass = (status) => {
-    if (status === "approved") {
-      return "bg-green-100 text-green-700 border-green-300";
-    }
-    if (status === "rejected") {
-      return "bg-red-100 text-red-700 border-red-300";
-    }
-    return "bg-yellow-100 text-yellow-700 border-yellow-300";
-  };
-
-  const initials = (name = "") =>
-    name
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((w) => w[0]?.toUpperCase())
-      .join("");
-
-  const updateStatus = async (userId, nextStatus) => {
-    const targetUser = users.find((user) => user._id === userId);
-    if (
-      nextStatus === "approved" &&
-      targetUser?.emailReviewStatus === "manual_review_required" &&
-      !window.confirm(
-        "This email does not use a .gov.ph domain. Confirm that you manually verified the applicant's organization, position, and authorization before approving access.",
-      )
-    ) {
-      return;
-    }
-
-    try {
-      setActionLoadingId(userId);
-
-      const selectedAccess = accessSelections[userId] || {
-        role: "cesu",
-        canAccessPatientIdentity: false,
-      };
-      await axiosPrivate.patch(`/api/users/${userId}/status`, {
-        status: nextStatus,
-        ...(nextStatus === "approved"
-          ? {
-              ...selectedAccess,
-              manualAffiliationConfirmed:
-                targetUser?.emailReviewStatus === "manual_review_required",
-            }
-          : {}),
-      });
-
-      setUsers((prev) => {
-        const updated = prev.map((u) =>
-          u._id === userId ? { ...u, status: nextStatus } : u,
-        );
-
-        if (statusFilter !== nextStatus) {
-          return updated.filter((u) => u._id !== userId);
-        }
-
-        return updated;
-      });
-
-      if (nextStatus === "approved") {
-        await fetchApprovedUsers();
-      }
-
-      await Promise.all([fetchUsers(), fetchStats()]);
-      setError(null);
-      setInfoMsg(
-        nextStatus === "approved"
-          ? "User has been approved successfully."
-          : "User has been rejected successfully.",
-      );
-    } catch (e) {
-      setError(e?.response?.data?.message || "Failed to update user status");
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const selectedAccessFor = (user) =>
-    accessSelections[user._id] || {
-      role: ["cesu", "surveillance_team"].includes(user.role) ? user.role : "cesu",
+  const selectedAccessFor = useCallback(
+    (user) => accessSelections[user._id] || {
+      role: ASSIGNABLE_ROLES.has(user.role)
+        ? user.role
+        : ASSIGNABLE_ROLES.has(user.requestedRole)
+          ? user.requestedRole
+          : "cesu",
       canAccessPatientIdentity: user.canAccessPatientIdentity === true,
-    };
+    },
+    [accessSelections],
+  );
 
-  const setSelectedAccess = (userId, changes) => {
-    const user =
-      users.find((item) => item._id === userId) ||
-      approvedUsers.find((item) => item._id === userId);
-    const current = selectedAccessFor(user || { _id: userId });
-    setAccessSelections((previous) => ({
-      ...previous,
-      [userId]: { ...current, ...changes },
+  const setSelectedAccess = (user, changes) => {
+    setAccessSelections((current) => ({
+      ...current,
+      [user._id]: { ...selectedAccessFor(user), ...changes },
     }));
   };
 
-  const updateApprovedAccess = async (user) => {
-    const access = selectedAccessFor(user);
-    const requiresManualConfirmation =
-      user.emailReviewStatus === "manual_review_required";
-    if (
-      requiresManualConfirmation &&
-      !window.confirm(
-        "This account does not use a .gov.ph domain. Confirm that its affiliation and authorization remain valid before changing access.",
-      )
-    ) {
+  const visibleRequests = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return requests;
+    return requests.filter((user) =>
+      [user.username, user.email, user.requestedRole, user.status]
+        .filter(Boolean).join(" ").toLowerCase().includes(term),
+    );
+  }, [requests, search]);
+
+  const visibleManagedUsers = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return managedUsers;
+    return managedUsers.filter((user) =>
+      [user.username, user.email, user.role, user.status]
+        .filter(Boolean).join(" ").toLowerCase().includes(term),
+    );
+  }, [managedUsers, search]);
+
+  const confirmManualAffiliation = (user) =>
+    user.emailReviewStatus !== "manual_review_required" ||
+    window.confirm("This account does not use a .gov.ph address. Confirm that you manually verified the user's affiliation and authorization.");
+
+  const changeStatus = async (user, status) => {
+    if (user.role === "admin" || !confirmManualAffiliation(user)) return;
+    const isInitialDecision = ["pending", "rejected"].includes(user.status);
+    const access = isInitialDecision
+      ? {
+          role: user.requestedRole,
+          canAccessPatientIdentity: false,
+        }
+      : selectedAccessFor(user);
+    if (status === "approved" && !ASSIGNABLE_ROLES.has(access.role)) {
+      setError("This legacy request has no selected role and cannot be approved. Ask the applicant to submit a new request.");
       return;
     }
-
     try {
       setActionLoadingId(user._id);
-      await axiosPrivate.patch(`/api/users/${user._id}/access`, {
-        ...access,
-        manualAffiliationConfirmed: requiresManualConfirmation,
+      await axiosPrivate.patch(`/api/users/${user._id}/status`, {
+        status,
+        ...(status === "approved" ? access : {}),
+        manualAffiliationConfirmed: user.emailReviewStatus === "manual_review_required",
       });
-      await fetchApprovedUsers();
-      setError(null);
-      setInfoMsg("User access updated successfully.");
-    } catch (e) {
-      setError(e?.response?.data?.message || "Failed to update user access");
+      setInfoMessage(
+        status === "approved"
+          ? user.status === "suspended" ? "User account reactivated." : "Access request approved."
+          : status === "suspended" ? "User account suspended." : "Access request rejected.",
+      );
+      await refreshAll();
+    } catch (requestError) {
+      setError(requestError?.response?.data?.message || "Failed to update user status.");
     } finally {
       setActionLoadingId(null);
     }
   };
 
-  const openDeleteModal = (user) => {
-    if (!canDeleteUser(user)) return;
-    setDeleteTarget(user);
-  };
-
-  const closeDeleteModal = () => {
-    if (deleting) return;
-    setDeleteTarget(null);
-  };
-
-  const confirmDelete = async () => {
-    if (!deleteTarget?._id) return;
-
+  const saveAccess = async () => {
+    if (!editTarget || !confirmManualAffiliation(editTarget)) return;
     try {
-      setDeleting(true);
-
-      await axiosPrivate.delete(`/api/users/${deleteTarget._id}`);
-
-      const deletingApprovedUser = isApprovedUser(deleteTarget);
-      const deletingRejectedUser = isRejectedUser(deleteTarget);
-
-      const shouldGoBackApprovedPage =
-        deletingApprovedUser && approvedUsers.length === 1 && approvedPage > 1;
-
-      const shouldGoBackMainPage =
-        deletingRejectedUser && users.length === 1 && page > 1;
-
-      if (deletingApprovedUser) {
-        setApprovedUsers((prev) =>
-          prev.filter((u) => u._id !== deleteTarget._id),
-        );
-      }
-
-      if (deletingRejectedUser) {
-        setUsers((prev) => prev.filter((u) => u._id !== deleteTarget._id));
-      }
-
-      setDeleteTarget(null);
-
-      await fetchStats();
-
-      if (shouldGoBackApprovedPage) {
-        setApprovedPage((prev) => prev - 1);
-      } else if (shouldGoBackMainPage) {
-        setPage((prev) => prev - 1);
-      } else {
-        await Promise.all([fetchApprovedUsers(), fetchUsers()]);
-      }
-
-      setError(null);
-      setInfoMsg("User deleted successfully.");
-    } catch (e) {
-      setError(e?.response?.data?.message || "Failed to delete user");
+      setActionLoadingId(editTarget._id);
+      await axiosPrivate.patch(`/api/users/${editTarget._id}/access`, {
+        ...selectedAccessFor(editTarget),
+        manualAffiliationConfirmed: editTarget.emailReviewStatus === "manual_review_required",
+      });
+      setEditTarget(null);
+      setInfoMessage("User role updated successfully.");
+      await refreshAll();
+    } catch (requestError) {
+      setError(requestError?.response?.data?.message || "Failed to update user role.");
     } finally {
-      setDeleting(false);
+      setActionLoadingId(null);
     }
   };
-
-  const retryLoad = async () => {
-    setError(null);
-    await refreshAll();
-  };
-
-  if (loading && approvedLoading) {
-    return <p>Loading users...</p>;
-  }
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold">User Management</h2>
-        <p className="text-gray-600 mt-1">User access and role management</p>
+        <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
+        <p className="mt-1 text-gray-600">Review access requests and manage system roles.</p>
       </div>
 
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-red-700 text-sm">{error}</p>
-          <button
-            onClick={retryLoad}
-            className="mt-3 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
-          >
-            Retry
-          </button>
-        </div>
-      )}
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+      {infoMessage && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{infoMessage}</div>}
 
-      {infoMsg && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-          <p className="text-emerald-700 text-sm">{infoMsg}</p>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <p className="text-sm text-gray-600 mb-2">Pending Approval</p>
-          <p className="text-3xl text-yellow-600">{stats.pending}</p>
-          <p className="text-sm text-gray-600 mt-2">Awaiting review</p>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <p className="text-sm text-gray-600 mb-2">Approved Users</p>
-          <p className="text-3xl text-green-600">{stats.approved}</p>
-          <p className="text-sm text-gray-600 mt-2">Active accounts</p>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <p className="text-sm text-gray-600 mb-2">Rejected</p>
-          <p className="text-3xl text-red-600">{stats.rejected}</p>
-          <p className="text-sm text-gray-600 mt-2">Denied access</p>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex flex-col sm:flex-row items-center gap-4">
-          <div className="flex-1 relative">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Filter visible users by name, email, or organization..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {[["Pending", stats.pending, "text-amber-600"], ["Active", stats.approved, "text-blue-600"], ["Suspended", stats.suspended, "text-gray-600"], ["Rejected", stats.rejected, "text-red-600"]].map(([label, count, color]) => (
+          <div key={label} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <p className="text-sm text-gray-600">{label}</p>
+            <p className={`mt-2 text-3xl font-semibold ${color}`}>{count || 0}</p>
           </div>
+        ))}
+      </div>
 
-          {/* Pending/Rejected Filters */}
-          <div className="flex items-center gap-3">
-            <FilterIcon className="h-4 w-4 text-gray-500" />
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="relative">
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+          <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search visible users by name, email, role, or status..." className="min-h-11 w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-4 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200" />
+        </div>
+      </div>
 
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  setStatusFilter("pending");
-                  setPage(1);
-                  setSearch("");
-                }}
-                className={`px-4 py-2 rounded-lg border text-sm font-medium border-b-2 transition
-      ${
-        statusFilter === "pending"
-          ? "bg-yellow-100 border-yellow-300 text-yellow-700"
-          : "border-transparent text-gray-600 hover:bg-gray-100"
-      }`}
-              >
-                Pending ({stats.pending})
-              </button>
-
-              <button
-                onClick={() => {
-                  setStatusFilter("rejected");
-                  setPage(1);
-                  setSearch("");
-                }}
-                className={`px-4 py-2 rounded-lg border text-sm font-medium border-b-2 transition
-      ${
-        statusFilter === "rejected"
-          ? "bg-red-100 border-red-300 text-red-700"
-          : "border-transparent text-gray-600 hover:bg-gray-100"
-      }`}
-              >
-                Rejected ({stats.rejected})
-              </button>
-            </div>
+      <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-semibold text-gray-900">Access Requests</h2>
+            <p className="mt-1 text-sm text-gray-600">Review the role selected by the applicant before accepting or rejecting access.</p>
           </div>
-
+          <div className="inline-flex self-start rounded-lg border border-gray-300 bg-gray-50 p-1">
+            {["pending", "rejected"].map((status) => (
+              <button key={status} type="button" onClick={() => { setRequestStatus(status); setRequestPage(1); }} className={`rounded-md px-3 py-2 text-sm font-medium ${requestStatus === status ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:bg-white"}`}>
+                {formatStatusLabel(status)}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="font-semibold text-lg">User access queue</h2>
-          <p className="text-sm text-gray-600 mt-1">
-            Showing {filteredUsers.length} visible users (page {page} of{" "}
-            {totalPages})
-          </p>
-        </div>
-
-        <div className="divide-y divide-gray-200">
-          {loading ? (
-            <div className="p-6 text-sm text-gray-600">Loading users...</div>
-          ) : (
-            <>
-              {filteredUsers.map((u) => (
-                <div
-                  key={u._id}
-                  className="p-6 hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-4 flex-1">
-                      <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                        <span className="text-blue-600 text-lg">
-                          {initials(u.username)}
-                        </span>
+        <div className="overflow-x-auto">
+          <table className="min-w-[850px] w-full text-left text-sm">
+            <thead className="bg-blue-50 text-xs uppercase tracking-wide text-blue-900">
+              <tr><th className="px-5 py-3">Username</th><th className="px-5 py-3">Email</th><th className="px-5 py-3">Role</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Requested</th><th className="px-5 py-3 text-right">Actions</th></tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {visibleRequests.map((user) => {
+                const busy = actionLoadingId === user._id;
+                return (
+                  <tr key={user._id} className="hover:bg-blue-50/30">
+                    <td className="px-5 py-4 font-medium text-gray-900">{user.username}</td>
+                    <td className="px-5 py-4 text-gray-600">{user.email}</td>
+                    <td className="px-5 py-4">
+                      <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                        {formatStatusLabel(user.requestedRole, "Not specified")}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4"><span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusBadgeClass(user.status)}`}>{formatStatusLabel(user.status)}</span></td>
+                    <td className="px-5 py-4 text-gray-600">{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "—"}</td>
+                    <td className="px-5 py-4">
+                      <div className="flex justify-end gap-2">
+                        <button type="button" disabled={busy || !ASSIGNABLE_ROLES.has(user.requestedRole)} onClick={() => changeStatus(user, "approved")} title={!ASSIGNABLE_ROLES.has(user.requestedRole) ? "This legacy request has no selected role." : undefined} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"><CheckIcon className="h-4 w-4" />{user.status === "rejected" ? "Approve" : "Accept"}</button>
+                        {user.status === "pending" && <button type="button" disabled={busy} onClick={() => changeStatus(user, "rejected")} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"><XMarkIcon className="h-4 w-4" /> Reject</button>}
                       </div>
-
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2 flex-wrap">
-                          <h3 className="font-semibold text-lg">
-                            {u.username}
-                          </h3>
-
-                          <span
-                            className={`px-3 py-1 rounded-full text-sm capitalize border ${badgeClass(
-                              u.status,
-                            )}`}
-                          >
-                            {formatStatusLabel(u.status)}
-                          </span>
-
-                          {isAdminUser(u) && (
-                            <span className="px-3 py-1 rounded-full text-xs border bg-indigo-50 text-indigo-700 border-indigo-200">
-                              admin
-                            </span>
-                          )}
-                          {u.emailReviewStatus === "government_domain" ? (
-                            <span className="px-3 py-1 rounded-full text-xs border bg-emerald-50 text-emerald-700 border-emerald-200">
-                              .gov.ph domain
-                            </span>
-                          ) : (
-                            <span className="px-3 py-1 rounded-full text-xs border bg-amber-50 text-amber-800 border-amber-200">
-                              Manual affiliation review
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="space-y-1 text-sm text-gray-600">
-                          <div>
-                            <span className="font-medium">Email:</span>{" "}
-                            <a
-                              href={`mailto:${u.email}`}
-                              className="hover:text-blue-600"
-                            >
-                              {u.email}
-                            </a>
-                          </div>
-
-                          {u.emailReviewStatus === "manual_review_required" && (
-                            <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                              This is not a <span className="font-semibold">.gov.ph</span>{" "}
-                              address. Verify the applicant&apos;s organization,
-                              position, and authorization before approval.
-                            </div>
-                          )}
-
-                          {u.organization && (
-                            <div>
-                              <span className="font-medium">Organization:</span>{" "}
-                              {u.organization}
-                            </div>
-                          )}
-
-                          {u.position && (
-                            <div>
-                              <span className="font-medium">Position:</span>{" "}
-                              {u.position}
-                            </div>
-                          )}
-
-                          {u.reason && (
-                            <div className="mt-2 bg-gray-50 border border-gray-200 rounded-lg p-3">
-                              <p className="text-gray-700">
-                                <span className="font-medium">Reason:</span>{" "}
-                                {u.reason}
-                              </p>
-                            </div>
-                          )}
-
-                          <div className="text-xs text-gray-400 mt-2">
-                            Requested:{" "}
-                            {u.createdAt
-                              ? new Date(u.createdAt).toLocaleDateString()
-                              : "-"}
-                          </div>
-
-                          {(showPendingActions(u) || showRejectedActions(u)) && (
-                            <div className="mt-4 grid grid-cols-1 gap-3 rounded-lg border border-blue-100 bg-blue-50/50 p-3 sm:grid-cols-2">
-                              <label className="text-sm font-medium text-gray-700">
-                                Assigned role
-                                <select
-                                  value={selectedAccessFor(u).role}
-                                  onChange={(event) =>
-                                    setSelectedAccess(u._id, {
-                                      role: event.target.value,
-                                      canAccessPatientIdentity:
-                                        event.target.value === "surveillance_team"
-                                          ? selectedAccessFor(u).canAccessPatientIdentity
-                                          : false,
-                                    })
-                                  }
-                                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5"
-                                >
-                                  <option value="cesu">CESU</option>
-                                  <option value="surveillance_team">Surveillance Team</option>
-                                </select>
-                              </label>
-
-                              <label className="flex min-h-11 items-center gap-2 self-end rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
-                                <input
-                                  type="checkbox"
-                                  disabled={selectedAccessFor(u).role !== "surveillance_team"}
-                                  checked={
-                                    selectedAccessFor(u).role === "surveillance_team" &&
-                                    selectedAccessFor(u).canAccessPatientIdentity
-                                  }
-                                  onChange={(event) =>
-                                    setSelectedAccess(u._id, {
-                                      canAccessPatientIdentity: event.target.checked,
-                                    })
-                                  }
-                                />
-                                Allow patient-identifiable information
-                              </label>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-2 items-end">
-                      {showPendingActions(u) && (
-                        <div className="flex gap-2">
-                          <button
-                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-                            disabled={actionLoadingId === u._id}
-                            onClick={() => updateStatus(u._id, "approved")}
-                          >
-                            <CheckIcon className="w-4 h-4" />
-                            {actionLoadingId === u._id ? "..." : "Approve"}
-                          </button>
-
-                          <button
-                            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-                            disabled={actionLoadingId === u._id}
-                            onClick={() => updateStatus(u._id, "rejected")}
-                          >
-                            <XMarkIcon className="w-4 h-4" />
-                            {actionLoadingId === u._id ? "..." : "Reject"}
-                          </button>
-                        </div>
-                      )}
-
-                      {showRejectedActions(u) && (
-                        <div className="flex gap-2">
-                          <button
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                            disabled={actionLoadingId === u._id}
-                            onClick={() => updateStatus(u._id, "approved")}
-                          >
-                            <ArrowPathIcon className="w-4 h-4" />
-                            {actionLoadingId === u._id ? "..." : "Re-approve"}
-                          </button>
-
-                          <button
-                            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-                            disabled={
-                              !canDeleteUser(u) || actionLoadingId === u._id
-                            }
-                            onClick={() => openDeleteModal(u)}
-                            title={getDeleteTitle(u)}
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                            Delete
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              {filteredUsers.length === 0 && (
-                <div className="p-6 text-sm text-gray-600">
-                  {search.trim()
-                    ? "No visible users match your search."
-                    : statusFilter === "pending"
-                      ? "No pending users at the moment."
-                      : "No rejected users at the moment."}
-                </div>
-              )}
-            </>
-          )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {!loading && visibleRequests.length === 0 && <tr><td colSpan={6} className="px-5 py-10 text-center text-gray-500">No {requestStatus} access requests.</td></tr>}
+            </tbody>
+          </table>
         </div>
-      </div>
+        <Pagination page={requestPage} totalPages={requestTotalPages} onChange={setRequestPage} />
+      </section>
 
-      <div className="flex justify-center gap-2">
-        <button
-          className="px-3 py-1 rounded bg-gray-200 disabled:opacity-50"
-          disabled={page <= 1}
-          onClick={() => setPage((prev) => prev - 1)}
-        >
-          Prev
-        </button>
-
-        <span className="px-3 py-1 text-sm text-gray-700">
-          Page {page} / {totalPages}
+      <div className="flex items-center gap-4 py-4" aria-hidden="true">
+        <div className="h-px flex-1 bg-gray-300" />
+        <span className="rounded-full border border-gray-300 bg-gray-100 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-gray-600">
+          List of Users
         </span>
-
-        <button
-          className="px-3 py-1 rounded bg-gray-200 disabled:opacity-50"
-          disabled={page >= totalPages}
-          onClick={() => setPage((prev) => prev + 1)}
-        >
-          Next
-        </button>
+        <div className="h-px flex-1 bg-gray-300" />
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="font-semibold text-lg">Approved users</h2>
-          <p className="text-sm text-gray-600 mt-1">
-            Showing {filteredApprovedUsers.length} visible users (page{" "}
-            {approvedPage} of {approvedTotalPages})
-          </p>
+      <section className="overflow-hidden rounded-xl border border-blue-200 bg-white shadow-sm ring-4 ring-blue-50">
+        <div className="border-b border-gray-200 p-5">
+          <h2 className="font-semibold text-gray-900">Users</h2>
+          <p className="mt-1 text-sm text-gray-600">Active and suspended dashboard accounts. System administrators cannot be modified.</p>
         </div>
-
-        <div className="divide-y divide-gray-200">
-          {approvedLoading ? (
-            <div className="p-6 text-sm text-gray-600">
-              Loading approved users...
-            </div>
-          ) : (
-            <>
-              {filteredApprovedUsers.map((u) => (
-                <div
-                  key={u._id}
-                  className="p-6 hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-4 flex-1">
-                      <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                        <span className="text-green-700 text-sm">
-                          {initials(u.username)}
-                        </span>
+        <div className="overflow-x-auto">
+          <table className="min-w-[900px] w-full text-left text-sm">
+            <thead className="bg-blue-50 text-xs uppercase tracking-wide text-blue-900">
+              <tr><th className="px-5 py-3">Username</th><th className="px-5 py-3">Email</th><th className="px-5 py-3">Role</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Last Login</th><th className="px-5 py-3 text-right">Actions</th></tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {visibleManagedUsers.map((user) => {
+                const isAdmin = user.role === "admin";
+                const isSuspended = user.status === "suspended";
+                const busy = actionLoadingId === user._id;
+                return (
+                  <tr key={user._id} className={isAdmin ? "bg-gray-100 text-gray-500" : "hover:bg-blue-50/30"}>
+                    <td className="px-5 py-4 font-medium">{user.username}</td><td className="px-5 py-4">{user.email}</td>
+                    <td className="px-5 py-4"><span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${isAdmin ? "border-gray-300 bg-gray-200 text-gray-600" : "border-blue-200 bg-blue-50 text-blue-700"}`}>{formatStatusLabel(user.role)}</span></td>
+                    <td className="px-5 py-4"><span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusBadgeClass(user.status)}`}>{formatStatusLabel(user.status)}</span></td>
+                    <td className="px-5 py-4">{formatLastLogin(user.lastLoginAt)}</td>
+                    <td className="px-5 py-4">
+                      <div className="flex justify-end gap-2">
+                        <button type="button" disabled={isAdmin || isSuspended || busy} onClick={() => setEditTarget(user)} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-blue-200 px-3 py-2 font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"><PencilSquareIcon className="h-4 w-4" /> Edit</button>
+                        <button type="button" disabled={isAdmin || busy} onClick={() => changeStatus(user, isSuspended ? "approved" : "suspended")} className="min-h-10 rounded-lg border border-gray-300 px-3 py-2 font-medium text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400">{isSuspended ? "Reactivate" : "Suspend"}</button>
                       </div>
-
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-1 flex-wrap">
-                          <h3 className="font-semibold">{u.username}</h3>
-
-                          {isAdminUser(u) && (
-                            <span className="px-3 py-1 rounded-full text-xs border bg-indigo-50 text-indigo-700 border-indigo-200">
-                              admin
-                            </span>
-                          )}
-                          {!isAdminUser(u) && (
-                            <span className="px-3 py-1 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200">
-                              {u.role === "surveillance_team"
-                                ? "Surveillance Team"
-                                : u.role === "cesu"
-                                  ? "CESU"
-                                  : "Unassigned"}
-                            </span>
-                          )}
-                          {u.canAccessPatientIdentity && (
-                            <span className="px-3 py-1 rounded-full text-xs border bg-violet-50 text-violet-700 border-violet-200">
-                              Patient identity authorized
-                            </span>
-                          )}
-                          {u.emailReviewStatus === "government_domain" ? (
-                            <span className="px-3 py-1 rounded-full text-xs border bg-emerald-50 text-emerald-700 border-emerald-200">
-                              .gov.ph domain
-                            </span>
-                          ) : (
-                            <span className="px-3 py-1 rounded-full text-xs border bg-amber-50 text-amber-800 border-amber-200">
-                              Manually reviewed affiliation
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="text-sm text-gray-600">
-                          <span className="font-medium">Email:</span>{" "}
-                          <a
-                            href={`mailto:${u.email}`}
-                            className="hover:text-blue-600"
-                          >
-                            {u.email}
-                          </a>
-                        </div>
-
-                        {u.organization && (
-                          <div className="text-sm text-gray-600 mt-1">
-                            <span className="font-medium">Organization:</span>{" "}
-                            {u.organization}
-                          </div>
-                        )}
-
-                        {u.position && (
-                          <div className="text-sm text-gray-600 mt-1">
-                            <span className="font-medium">Position:</span>{" "}
-                            {u.position}
-                          </div>
-                        )}
-                        {!isAdminUser(u) && (
-                          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <label className="text-sm font-medium text-gray-700">
-                              Role
-                              <select
-                                value={selectedAccessFor(u).role}
-                                onChange={(event) =>
-                                  setSelectedAccess(u._id, {
-                                    role: event.target.value,
-                                    canAccessPatientIdentity:
-                                      event.target.value === "surveillance_team"
-                                        ? selectedAccessFor(u).canAccessPatientIdentity
-                                        : false,
-                                  })
-                                }
-                                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5"
-                              >
-                                <option value="cesu">CESU</option>
-                                <option value="surveillance_team">Surveillance Team</option>
-                              </select>
-                            </label>
-                            <label className="flex min-h-11 items-center gap-2 self-end rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700">
-                              <input
-                                type="checkbox"
-                                disabled={selectedAccessFor(u).role !== "surveillance_team"}
-                                checked={selectedAccessFor(u).role === "surveillance_team" && selectedAccessFor(u).canAccessPatientIdentity}
-                                onChange={(event) => setSelectedAccess(u._id, { canAccessPatientIdentity: event.target.checked })}
-                              />
-                              Patient identity access
-                            </label>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-2">
-                      {!isAdminUser(u) && (
-                        <button
-                          className="min-h-11 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                          onClick={() => updateApprovedAccess(u)}
-                          disabled={actionLoadingId === u._id}
-                        >
-                          {actionLoadingId === u._id ? "Saving…" : "Save access"}
-                        </button>
-                      )}
-                      <button
-                        className="flex min-h-11 items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-white hover:bg-red-700 disabled:opacity-50"
-                        onClick={() => openDeleteModal(u)}
-                        disabled={!canDeleteUser(u)}
-                        title={getDeleteTitle(u)}
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              {filteredApprovedUsers.length === 0 && (
-                <div className="p-6 text-sm text-gray-600">
-                  {search.trim()
-                    ? "No approved users match your search."
-                    : "No approved users found."}
-                </div>
-              )}
-            </>
-          )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {!loading && visibleManagedUsers.length === 0 && <tr><td colSpan={6} className="px-5 py-10 text-center text-gray-500">No users found.</td></tr>}
+            </tbody>
+          </table>
         </div>
-      </div>
+        <Pagination page={usersPage} totalPages={usersTotalPages} onChange={setUsersPage} />
+      </section>
 
-      <div className="flex justify-center gap-2">
-        <button
-          className="px-3 py-1 rounded bg-gray-200 disabled:opacity-50"
-          disabled={approvedPage <= 1}
-          onClick={() => setApprovedPage((prev) => prev - 1)}
-        >
-          Prev
-        </button>
-
-        <span className="px-3 py-1 text-sm text-gray-700">
-          Page {approvedPage} / {approvedTotalPages}
-        </span>
-
-        <button
-          className="px-3 py-1 rounded bg-gray-200 disabled:opacity-50"
-          disabled={approvedPage >= approvedTotalPages}
-          onClick={() => setApprovedPage((prev) => prev + 1)}
-        >
-          Next
-        </button>
-      </div>
-
-      {deleteTarget && (
+      {editTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full">
-            <h3 className="text-lg font-bold mb-5">Confirm Delete</h3>
-            <p className="mb-5">
-              Are you sure you want to delete{" "}
-              <span className="font-semibold">{deleteTarget.username}</span>?
-              This action cannot be undone.
-            </p>
-
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={closeDeleteModal}
-                disabled={deleting}
-                className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-
-              <button
-                onClick={confirmDelete}
-                disabled={deleting}
-                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
-              >
-                {deleting && (
-                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                )}
-                {deleting ? "Deleting..." : "Delete"}
-              </button>
-            </div>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-semibold text-gray-900">Edit User Role</h3><p className="mt-1 text-sm text-gray-600">{editTarget.username}</p></div><button type="button" onClick={() => setEditTarget(null)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100" aria-label="Close"><XMarkIcon className="h-5 w-5" /></button></div>
+            <label className="mt-5 block text-sm font-medium text-gray-700">Role
+              <select value={selectedAccessFor(editTarget).role} onChange={(event) => setSelectedAccess(editTarget, { role: event.target.value, canAccessPatientIdentity: event.target.value === "surveillance_team" && selectedAccessFor(editTarget).canAccessPatientIdentity })} className="mt-2 min-h-11 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5"><option value="cesu">Data Manager</option><option value="surveillance_team">Surveillance Officer</option></select>
+            </label>
+            <label className="mt-4 flex min-h-11 items-center gap-3 rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700"><input type="checkbox" disabled={selectedAccessFor(editTarget).role !== "surveillance_team"} checked={selectedAccessFor(editTarget).role === "surveillance_team" && selectedAccessFor(editTarget).canAccessPatientIdentity} onChange={(event) => setSelectedAccess(editTarget, { canAccessPatientIdentity: event.target.checked })} className="h-4 w-4 rounded border-gray-300 text-blue-600" />Allow access to patient-identifiable information</label>
+            <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setEditTarget(null)} className="min-h-11 rounded-lg border border-gray-300 px-4 py-2.5 text-gray-700 hover:bg-gray-50">Cancel</button><button type="button" onClick={saveAccess} disabled={actionLoadingId === editTarget._id} className="min-h-11 rounded-lg bg-blue-600 px-4 py-2.5 font-medium text-white hover:bg-blue-700 disabled:opacity-50">Save Changes</button></div>
           </div>
         </div>
       )}

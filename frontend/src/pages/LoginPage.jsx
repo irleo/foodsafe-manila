@@ -41,6 +41,8 @@ const Login = () => {
         accessToken: res.data.accessToken,
         role: res.data.user.role,
         username: res.data.user.username,
+        canAccessPatientIdentity:
+          res.data.user.canAccessPatientIdentity === true,
       });
 
       await notify.promise(Promise.resolve(res), {

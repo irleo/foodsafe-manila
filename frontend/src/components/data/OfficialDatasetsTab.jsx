@@ -66,14 +66,13 @@ export default function OfficialDatasetsTab() {
     if (!f) return;
 
     const ok =
-      f.name.toLowerCase().endsWith(".csv") ||
       f.name.toLowerCase().endsWith(".xlsx") ||
       f.name.toLowerCase().endsWith(".xls");
 
     if (!ok) {
       setFile(null);
       setErrorMsg(
-        "Unsupported file type. Please upload CSV or Excel (.xlsx/.xls).",
+        "Unsupported file type. Please upload an Excel workbook (.xlsx/.xls).",
       );
       return;
     }
@@ -81,7 +80,7 @@ export default function OfficialDatasetsTab() {
     setFile(f);
 
     if (!datasetName.trim()) {
-      const base = f.name.replace(/\.(csv|xlsx|xls)$/i, "");
+      const base = f.name.replace(/\.(xlsx|xls)$/i, "");
       setDatasetName(base);
     }
   };
@@ -146,7 +145,7 @@ export default function OfficialDatasetsTab() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = filename || "dataset.csv";
+      a.download = filename || "dataset.xlsx";
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -198,9 +197,6 @@ export default function OfficialDatasetsTab() {
               </li>
               <li>
                 <span className="font-medium">OfficialCaseTemplate XLSX</span>: one sheet (prefer “processed data”) with standardized columns.
-              </li>
-              <li>
-                <span className="font-medium">OfficialCaseTemplate CSV</span>: columns should match the OfficialCaseTemplate XLSX, including epidemiological year/week for weekly data.
               </li>
             </ul>
           </div>

@@ -7,7 +7,7 @@ export default function ReportLogsPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Report Logs</h1>
         <p className="mt-1 text-gray-600">
-          Investigate citizen reports, classify suspected cases, and record validation outcomes.
+          Investigate citizen reports, classify suspected cases, and record confirmation outcomes.
         </p>
       </div>
       <DataCoverageNotice fallbackText="Citizen report logs show submissions received by FoodSafe Manila. They are not a complete historical case record before CESU surveillance began in 2022." />

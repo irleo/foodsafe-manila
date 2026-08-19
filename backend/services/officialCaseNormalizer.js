@@ -1,4 +1,17 @@
 import { normalizeDistrict as normalizeDistrictKey } from "../utils/normalizeDistrict.js";
+import { legislativeDistrictFromBarangayNo } from "../utils/legislativeDistrict.js";
+
+const ALLOWED_DISTRICTS = new Set([
+  "District 1",
+  "District 2",
+  "District 3",
+  "District 4",
+  "District 5",
+  "District 6",
+]);
+const ALLOWED_SOURCES = new Set(["official", "excel", "system", "file"]);
+const MIN_YEAR = 2015;
+const MAX_YEAR = 2100;
 
 export function parseNumber(v) {
   if (v === undefined || v === null || v === "") return NaN;
@@ -57,7 +70,7 @@ export function normalizeCaseClassification(input = "") {
 }
 
 export function normalizeDisease(input = "") {
-  return String(input || "").trim();
+  return String(input || "").trim().replace(/\s+/g, " ");
 }
 
 export function normalizeDistrict(input = "") {
@@ -76,8 +89,8 @@ export function normalizeDistrict(input = "") {
   };
   if (romanMap[roman]) return romanMap[roman];
 
-  // If already "District 1" etc keep as-is
-  if (/^district\s+\d+/i.test(raw)) return raw.replace(/\s+/g, " ").trim();
+  const numbered = raw.match(/^district\s*([1-6])$/i);
+  if (numbered) return `District ${numbered[1]}`;
 
   // Fallback: normalize spacing/casing but preserve human-readable label
   const normKey = normalizeDistrictKey(raw);
@@ -114,6 +127,12 @@ export function normalizeRawHealthOfficeRow({ sheetName, row }) {
     };
   if (!district)
     return { ok: false, field: "district", message: "District is required." };
+  if (!ALLOWED_DISTRICTS.has(district))
+    return {
+      ok: false,
+      field: "district",
+      message: "District must be District 1 through District 6.",
+    };
   if (!cls)
     return {
       ok: false,
@@ -122,6 +141,24 @@ export function normalizeRawHealthOfficeRow({ sheetName, row }) {
     };
 
   const year = reportedAt.getUTCFullYear();
+  if (year < MIN_YEAR || year > MAX_YEAR)
+    return {
+      ok: false,
+      field: "reportDate",
+      message: `Report date year must be ${MIN_YEAR}–${MAX_YEAR}.`,
+    };
+  if (row["Barangay"] && !barangayNo)
+    return {
+      ok: false,
+      field: "barangay",
+      message: "Barangay must contain a number from 1 to 905.",
+    };
+  if (barangayNo && legislativeDistrictFromBarangayNo(barangayNo) !== district)
+    return {
+      ok: false,
+      field: "barangay",
+      message: `Barangay ${barangayNo} does not belong to ${district}.`,
+    };
   const month = reportedAt.getUTCMonth() + 1;
   const weekData = getIsoWeekData(reportedAt);
 
@@ -163,27 +200,89 @@ export function normalizeTemplateRow(row = {}) {
   const suppliedWeekStartDate = parseExcelDate(
     row.week_start_date ?? row.weekStartDate,
   );
+  const hasWeekStartDate =
+    (row.week_start_date !== undefined && row.week_start_date !== "") ||
+    (row.weekStartDate !== undefined && row.weekStartDate !== "");
   const cls = normalizeCaseClassification(
     row.case_classification ?? row.caseClassification,
   );
   const cases = parseNumber(row.cases);
-  const source = String(row.source ?? "official").trim() || "official";
+  const source = String(row.source ?? "official").trim().toLowerCase() || "official";
+  const hasEpidemiologicalWeek =
+    (row.epidemiological_week !== undefined && row.epidemiological_week !== "") ||
+    (row.epidemiologicalWeek !== undefined && row.epidemiologicalWeek !== "");
 
   if (!city) return { ok: false, field: "city", message: "City is required." };
+  if (city.toLowerCase() !== "manila")
+    return { ok: false, field: "city", message: "City must be Manila." };
   if (!district)
     return { ok: false, field: "district", message: "District is required." };
+  if (!ALLOWED_DISTRICTS.has(district))
+    return {
+      ok: false,
+      field: "district",
+      message: "District must be District 1 through District 6.",
+    };
+  if (row.barangay && !barangayNo)
+    return {
+      ok: false,
+      field: "barangay",
+      message: "Barangay must contain a number from 1 to 905.",
+    };
+  if (barangayNo && (barangayNo < 1 || barangayNo > 905))
+    return {
+      ok: false,
+      field: "barangay",
+      message: "Barangay number must be 1–905.",
+    };
+  if (barangayNo && legislativeDistrictFromBarangayNo(barangayNo) !== district)
+    return {
+      ok: false,
+      field: "barangay",
+      message: `Barangay ${barangayNo} does not belong to ${district}.`,
+    };
   if (!disease)
     return { ok: false, field: "disease", message: "Disease is required." };
-  if (!Number.isFinite(year))
-    return { ok: false, field: "year", message: "Year must be numeric." };
-  if (!Number.isFinite(month) || month < 1 || month > 12)
-    return { ok: false, field: "month", message: "Month must be 1–12." };
+  if (!Number.isInteger(year) || year < MIN_YEAR || year > MAX_YEAR)
+    return { ok: false, field: "year", message: `Year must be an integer from ${MIN_YEAR}–${MAX_YEAR}.` };
+  if (!Number.isInteger(month) || month < 1 || month > 12)
+    return { ok: false, field: "month", message: "Month must be an integer from 1–12." };
   if (
-    row.epidemiological_week !== undefined
-    && row.epidemiological_week !== ""
-    && (!Number.isFinite(epidemiologicalWeek) || epidemiologicalWeek < 1 || epidemiologicalWeek > 53)
+    hasEpidemiologicalWeek &&
+    (!Number.isInteger(epidemiologicalWeek) || epidemiologicalWeek < 1 || epidemiologicalWeek > 53)
   ) {
-    return { ok: false, field: "epidemiologicalWeek", message: "Epidemiological week must be 1–53." };
+    return { ok: false, field: "epidemiologicalWeek", message: "Epidemiological week must be an integer from 1–53." };
+  }
+  if (
+    hasEpidemiologicalWeek &&
+    (!Number.isInteger(epidemiologicalYear) ||
+      epidemiologicalYear < MIN_YEAR ||
+      epidemiologicalYear > MAX_YEAR)
+  ) {
+    return {
+      ok: false,
+      field: "epidemiologicalYear",
+      message: `Epidemiological year must be an integer from ${MIN_YEAR}–${MAX_YEAR}.`,
+    };
+  }
+  if (hasWeekStartDate && !suppliedWeekStartDate)
+    return {
+      ok: false,
+      field: "weekStartDate",
+      message: "Week start date must be a valid Excel date or YYYY-MM-DD value.",
+    };
+  if (hasWeekStartDate && suppliedWeekStartDate && hasEpidemiologicalWeek) {
+    const suppliedWeek = getIsoWeekData(suppliedWeekStartDate);
+    if (
+      suppliedWeek?.epidemiologicalYear !== epidemiologicalYear ||
+      suppliedWeek?.epidemiologicalWeek !== epidemiologicalWeek
+    ) {
+      return {
+        ok: false,
+        field: "weekStartDate",
+        message: "Week start date does not match the epidemiological year and week.",
+      };
+    }
   }
   if (!cls)
     return {
@@ -191,23 +290,29 @@ export function normalizeTemplateRow(row = {}) {
       field: "caseClassification",
       message: "Invalid case classification.",
     };
-  if (!Number.isFinite(cases) || cases < 0)
+  if (!Number.isInteger(cases) || cases < 0)
     return {
       ok: false,
       field: "cases",
-      message: "Cases must be a non-negative number.",
+      message: "Cases must be a non-negative integer.",
+    };
+  if (!ALLOWED_SOURCES.has(source))
+    return {
+      ok: false,
+      field: "source",
+      message: "Source must be official, excel, system, or file.",
     };
 
   return {
     ok: true,
     value: {
-      city,
+      city: "Manila",
       district,
       barangay,
       barangayNo,
       disease,
-      year: Math.trunc(year),
-      month: Math.trunc(month),
+      year,
+      month,
       epidemiologicalYear: Number.isFinite(epidemiologicalWeek)
         ? Math.trunc(epidemiologicalYear)
         : null,
@@ -219,7 +324,7 @@ export function normalizeTemplateRow(row = {}) {
           ? isoWeekStartDate(Math.trunc(epidemiologicalYear), Math.trunc(epidemiologicalWeek))
           : null),
       caseClassification: cls,
-      cases: Math.trunc(cases),
+      cases,
       source,
     },
   };
@@ -228,11 +333,12 @@ export function normalizeTemplateRow(row = {}) {
 function normalizeBarangay(value) {
   if (!value) return { barangay: null, barangayNo: null };
 
-  const match = String(value).match(/\d+/);
-  const barangayNo = match ? Number(match[0]) : null;
+  const normalized = String(value).trim();
+  const match = normalized.match(/^(?:(?:barangay|brgy\.?)\s*)?(\d+)$/i);
+  const barangayNo = match ? Number(match[1]) : null;
 
   return {
-    barangay: barangayNo ? `Barangay ${barangayNo}` : String(value).trim(),
+    barangay: barangayNo ? `Barangay ${barangayNo}` : normalized,
     barangayNo,
   };
 }

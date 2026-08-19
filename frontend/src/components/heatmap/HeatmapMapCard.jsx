@@ -110,7 +110,7 @@ export default function HeatmapMapCard({
         <div class="text-sm">
           <p><strong>${district}</strong></p>
           <p>Forecast target: <strong>${forecastLabel}</strong></p>
-          <p>Predicted validated/confirmed cases: <strong>${formatNumber(forecast.predictedCases)}</strong></p>
+          <p>Predicted confirmed cases: <strong>${formatNumber(forecast.predictedCases)}</strong></p>
           <p>Selected district model: <strong>${formatModel(forecast.model)}</strong></p>
           <p>95% prediction interval: <strong>${formatNumber(forecast.lowerBound)} – ${formatNumber(forecast.upperBound)}</strong></p>
           <p style="margin-top:6px;color:#475569;font-size:12px">District-level forecast repeated across district polygons. This is not a barangay prediction or an actual case count.</p>
@@ -125,7 +125,7 @@ export default function HeatmapMapCard({
       return `
         <div class="text-sm">
           <p><strong>${district}</strong></p>
-          <p>Actual validated/confirmed (${basisLabel}): <strong>${formatNumber(comparison.actualCases)}</strong></p>
+          <p>Actual confirmed (${basisLabel}): <strong>${formatNumber(comparison.actualCases)}</strong></p>
           <p>Forecast (${forecastLabel}): <strong>${formatNumber(comparison.predictedCases)}</strong></p>
           <p>Selected district model: <strong>${formatModel(comparison.model)}</strong></p>
           <p>Change: <strong>${difference}</strong></p>

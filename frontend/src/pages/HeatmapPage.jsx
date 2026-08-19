@@ -251,7 +251,7 @@ export default function Heatmap() {
         <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 text-sm text-blue-950">
           <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
             <p>
-              <strong>Forecast—not actual cases.</strong> Target: {forecastLabel}. Input basis: validated/confirmed cases through {basisLabel}. Each district uses the model selected by rolling-backtest MAE, with the operational fallback identified where comparison history is insufficient.
+              <strong>Forecast—not actual cases.</strong> Target: {forecastLabel}. Input basis: confirmed cases through {basisLabel}. Each district uses the model selected by rolling-backtest MAE, with the operational fallback identified where comparison history is insufficient.
             </p>
             <p className="shrink-0 text-xs text-blue-700">
               Prediction run {predictionRun.predictionRunId?.slice(-8)} · {predictionRun.generatedAt ? new Date(predictionRun.generatedAt).toLocaleString("en-PH") : "date unavailable"}
@@ -325,7 +325,7 @@ export default function Heatmap() {
               </div>
               {viewMode !== "actual" && (
                 <p className="mt-3 text-xs text-gray-500">
-                  Forecast filters are locked because the stored model predicts all validated/confirmed foodborne cases by district for one target month.
+                  Forecast filters are locked because the stored model predicts all confirmed foodborne cases by district for one target month.
                 </p>
               )}
             </div>

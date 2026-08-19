@@ -50,12 +50,12 @@ export default function UploadDropzone({
             ref={fileInputRef}
             type="file"
             className="hidden"
-            accept=".csv,.xlsx,.xls"
+            accept=".xlsx,.xls"
             onChange={(e) => onFileSelected(e.target.files?.[0])}
           />
 
           <p className="text-xs text-gray-500 mt-4">
-            Supported formats: CSV, Excel (.xlsx, .xls)
+            Supported format: Excel (.xlsx, .xls)
           </p>
         </>
       ) : (

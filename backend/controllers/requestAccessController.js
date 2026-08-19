@@ -3,9 +3,9 @@ import bcrypt from "bcryptjs";
 import { validatePassword } from "../utils/passwordValidation.js";
 
 export const requestAccess = async (req, res) => {
-  const { username, email, password, organization, position, reason } = req.body;
+  const { username, email, password, organization, position, requestedRole } = req.body;
 
-  if (!username || !email || !password || !organization || !position || !reason) {
+  if (!username || !email || !password || !organization || !position || !["cesu", "surveillance_team"].includes(requestedRole)) {
     return res.status(400).json({ message: "All fields are required" });
   }
 
@@ -28,7 +28,7 @@ export const requestAccess = async (req, res) => {
       password: hashedPassword,
       organization,
       position,
-      reason,
+      requestedRole,
       status: "pending",
       role: "unassigned",
     });

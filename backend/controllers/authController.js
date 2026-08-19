@@ -17,6 +17,19 @@ const RESET_OTP_MAX_ATTEMPTS = 5;
 const ACCESS_OTP_TTL_MINUTES = 10;
 const ACCESS_OTP_MAX_ATTEMPTS = 5;
 const ACCESS_OTP_PURPOSE = "request_access";
+const REQUESTABLE_ROLES = new Set(["cesu", "surveillance_team"]);
+const WEB_SESSION_COOKIE = "webSessionRefreshToken";
+const LEGACY_REFRESH_COOKIE = "refreshToken";
+
+function webSessionCookieOptions() {
+  const isProd = process.env.NODE_ENV === "production";
+  return {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
+    path: "/",
+  };
+}
 
 function generateOtp(length = RESET_OTP_LENGTH) {
   const min = 10 ** (length - 1);
@@ -46,13 +59,16 @@ async function findRequestAccessConflict(email) {
     };
   }
 
-  if (existingUser.status === "approved") {
+  if (["approved", "suspended"].includes(existingUser.status)) {
     return {
       existingUser,
       response: {
         status: 409,
         body: {
-          message: "An account with this email already exists. Please sign in.",
+          message:
+            existingUser.status === "suspended"
+              ? "An account with this email is suspended. Contact a system administrator."
+              : "An account with this email already exists. Please sign in.",
         },
       },
     };
@@ -67,7 +83,7 @@ function validateAccessRequestFields({
   password,
   organization,
   position,
-  reason,
+  requestedRole,
 }) {
   if (
     !username ||
@@ -75,7 +91,7 @@ function validateAccessRequestFields({
     !password ||
     !organization ||
     !position ||
-    !reason
+    !requestedRole
   ) {
     return "All fields are required";
   }
@@ -83,8 +99,8 @@ function validateAccessRequestFields({
   const passwordValidation = validatePassword(password);
   if (!passwordValidation.isValid) return passwordValidation.message;
 
-  if (typeof reason !== "string" || reason.trim().length > 300) {
-    return "Reason must be 300 characters or less";
+  if (!REQUESTABLE_ROLES.has(requestedRole)) {
+    return "Select either the Data Manager or Surveillance Officer role";
   }
 
   return "";
@@ -143,7 +159,7 @@ async function verifyAccessOtpOrResponse(email, otp) {
 
 // POST /api/auth/request-access/send-otp
 export const sendRequestAccessOtp = async (req, res) => {
-  const { username, email, password, organization, position, reason } =
+  const { username, email, password, organization, position, requestedRole } =
     req.body;
   const normalizedEmail = String(email || "")
     .trim()
@@ -155,7 +171,7 @@ export const sendRequestAccessOtp = async (req, res) => {
     password,
     organization,
     position,
-    reason,
+    requestedRole,
   });
   if (validationMessage) {
     return res.status(400).json({ message: validationMessage });
@@ -256,7 +272,7 @@ export const requestAccess = async (req, res) => {
     password,
     organization,
     position,
-    reason,
+    requestedRole,
     accessOtp,
   } = req.body;
   const normalizedEmail = String(email || "")
@@ -270,7 +286,7 @@ export const requestAccess = async (req, res) => {
     password,
     organization,
     position,
-    reason,
+    requestedRole,
   });
   if (validationMessage) {
     return res.status(400).json({ message: validationMessage });
@@ -300,7 +316,7 @@ export const requestAccess = async (req, res) => {
         existingUser.password = hashedPassword;
         existingUser.organization = organization.trim();
         existingUser.position = position.trim();
-        existingUser.reason = reason.trim();
+        existingUser.requestedRole = requestedRole;
         existingUser.status = "pending";
         existingUser.approvedAt = undefined;
         existingUser.approvedBy = undefined;
@@ -343,7 +359,7 @@ export const requestAccess = async (req, res) => {
       password: hashedPassword,
       organization: organization.trim(),
       position: position.trim(),
-      reason: reason.trim(),
+      requestedRole,
       // status defaults to "pending"
     });
 
@@ -392,8 +408,6 @@ export const login = async (req, res) => {
   }
 
   const { email, password } = req.body;
-  const isProd = process.env.NODE_ENV === "production";
-
   if (!email || !password) {
     return res.status(400).json({ message: "Email and password are required" });
   }
@@ -412,7 +426,9 @@ export const login = async (req, res) => {
         message:
           user.status === "pending"
             ? "Your access request is pending approval."
-            : "Your access request was rejected. Please contact an administrator.",
+            : user.status === "suspended"
+              ? "Your account is suspended. Please contact a system administrator."
+              : "Your access request was rejected. Please contact a system administrator.",
       });
     }
 
@@ -420,6 +436,9 @@ export const login = async (req, res) => {
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
+
+    user.lastLoginAt = new Date();
+    await user.save();
 
     const accessToken = jwt.sign(
       { id: user._id.toString(), role: user.role },
@@ -433,12 +452,16 @@ export const login = async (req, res) => {
       { expiresIn: "7d" },
     );
 
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: isProd, // only HTTPS in production
-      sameSite: isProd ? "none" : "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    // Intentionally omit maxAge/expires. The browser removes this cookie when
+    // its session ends, while page refreshes and same-session tabs still work.
+    res.cookie(
+      WEB_SESSION_COOKIE,
+      refreshToken,
+      webSessionCookieOptions(),
+    );
+
+    // Remove cookies issued by versions that persisted login for seven days.
+    res.clearCookie(LEGACY_REFRESH_COOKIE, webSessionCookieOptions());
 
     return res.status(200).json({
       accessToken,
@@ -449,6 +472,7 @@ export const login = async (req, res) => {
         role: user.role,
         canAccessPatientIdentity: user.canAccessPatientIdentity,
         status: user.status,
+        lastLoginAt: user.lastLoginAt,
       },
     });
   } catch (error) {
@@ -459,7 +483,7 @@ export const login = async (req, res) => {
 
 // GET /api/auth/refresh
 export const refreshToken = async (req, res) => {
-  const token = req.cookies.refreshToken;
+  const token = req.cookies[WEB_SESSION_COOKIE];
 
   if (!token) {
     return res.status(401).json({ message: "No refresh token provided" });
@@ -473,13 +497,16 @@ export const refreshToken = async (req, res) => {
       return res.status(401).json({ message: "Invalid refresh token" });
     }
 
-    // Block refresh if user becomes rejected later
+    // Block refresh if account access changes after the token was issued.
     if (user.status !== "approved") {
+      res.clearCookie(WEB_SESSION_COOKIE, webSessionCookieOptions());
       return res.status(403).json({
         message:
           user.status === "pending"
             ? "Your access request is pending approval."
-            : "Your access request was rejected. Please contact an administrator.",
+            : user.status === "suspended"
+              ? "Your account is suspended. Please contact a system administrator."
+              : "Your access request was rejected. Please contact a system administrator.",
       });
     }
 
@@ -501,6 +528,14 @@ export const refreshToken = async (req, res) => {
       },
     });
   } catch (error) {
+    if (
+      error instanceof jwt.TokenExpiredError ||
+      error instanceof jwt.JsonWebTokenError
+    ) {
+      res.clearCookie(WEB_SESSION_COOKIE, webSessionCookieOptions());
+      return res.status(401).json({ message: "Session expired" });
+    }
+
     console.error("Error refreshing token:", error);
     return res.status(500).json({ message: "Server error" });
   }
@@ -509,13 +544,9 @@ export const refreshToken = async (req, res) => {
 // POST /api/auth/logout
 export const logout = (req, res) => {
   try {
-    const isProd = process.env.NODE_ENV === "production";
-
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: isProd ? "none" : "lax",
-    });
+    const cookieOptions = webSessionCookieOptions();
+    res.clearCookie(WEB_SESSION_COOKIE, cookieOptions);
+    res.clearCookie(LEGACY_REFRESH_COOKIE, cookieOptions);
 
     return res.status(200).json({ message: "Logged out successfully" });
   } catch (error) {

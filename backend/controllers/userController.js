@@ -30,7 +30,9 @@ export const getUsers = async (req, res) => {
 
     const query = {};
 
-    if (status !== "all") {
+    if (status === "managed") {
+      query.status = { $in: ["approved", "suspended"] };
+    } else if (status !== "all") {
       query.status = status; // pending/approved/rejected
     }
 
@@ -70,13 +72,14 @@ export const getUsers = async (req, res) => {
  */
 export const getUserStats = async (req, res) => {
   try {
-    const [pending, approved, rejected] = await Promise.all([
+    const [pending, approved, rejected, suspended] = await Promise.all([
       User.countDocuments({ status: "pending" }),
       User.countDocuments({ status: "approved" }),
       User.countDocuments({ status: "rejected" }),
+      User.countDocuments({ status: "suspended" }),
     ]);
 
-    res.status(200).json({ pending, approved, rejected });
+    res.status(200).json({ pending, approved, rejected, suspended });
   } catch (error) {
     console.error("Error fetching user stats:", error);
     res.status(500).json({ message: "Server error" });
@@ -96,21 +99,22 @@ export const updateUserStatus = async (req, res) => {
       manualAffiliationConfirmed = false,
     } = req.body;
 
-    if (!["approved", "rejected"].includes(status)) {
+    if (!["approved", "rejected", "suspended"].includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }
 
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found" });
+    const previousStatus = user.status;
 
     // optional safety: don't let admins be rejected accidentally
     if (user.role === "admin") {
-      return res.status(403).json({ message: "Cannot change status of admin users" });
+      return res.status(403).json({ message: "Cannot change the status of system administrators" });
     }
 
     if (status === "approved") {
       if (!ASSIGNABLE_ROLES.has(role)) {
-        return res.status(400).json({ message: "Assign either the CESU or Surveillance Team role before approval." });
+        return res.status(400).json({ message: "Assign either the Data Manager or Surveillance Officer role before approval." });
       }
       if (
         !GOVERNMENT_EMAIL_PATTERN.test(user.email) &&
@@ -126,6 +130,12 @@ export const updateUserStatus = async (req, res) => {
         role === "surveillance_team" && canAccessPatientIdentity === true;
       user.approvedAt = new Date();
       user.approvedBy = req.user?.id;
+    } else if (status === "suspended") {
+      if (user.status !== "approved") {
+        return res.status(409).json({
+          message: "Only active users can be suspended.",
+        });
+      }
     } else {
       user.role = "unassigned";
       user.canAccessPatientIdentity = false;
@@ -136,10 +146,26 @@ export const updateUserStatus = async (req, res) => {
     user.status = status;
     await user.save();
 
+    const actionType =
+      status === "suspended"
+        ? "user_suspended"
+        : status === "approved" && previousStatus === "suspended"
+          ? "user_reactivated"
+          : status === "approved"
+            ? "user_approved"
+            : "user_rejected";
+
     await logActivity({
       actor: req.user?.id,
-      actionType: status === "approved" ? "user_approved" : "user_rejected",
-      title: status === "approved" ? "User approved" : "User rejected",
+      actionType,
+      title:
+        status === "approved"
+          ? previousStatus === "suspended"
+            ? "User reactivated"
+            : "User approved"
+          : status === "suspended"
+            ? "User suspended"
+            : "User rejected",
       subtitle: `${user.username} (${user.email}) was ${status}.`,
       metadata: {
         userId: user._id,
@@ -180,12 +206,12 @@ export const updateUserAccess = async (req, res) => {
       manualAffiliationConfirmed = false,
     } = req.body;
     if (!ASSIGNABLE_ROLES.has(role)) {
-      return res.status(400).json({ message: "Role must be CESU or Surveillance Team." });
+      return res.status(400).json({ message: "Role must be Data Manager or Surveillance Officer." });
     }
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found" });
-    if (user.role === "admin") return res.status(403).json({ message: "Admin access cannot be changed here." });
-    if (user.status !== "approved") return res.status(409).json({ message: "Only approved users can have access updated." });
+    if (user.role === "admin") return res.status(403).json({ message: "System Administrator access cannot be changed here." });
+    if (user.status !== "approved") return res.status(409).json({ message: "Only active users can have access updated." });
     if (
       !GOVERNMENT_EMAIL_PATTERN.test(user.email) &&
       manualAffiliationConfirmed !== true
@@ -237,7 +263,7 @@ export const deleteUser = async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
 
     if (user.role === "admin") {
-      return res.status(403).json({ message: "Cannot delete admin users" });
+      return res.status(403).json({ message: "Cannot delete system administrators" });
     }
 
     await User.findByIdAndDelete(req.params.id);
@@ -252,6 +278,9 @@ export const getProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
+    if (user.status !== "approved") {
+      return res.status(403).json({ message: "Account access is not active" });
+    }
     res.status(200).json(user);
   } catch (error) {
     console.error("Error fetching profile:", error);

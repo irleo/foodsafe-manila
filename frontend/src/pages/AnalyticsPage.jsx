@@ -49,11 +49,12 @@ export default function Analytics() {
   );
 
   const vm = useMemo(
-    () => ({
-      ...buildAnalyticsCasesViewModel(selectedRows),
-      monthlyTimelineData: buildMonthlyTimelineData(selectedRows),
-    }),
+    () => buildAnalyticsCasesViewModel(selectedRows),
     [selectedRows],
+  );
+  const allStatusTimelineData = useMemo(
+    () => buildMonthlyTimelineData(caseRows),
+    [caseRows],
   );
 
   const selectedStatusLabel = formatStatusLabel(selectedCaseStatus);
@@ -152,9 +153,8 @@ export default function Analytics() {
           />
 
           <AnalyticsGrid
-            selectedCaseStatus={selectedCaseStatus}
             caseStatusLabel={selectedStatusLabel}
-            monthlyTimelineData={vm.monthlyTimelineData}
+            monthlyTimelineData={allStatusTimelineData}
             diseaseData={vm.diseaseData}
             districtData={vm.districtData}
             districtStats={vm.districtStats}

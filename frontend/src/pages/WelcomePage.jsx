@@ -137,14 +137,14 @@ export default function LandingPage() {
                 <MonitorSmartphone className="w-8 h-8 text-white" />
               </div>
             }
-            title="Admin Dashboard"
+            title="System Dashboard"
             subtitle="For MHD officials, health analysts, and researchers"
             features={adminFeatures}
             buttonTo="/login"
-            buttonText="Access Admin Portal"
+            buttonText="Access Staff Portal"
             buttonClass="bg-blue-600 hover:bg-blue-700"
             hoverBorderClass="hover:border-blue-500"
-            footnote="Requires admin approval"
+            footnote="Requires system administrator approval"
             accent="text-blue-600"
           />
 

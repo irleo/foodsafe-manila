@@ -35,7 +35,7 @@ export default function Sidebar({ isOpen }) {
       console.error("Logout failed", error);
     } finally {
       setAuth(null);
-      navigate("/", { replace: true });
+      navigate("/login", { replace: true });
     }
   };
 

@@ -1,8 +1,8 @@
 import {
   buildMonthlyTimelineData,
-  buildDiseaseData,
+  buildDiseaseDistributionComparison,
   buildDistrictDataFromCases,
-  buildDiseaseTrendByYear,
+  buildDiseaseTrendByMonth,
 } from "./analyticsCaseBuilders";
 
 import {
@@ -12,11 +12,11 @@ import {
 
 export function buildAnalyticsCasesViewModel(caseRows = []) {
   const monthlyTimelineData = buildMonthlyTimelineData(caseRows);
-  const diseaseData = buildDiseaseData(caseRows);
+  const diseaseData = buildDiseaseDistributionComparison(caseRows);
   const districtData = buildDistrictDataFromCases(caseRows);
   const districtStats = buildDistrictStatisticsFromCases(caseRows);
   const yoy = buildYoYCaseStatsFromCases(caseRows);
-  const diseaseTrend = buildDiseaseTrendByYear(caseRows, 5, 5);
+  const diseaseTrend = buildDiseaseTrendByMonth(caseRows, 5, 60);
 
   const topDistrict = districtStats[0]?.district ?? "—";
   const topDisease = diseaseData[0]?.disease ?? "—";

@@ -68,7 +68,7 @@ export default function YearlyLineChart({
                 labelFormatter={(label) => formatYearLabel(label)}
                 formatter={(value, name) => {
                   const labels = {
-                    officialCases: "Validated / Confirmed Cases",
+                    officialCases: "Confirmed Cases",
                   };
                   return [`${value}`, labels[name] || name];
                 }}
@@ -80,7 +80,7 @@ export default function YearlyLineChart({
                 strokeWidth={2}
                 dot={<HollowDot stroke="#2563eb" />}
                 activeDot={{ r: 5 }}
-                name="Validated / Confirmed Cases"
+                name="Confirmed Cases"
               />
               <Legend />
             </LineChart>
