@@ -63,20 +63,20 @@ const STATUS_SERIES = {
   reported: {
     dataKey: "reportedCases",
     label: "Reported Cases",
-    stroke: "#60a5fa",
-    fill: "#93c5fd",
+    stroke: "#3b82f6",
+    fill: "#60a5fa",
   },
   suspected: {
     dataKey: "suspectedCases",
     label: "Suspected Cases",
-    stroke: "#2563eb",
-    fill: "#60a5fa",
+    stroke: "#f59e0b",
+    fill: "#fbbf24",
   },
   confirmed: {
     dataKey: "confirmedCases",
-    label: "Validated / Confirmed Cases",
-    stroke: "#1d4ed8",
-    fill: "#3b82f6",
+    label: "Confirmed Cases",
+    stroke: "#10b981",
+    fill: "#34d399",
   },
 };
 
@@ -84,38 +84,16 @@ export default function SwitchableYearlyChart({
   data = [],
   title = "Cases Over Time",
   height = 380,
-  selectedStatus = "confirmed",
 }) {
   const [chartType, setChartType] = useState("line");
   const [rangeMonths, setRangeMonths] = useState(6);
-  const [showMa3, setShowMa3] = useState(false);
-  const [showMa6, setShowMa6] = useState(false);
-  const activeSeries = STATUS_SERIES[selectedStatus] || STATUS_SERIES.confirmed;
 
   const chartData = useMemo(() => {
     const safeData = Array.isArray(data) ? data : [];
-    const filtered = filterByMonthRange(safeData, rangeMonths).sort((a, b) =>
+    return filterByMonthRange(safeData, rangeMonths).sort((a, b) =>
       a.date > b.date ? 1 : -1,
     );
-
-    return filtered.map((row, index) => {
-      const window3 = filtered
-        .slice(Math.max(0, index - 2), index + 1)
-        .map((x) => Number(x?.[activeSeries.dataKey] || 0));
-      const window6 = filtered
-        .slice(Math.max(0, index - 5), index + 1)
-        .map((x) => Number(x?.[activeSeries.dataKey] || 0));
-
-      const ma3 = window3.reduce((sum, v) => sum + v, 0) / window3.length;
-      const ma6 = window6.reduce((sum, v) => sum + v, 0) / window6.length;
-
-      return {
-        ...row,
-        ma3: Number(ma3.toFixed(2)),
-        ma6: Number(ma6.toFixed(2)),
-      };
-    });
-  }, [activeSeries.dataKey, data, rangeMonths]);
+  }, [data, rangeMonths]);
 
   const commonTooltip = {
     labelFormatter: (label) => String(formatMonthLabel(label)),
@@ -123,9 +101,7 @@ export default function SwitchableYearlyChart({
       const labels = {
         reportedCases: "Reported Cases",
         suspectedCases: "Suspected Cases",
-        confirmedCases: "Validated / Confirmed Cases",
-        ma3: `${activeSeries.label} MA 3`,
-        ma6: `${activeSeries.label} MA 6`,
+        confirmedCases: "Confirmed Cases",
       };
       return [Number(value || 0), labels[name] || name];
     },
@@ -167,32 +143,6 @@ export default function SwitchableYearlyChart({
               </button>
             ))}
           </div>
-          <div className="inline-flex rounded-lg border border-gray-300 bg-gray-50 p-1 self-start">
-            <button
-              type="button"
-              onClick={() => setShowMa3((v) => !v)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                showMa3 ? "bg-slate-600 text-white shadow-sm" : "text-gray-600 hover:bg-white"
-              }`}
-            >
-              MA 3
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowMa6((v) => !v)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                showMa6 ? "bg-blue-800 text-white shadow-sm" : "text-gray-600 hover:bg-white"
-              }`}
-            >
-              MA 6
-            </button>
-          </div>
-          <div className="group relative inline-flex items-center justify-center h-6 w-6 rounded-full border border-gray-300 bg-white text-gray-500">
-            <span className="text-xs font-semibold">i</span>
-            <div className="pointer-events-none absolute -bottom-12 right-0 z-10 hidden w-72 rounded-md bg-gray-900 px-3 py-2 text-xs text-white shadow-lg group-hover:block">
-              MA3 and MA6 show moving averages for the selected case status and are visible only in Line view.
-            </div>
-          </div>
         </div>
       </div>
 
@@ -208,9 +158,18 @@ export default function SwitchableYearlyChart({
                 <YAxis allowDecimals={false} />
                 <Tooltip {...commonTooltip} />
                 <Legend />
-                <Line type="monotone" dataKey={activeSeries.dataKey} stroke={activeSeries.stroke} strokeWidth={2.5} dot={<HollowDot stroke={activeSeries.stroke} />} activeDot={{ r: 5 }} name={activeSeries.label} />
-                {showMa3 && <Line type="monotone" dataKey="ma3" stroke="#475569" strokeWidth={2} strokeDasharray="6 4" dot={false} name={`${activeSeries.label} MA 3`} />}
-                {showMa6 && <Line type="monotone" dataKey="ma6" stroke="#64748b" strokeWidth={2} strokeDasharray="2 4" dot={false} name={`${activeSeries.label} MA 6`} />}
+                {Object.values(STATUS_SERIES).map((series) => (
+                  <Line
+                    key={series.dataKey}
+                    type="monotone"
+                    dataKey={series.dataKey}
+                    stroke={series.stroke}
+                    strokeWidth={2.5}
+                    dot={<HollowDot stroke={series.stroke} />}
+                    activeDot={{ r: 5 }}
+                    name={series.label}
+                  />
+                ))}
               </LineChart>
             )}
 
@@ -221,7 +180,14 @@ export default function SwitchableYearlyChart({
                 <YAxis allowDecimals={false} />
                 <Tooltip {...commonTooltip} />
                 <Legend />
-                <Bar dataKey={activeSeries.dataKey} fill={activeSeries.fill} name={activeSeries.label} />
+                {Object.values(STATUS_SERIES).map((series) => (
+                  <Bar
+                    key={series.dataKey}
+                    dataKey={series.dataKey}
+                    fill={series.fill}
+                    name={series.label}
+                  />
+                ))}
               </BarChart>
             )}
 
@@ -232,7 +198,17 @@ export default function SwitchableYearlyChart({
                 <YAxis allowDecimals={false} />
                 <Tooltip {...commonTooltip} />
                 <Legend />
-                <Area type="monotone" dataKey={activeSeries.dataKey} stroke={activeSeries.stroke} fill={activeSeries.fill} fillOpacity={0.55} name={activeSeries.label} />
+                {Object.values(STATUS_SERIES).map((series) => (
+                  <Area
+                    key={series.dataKey}
+                    type="monotone"
+                    dataKey={series.dataKey}
+                    stroke={series.stroke}
+                    fill={series.fill}
+                    fillOpacity={0.25}
+                    name={series.label}
+                  />
+                ))}
               </AreaChart>
             )}
           </ResponsiveContainer>

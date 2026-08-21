@@ -31,6 +31,13 @@ const DatasetSchema = new mongoose.Schema(
     storedFileName: { type: String, required: true },
     filePath: { type: String, required: true },
     mimeType: { type: String, default: "" },
+    contentHash: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      minlength: 64,
+      maxlength: 64,
+    },
 
     // For official-case XLSX uploads:
     formatType: {
@@ -38,10 +45,12 @@ const DatasetSchema = new mongoose.Schema(
       enum: [
         "raw_health_office",
         "processed_template",
+        "unrecognized_excel",
+        // Retained only so historical CSV audit records remain readable.
         "processed_template_csv",
         "csv_generic",
       ],
-      default: "csv_generic",
+      default: "unrecognized_excel",
       index: true,
     },
     diseases: { type: [String], default: [] },
@@ -49,6 +58,7 @@ const DatasetSchema = new mongoose.Schema(
     totalRows: { type: Number, default: 0 },
     insertedRows: { type: Number, default: 0 },
     skippedRows: { type: Number, default: 0 },
+    validationErrorCount: { type: Number, default: 0, min: 0 },
     validationErrors: { type: mongoose.Schema.Types.Mixed, default: null },
 
     status: {
@@ -67,6 +77,11 @@ const DatasetSchema = new mongoose.Schema(
     errorMessage: { type: String, default: "" },
   },
   { timestamps: true, collection: "datasets" }
+);
+
+DatasetSchema.index(
+  { contentHash: 1 },
+  { unique: true, sparse: true, name: "dataset_content_hash_unique" },
 );
 
 export default mongoose.model("Dataset", DatasetSchema);

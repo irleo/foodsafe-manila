@@ -85,6 +85,64 @@ export function buildDiseaseData(caseRows = []) {
     .sort((a, b) => b.cases - a.cases);
 }
 
+export function buildDiseaseDistributionComparison(caseRows = []) {
+  const safeRows = Array.isArray(caseRows) ? caseRows : [];
+  const years = safeRows
+    .map((row) => Number(row?.year))
+    .filter((year) => Number.isFinite(year));
+
+  if (years.length === 0) return [];
+
+  const currentYear = Math.max(...years);
+  const previousYear = currentYear - 1;
+  const diseaseTotals = new Map();
+
+  for (const row of safeRows) {
+    const year = Number(row?.year);
+    if (year !== currentYear && year !== previousYear) continue;
+
+    const disease = String(row?.disease || "").trim();
+    const cases = Number(row?.cases ?? 0);
+    if (!disease || !Number.isFinite(cases) || cases < 0) continue;
+
+    const totals = diseaseTotals.get(disease) || { current: 0, previous: 0 };
+    if (year === currentYear) totals.current += cases;
+    if (year === previousYear) totals.previous += cases;
+    diseaseTotals.set(disease, totals);
+  }
+
+  const currentTotal = [...diseaseTotals.values()].reduce(
+    (sum, totals) => sum + totals.current,
+    0,
+  );
+
+  return [...diseaseTotals.entries()]
+    .map(([disease, totals]) => {
+      const absoluteChange = totals.current - totals.previous;
+      const relativeChange =
+        totals.previous > 0
+          ? Number(((absoluteChange / totals.previous) * 100).toFixed(1))
+          : null;
+
+      return {
+        disease,
+        cases: totals.current,
+        previousCases: totals.previous,
+        absoluteChange,
+        relativeChange,
+        changeDirection:
+          absoluteChange > 0 ? "increase" : absoluteChange < 0 ? "decrease" : "stable",
+        share:
+          currentTotal > 0
+            ? Number(((totals.current / currentTotal) * 100).toFixed(1))
+            : 0,
+        currentYear,
+        previousYear,
+      };
+    })
+    .sort((a, b) => b.cases - a.cases);
+}
+
 export function buildDistrictDataFromCases(caseRows = []) {
   const map = {};
   for (const r of caseRows) {
@@ -191,4 +249,75 @@ export function buildDiseaseTrendByYear(caseRows = [], topN = 5, yearsBack = 10)
   }
 
   return { data: rows, keys, startYear, endYear };
+}
+
+export function buildDiseaseTrendByMonth(caseRows = [], topN = 5, monthsBack = 60) {
+  const safeRows = Array.isArray(caseRows) ? caseRows : [];
+  const validRows = safeRows.filter((row) => {
+    const year = Number(row?.year);
+    const month = Number(row?.month);
+    const cases = Number(row?.cases ?? 0);
+    return (
+      Number.isFinite(year) &&
+      Number.isFinite(month) &&
+      month >= 1 &&
+      month <= 12 &&
+      Number.isFinite(cases) &&
+      cases >= 0 &&
+      String(row?.disease || "").trim()
+    );
+  });
+
+  if (validRows.length === 0) return { data: [], keys: [] };
+
+  const monthIndices = validRows.map(
+    (row) => Number(row.year) * 12 + Number(row.month) - 1,
+  );
+  const endIndex = Math.max(...monthIndices);
+  const firstIndex = Math.min(...monthIndices);
+  const startIndex = monthsBack
+    ? Math.max(firstIndex, endIndex - (monthsBack - 1))
+    : firstIndex;
+
+  const diseaseTotals = new Map();
+  for (const row of validRows) {
+    const monthIndex = Number(row.year) * 12 + Number(row.month) - 1;
+    if (monthIndex < startIndex || monthIndex > endIndex) continue;
+    const disease = String(row.disease).trim();
+    diseaseTotals.set(
+      disease,
+      (diseaseTotals.get(disease) || 0) + Number(row.cases),
+    );
+  }
+
+  const keys = [...diseaseTotals.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topN)
+    .map(([disease]) => disease);
+  if (keys.length === 0) return { data: [], keys: [] };
+
+  const rows = [];
+  const rowByIndex = new Map();
+  for (let monthIndex = startIndex; monthIndex <= endIndex; monthIndex += 1) {
+    const year = Math.floor(monthIndex / 12);
+    const month = (monthIndex % 12) + 1;
+    const row = {
+      date: `${year}-${String(month).padStart(2, "0")}-01`,
+      year,
+      month,
+    };
+    for (const disease of keys) row[disease] = 0;
+    rows.push(row);
+    rowByIndex.set(monthIndex, row);
+  }
+
+  for (const sourceRow of validRows) {
+    const monthIndex = Number(sourceRow.year) * 12 + Number(sourceRow.month) - 1;
+    const disease = String(sourceRow.disease).trim();
+    const targetRow = rowByIndex.get(monthIndex);
+    if (!targetRow || !keys.includes(disease)) continue;
+    targetRow[disease] += Number(sourceRow.cases);
+  }
+
+  return { data: rows, keys };
 }

@@ -10,7 +10,7 @@ export function ensureUploadDir() {
 
 export function isAllowedDatasetFile(filename = "") {
   const lower = filename.toLowerCase();
-  return lower.endsWith(".csv") || lower.endsWith(".xlsx") || lower.endsWith(".xls");
+  return lower.endsWith(".xlsx") || lower.endsWith(".xls");
 }
 
 const storage = multer.diskStorage({
@@ -32,7 +32,7 @@ export const datasetUpload = multer({
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
   fileFilter: (req, file, cb) => {
     if (!isAllowedDatasetFile(file.originalname)) {
-      return cb(new Error("Unsupported file type. Upload CSV or Excel (.xlsx/.xls)."));
+      return cb(new Error("Unsupported file type. Upload an Excel workbook (.xlsx/.xls)."));
     }
     cb(null, true);
   },

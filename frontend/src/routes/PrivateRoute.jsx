@@ -10,11 +10,11 @@ export default function PrivateRoute({ allowedRoles }) {
   }
 
   if (!auth || !auth.accessToken) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   if (allowedRoles && !allowedRoles.includes(auth.role)) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <Outlet />;

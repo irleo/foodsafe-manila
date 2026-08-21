@@ -96,11 +96,11 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
       <div>
         <h4 className="font-semibold text-gray-900">Case workflow</h4>
         <p className="mt-1 text-sm text-gray-600">
-          After investigation, mark the report as Suspected or Rule it Out. Suspected cases then proceed to validation.
+          After investigation, mark the report as Suspected or Rule it Out. Suspected cases then proceed to confirmation.
         </p>
         <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
           <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">Investigation: {formatStatusLabel(report.investigationStatus || "not_started")}</span>
-          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">Validation: {formatStatusLabel(validationLabel)}</span>
+          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">Confirmation: {formatStatusLabel(validationLabel)}</span>
         </div>
       </div>
 
@@ -119,7 +119,7 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
 
       {report.validation?.validatedAt && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 text-sm text-gray-700">
-          <h5 className="font-semibold text-gray-900">Validation record</h5>
+          <h5 className="font-semibold text-gray-900">Case confirmation record</h5>
           <p className="mt-1">Recorded {new Date(report.validation.validatedAt).toLocaleString()} by {report.validation.validatedBy?.username || "authorized personnel"}.</p>
           <p className="mt-1"><span className="font-medium">Supporting findings:</span> {report.validation.supportingFindings || "—"}</p>
           <p className="mt-1"><span className="font-medium">Laboratory evidence:</span> {report.validation.laboratoryEvidence || "—"}</p>
@@ -236,11 +236,11 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
 
       {canValidate && (
         <form className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4" onSubmit={(event) => { event.preventDefault(); submit("validation", "validation", validation); }}>
-          <h5 className="font-semibold text-gray-900">3. Record validation outcome</h5>
-          <Field label="Validation result">
+          <h5 className="font-semibold text-gray-900">3. Record confirmation outcome</h5>
+          <Field label="Confirmation result">
             <select className={inputClass} value={validation.result} onChange={(e) => setValidation((v) => ({ ...v, result: e.target.value }))}>
               <option value="confirmed">Confirmed</option>
-              <option value="not_validated">Not Validated</option>
+              <option value="not_validated">Not Confirmed</option>
             </select>
           </Field>
           <Field label="Supporting findings">
@@ -260,7 +260,7 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
             <textarea rows={2} className={inputClass} value={validation.remarks} onChange={(e) => setValidation((v) => ({ ...v, remarks: e.target.value }))} />
           </Field>
           <button disabled={Boolean(busyAction)} className="min-h-11 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 ms-auto">
-            {busyAction === "validation" ? "Saving…" : "Submit validation"}
+            {busyAction === "validation" ? "Saving…" : "Submit confirmation"}
           </button>
         </form>
       )}

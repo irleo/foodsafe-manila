@@ -1,6 +1,11 @@
 const STATUS_LABEL_OVERRIDES = {
-  validated_confirmed: "Validated / Confirmed",
-  confirmed: "Validated / Confirmed",
+  admin: "System Administrator",
+  cesu: "Data Manager",
+  surveillance_team: "Surveillance Officer",
+  validated_confirmed: "Confirmed",
+  confirmed: "Confirmed",
+  not_validated: "Not Confirmed",
+  case_not_validated: "Case Not Confirmed",
   not_suspected: "Ruled Out",
 };
 

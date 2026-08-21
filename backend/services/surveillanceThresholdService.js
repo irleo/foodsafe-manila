@@ -61,7 +61,7 @@ function baseResult({ periodType, target, district, observedConfirmedCases = 0, 
     observedConfirmedCases,
     baselinePeriods,
     formula: THRESHOLD_FORMULA,
-    caseDefinition: "Validated/confirmed cases only; uploaded official cases and confirmed surveillance reports are combined at query time without copying records.",
+    caseDefinition: "Confirmed cases only; uploaded official case records and confirmed surveillance reports are combined at query time without copying records.",
   };
 }
 

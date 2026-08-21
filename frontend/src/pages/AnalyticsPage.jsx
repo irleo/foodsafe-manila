@@ -49,11 +49,12 @@ export default function Analytics() {
   );
 
   const vm = useMemo(
-    () => ({
-      ...buildAnalyticsCasesViewModel(selectedRows),
-      monthlyTimelineData: buildMonthlyTimelineData(selectedRows),
-    }),
+    () => buildAnalyticsCasesViewModel(selectedRows),
     [selectedRows],
+  );
+  const allStatusTimelineData = useMemo(
+    () => buildMonthlyTimelineData(caseRows),
+    [caseRows],
   );
 
   const selectedStatusLabel = formatStatusLabel(selectedCaseStatus);
@@ -64,7 +65,7 @@ export default function Analytics() {
 
   return (
     <div className="space-y-6 analytics-print-root">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Analytics</h1>
           <p className="mt-1 text-gray-600">
@@ -76,7 +77,7 @@ export default function Analytics() {
         <button
           type="button"
           onClick={handleExportPdf}
-          className="no-print flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-white hover:bg-blue-700"
+          className="no-print inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-lg bg-blue-600 px-5 py-2.5 text-white hover:bg-blue-700 sm:self-auto"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -152,9 +153,8 @@ export default function Analytics() {
           />
 
           <AnalyticsGrid
-            selectedCaseStatus={selectedCaseStatus}
             caseStatusLabel={selectedStatusLabel}
-            monthlyTimelineData={vm.monthlyTimelineData}
+            monthlyTimelineData={allStatusTimelineData}
             diseaseData={vm.diseaseData}
             districtData={vm.districtData}
             districtStats={vm.districtStats}

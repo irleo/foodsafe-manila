@@ -66,14 +66,13 @@ export default function OfficialDatasetsTab() {
     if (!f) return;
 
     const ok =
-      f.name.toLowerCase().endsWith(".csv") ||
       f.name.toLowerCase().endsWith(".xlsx") ||
       f.name.toLowerCase().endsWith(".xls");
 
     if (!ok) {
       setFile(null);
       setErrorMsg(
-        "Unsupported file type. Please upload CSV or Excel (.xlsx/.xls).",
+        "Unsupported file type. Please upload an Excel workbook (.xlsx/.xls).",
       );
       return;
     }
@@ -81,7 +80,7 @@ export default function OfficialDatasetsTab() {
     setFile(f);
 
     if (!datasetName.trim()) {
-      const base = f.name.replace(/\.(csv|xlsx|xls)$/i, "");
+      const base = f.name.replace(/\.(xlsx|xls)$/i, "");
       setDatasetName(base);
     }
   };
@@ -146,7 +145,7 @@ export default function OfficialDatasetsTab() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = filename || "dataset.csv";
+      a.download = filename || "dataset.xlsx";
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -177,13 +176,13 @@ export default function OfficialDatasetsTab() {
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div className="space-y-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="font-semibold text-xl">Upload official dataset</h2>
 
             <button
               type="button"
               onClick={handleDownloadTemplate}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 sm:w-auto"
             >
               <Download size={16} />
               Download template
@@ -198,9 +197,6 @@ export default function OfficialDatasetsTab() {
               </li>
               <li>
                 <span className="font-medium">OfficialCaseTemplate XLSX</span>: one sheet (prefer “processed data”) with standardized columns.
-              </li>
-              <li>
-                <span className="font-medium">OfficialCaseTemplate CSV</span>: columns should match the OfficialCaseTemplate XLSX, including epidemiological year/week for weekly data.
               </li>
             </ul>
           </div>

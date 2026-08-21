@@ -5,7 +5,6 @@ import DiseaseTrendStackedAreaChart from "../charts/DiseaseTrendStackedAreaChart
 import DistrictStatisticsTable from "../tables/DistrictStatisticsTable.jsx";
 
 export default function AnalyticsGrid({
-  selectedCaseStatus,
   caseStatusLabel,
   monthlyTimelineData,
   diseaseData,
@@ -18,13 +17,12 @@ export default function AnalyticsGrid({
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 analytics-print-grid">
       <div className="lg:col-span-2 analytics-print-block">
         <SwitchableYearlyChart
-          title={`${caseStatusLabel} Cases Over Time`}
+          title="Cases Over Time"
           data={monthlyTimelineData}
-          selectedStatus={selectedCaseStatus}
         />
         <p className="print-only mt-2 text-sm text-gray-700">
-          This graph shows {caseStatusLabel.toLowerCase()} case volume by month
-          to highlight changes over time.
+          This comparison graph shows reported, suspected, and confirmed case
+          volume by month.
         </p>
       </div>
 
@@ -45,8 +43,8 @@ export default function AnalyticsGrid({
           title={`${caseStatusLabel} Disease Distribution`}
         />
         <p className="print-only mt-2 text-sm text-gray-700">
-          This chart compares diseases by share of {caseStatusLabel.toLowerCase()}
-          cases, showing which illnesses make up the largest portions of the dataset.
+          This chart compares the latest-year disease share and each disease's
+          relative change from the previous year for {caseStatusLabel.toLowerCase()} cases.
         </p>
       </div>
 
@@ -54,11 +52,11 @@ export default function AnalyticsGrid({
         <DiseaseTrendStackedAreaChart
           data={diseaseTrendData}
           keys={diseaseTrendKeys}
-          title={`Disease Trends Over Time — ${caseStatusLabel} Cases`}
+          title={`Monthly Disease Trends — ${caseStatusLabel} Cases`}
         />
         <p className="print-only mt-2 text-sm text-gray-700">
-          This graph tracks disease-specific trends over time and shows whether
-          changes are broad-based or driven by specific diseases.
+          This graph compares disease-specific trajectories and highlights the
+          latest month-over-month movement for the leading diseases.
         </p>
       </div>
       <div className="lg:col-span-2 analytics-print-block">

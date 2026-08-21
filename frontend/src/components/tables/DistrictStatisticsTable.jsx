@@ -1,6 +1,6 @@
 export default function DistrictStatisticsTable({
   data = [],
-  caseStatusLabel = "Validated / Confirmed",
+  caseStatusLabel = "Confirmed",
 }) {
   const safeData = Array.isArray(data) ? data : [];
 

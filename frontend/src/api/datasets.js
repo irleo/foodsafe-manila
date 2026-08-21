@@ -76,7 +76,7 @@ export async function downloadDatasetFile({ datasetId, token }) {
   const blob = await res.blob();
   const cd = res.headers.get("content-disposition");
   const match = cd?.match(/filename="(.+)"/);
-  const filename = match?.[1] || "dataset.csv";
+  const filename = match?.[1] || "dataset.xlsx";
 
   return { blob, filename };
 }

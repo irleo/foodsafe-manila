@@ -21,7 +21,7 @@ function StatusCard({ value, options, onChange, disabled = false }) {
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
-        title={disabled ? "Forecasts use validated/confirmed cases only" : undefined}
+        title={disabled ? "Forecasts use confirmed cases only" : undefined}
         aria-describedby={disabled ? "heatmap-status-requirement" : undefined}
       >
         {options.map((option) => (

@@ -1,7 +1,6 @@
-import fs from "fs";
 import path from "path";
 import XLSX from "xlsx";
-import csv from "csv-parser";
+import mongoose from "mongoose";
 
 import Dataset from "../models/Dataset.js";
 import OfficialCase from "../models/OfficialCase.js";
@@ -24,12 +23,13 @@ const TEMPLATE_REQUIRED = [
 ];
 
 const RAW_REQUIRED = ["Report date", "District", "Case Classification"];
+const MAX_STORED_VALIDATION_ERRORS = 500;
 
 function normalizeHeaderKey(k) {
   return String(k || "")
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, " ");
+    .replace(/[\s_-]+/g, "_");
 }
 
 function hasAllHeaders(headers = [], required = []) {
@@ -145,35 +145,81 @@ function minMaxYearMonth(records) {
   return { coverageStart, coverageEnd };
 }
 
-async function parseCsvRows(filePath) {
-  const rows = [];
-  await new Promise((resolve, reject) => {
-    fs.createReadStream(filePath)
-      .pipe(csv())
-      .on("data", (row) => rows.push(row))
-      .on("end", resolve)
-      .on("error", reject);
-  });
-  return rows;
-}
-
-function normalizeTemplateCsvRowKeys(row = {}) {
-  const normalized = {};
-  for (const [key, value] of Object.entries(row || {})) {
-    const k = String(key || "")
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, "_");
-    normalized[k] = value;
-  }
-  return normalized;
-}
-
 function validateCesuCoverage(records, providerType) {
   if (providerType !== "cesu") return null;
   return records.some((record) => Number(record.year) < 2022)
     ? "CESU surveillance data in this project begins in 2022. Records before 2022 cannot be labeled as CESU data."
     : null;
+}
+
+function normalizeTemplateRowKeys(row = {}) {
+  return Object.fromEntries(
+    Object.entries(row).map(([key, value]) => [normalizeHeaderKey(key), value]),
+  );
+}
+
+function aggregateRecords(records) {
+  const byKey = new Map();
+  for (const record of records) {
+    const key = [
+      record.city,
+      record.district,
+      record.barangayNo,
+      record.disease,
+      record.year,
+      record.month,
+      record.epidemiologicalYear,
+      record.epidemiologicalWeek,
+      record.caseClassification,
+      record.source,
+    ].join("|");
+    const previous = byKey.get(key);
+    byKey.set(key, {
+      ...record,
+      cases: (previous?.cases || 0) + Number(record.cases || 0),
+    });
+  }
+  return Array.from(byKey.values());
+}
+
+async function persistOfficialCaseImport({
+  datasetPayload,
+  normalized,
+  providerType,
+  providerName,
+  reportingFrequency,
+}) {
+  const session = await mongoose.startSession();
+  let dataset = null;
+  let insertedRows = 0;
+
+  try {
+    await session.withTransaction(async () => {
+      dataset = new Dataset({ ...datasetPayload, status: "pending" });
+      await dataset.save({ session });
+
+      const docs = aggregateRecords(normalized).map((record) => ({
+        ...record,
+        datasetId: dataset._id,
+        providerType,
+        providerName,
+        reportingFrequency,
+      }));
+      await OfficialCase.insertMany(docs, { ordered: false, session });
+
+      insertedRows = docs.length;
+      dataset.insertedRows = insertedRows;
+      dataset.recordsCount = insertedRows;
+      dataset.status = "validated";
+      await dataset.save({ session });
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  if (!dataset) throw new Error("Dataset import transaction did not complete.");
+  await refreshDashboardSummaryAfterWrite();
+  return { dataset, insertedRows };
 }
 
 /**
@@ -191,10 +237,27 @@ export async function importOfficialCasesXlsx({
   providerType = "cesu",
   providerName = "CESU",
   reportingFrequency = "weekly",
+  contentHash,
 } = {}) {
   if (!filePath) throw new Error("filePath is required");
 
-  const wb = XLSX.readFile(filePath);
+  let wb;
+  try {
+    wb = XLSX.readFile(filePath);
+  } catch (error) {
+    return {
+      success: false,
+      reason: "The uploaded file could not be read as an Excel workbook.",
+      validationErrors: [
+        {
+          sheet: null,
+          row: null,
+          field: "workbook",
+          message: error?.message || "Invalid Excel workbook.",
+        },
+      ],
+    };
+  }
   const detected = detectOfficialCaseXlsxFormat(wb);
   if (!detected.ok) {
     return { success: false, reason: detected.reason, validationErrors: [] };
@@ -215,6 +278,7 @@ export async function importOfficialCasesXlsx({
 
     const normalized = [];
     const validationErrors = [];
+    let invalidRowCount = 0;
     const diseases = new Set();
     const districts = new Set();
 
@@ -231,12 +295,15 @@ export async function importOfficialCasesXlsx({
         if (isBlankRow(row)) continue;
         const n = normalizeRawHealthOfficeRow({ sheetName: sn, row });
         if (!n.ok) {
-          validationErrors.push({
-            sheet: sn,
-            row: rowNum,
-            field: n.field,
-            message: n.message,
-          });
+          invalidRowCount += 1;
+          if (validationErrors.length < MAX_STORED_VALIDATION_ERRORS) {
+            validationErrors.push({
+              sheet: sn,
+              row: rowNum,
+              field: n.field,
+              message: n.message,
+            });
+          }
           continue;
         }
         districts.add(n.value.district);
@@ -250,89 +317,67 @@ export async function importOfficialCasesXlsx({
         formatType,
         reason: "No valid rows could be normalized.",
         validationErrors,
+        validationErrorCount: invalidRowCount,
       };
     }
 
     const cesuCoverageError = validateCesuCoverage(normalized, providerType);
-    if (cesuCoverageError) return { success: false, formatType, reason: cesuCoverageError, validationErrors };
+    if (cesuCoverageError) {
+      return {
+        success: false,
+        formatType,
+        reason: cesuCoverageError,
+        validationErrors,
+        validationErrorCount: invalidRowCount,
+      };
+    }
     const { coverageStart, coverageEnd } = minMaxYearMonth(normalized);
 
-    const dataset = await Dataset.create({
-      name:
-        name?.trim() ||
-        path.basename(
-          originalFileName || storedFileName || "official_cases.xlsx",
-        ),
-      dataSource: providerName,
+    const { dataset, insertedRows } = await persistOfficialCaseImport({
+      datasetPayload: {
+        name:
+          name?.trim() ||
+          path.basename(
+            originalFileName || storedFileName || "official_cases.xlsx",
+          ),
+        dataSource: providerName,
+        providerType,
+        providerName,
+        reportingFrequency,
+        ingestionMethod: "excel",
+        coverageStart,
+        coverageEnd,
+        originalFileName: originalFileName || "official_cases.xlsx",
+        storedFileName: storedFileName || path.basename(filePath),
+        filePath,
+        mimeType:
+          mimeType ||
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        status: "pending",
+        uploadedBy: userId || null,
+        contentHash,
+        formatType,
+        diseases: Array.from(diseases),
+        districts: Array.from(districts),
+        totalRows: v.totalRows,
+        insertedRows: 0,
+        skippedRows: invalidRowCount,
+        validationErrorCount: invalidRowCount,
+        validationErrors: validationErrors.length ? validationErrors : null,
+      },
+      normalized,
       providerType,
       providerName,
       reportingFrequency,
-      ingestionMethod: "excel",
-      coverageStart,
-      coverageEnd,
-      originalFileName: originalFileName || "official_cases.xlsx",
-      storedFileName: storedFileName || path.basename(filePath),
-      filePath,
-      mimeType:
-        mimeType ||
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      status: "pending",
-      uploadedBy: userId || null,
-      formatType,
-      diseases: Array.from(diseases),
-      districts: Array.from(districts),
-      totalRows: v.totalRows,
-      insertedRows: 0,
-      skippedRows: validationErrors.length,
-      validationErrors: validationErrors.length ? validationErrors : null,
     });
-
-    // Insert monthly aggregate documents: group identical keys and sum cases (raw rows default to 1)
-    const byKey = new Map();
-    for (const r of normalized) {
-      const key = [
-        r.city,
-        r.district,
-        r.barangayNo,
-        r.disease,
-        r.year,
-        r.month,
-        r.epidemiologicalYear,
-        r.epidemiologicalWeek,
-        r.caseClassification,
-        r.source,
-      ].join("|");
-      const prev = byKey.get(key);
-      byKey.set(key, {
-        ...r,
-        cases: (prev?.cases || 0) + Number(r.cases || 0),
-      });
-    }
-    const docs = Array.from(byKey.values()).map((r) => ({
-      ...r,
-      datasetId: dataset._id,
-      providerType,
-      providerName,
-      reportingFrequency,
-    }));
-
-    await OfficialCase.deleteMany({ datasetId: dataset._id });
-    await OfficialCase.insertMany(docs, { ordered: false });
-
-    dataset.insertedRows = docs.length;
-    dataset.recordsCount = docs.length;
-    dataset.totalRows = v.totalRows;
-    dataset.skippedRows = validationErrors.length;
-    dataset.status = "validated";
-    await dataset.save();
-    await refreshDashboardSummaryAfterWrite();
 
     return {
       success: true,
       formatType,
       datasetId: String(dataset._id),
-      insertedRows: docs.length,
-      skippedRows: validationErrors.length,
+      insertedRows,
+      skippedRows: invalidRowCount,
+      validationErrorCount: invalidRowCount,
       coverageStart: dataset.coverageStart.toISOString(),
       coverageEnd: dataset.coverageEnd.toISOString(),
       diseases: dataset.diseases,
@@ -357,23 +402,27 @@ export async function importOfficialCasesXlsx({
     });
     const normalized = [];
     const validationErrors = [];
+    let invalidRowCount = 0;
     const diseases = new Set();
     const districts = new Set();
 
     for (let i = 0; i < rows.length; i++) {
       const rowNum = i + 2;
-      const row = rows[i];
+      const row = normalizeTemplateRowKeys(rows[i]);
       // Skip "notes" / empty trailing columns rows
       if (isBlankRow(row)) continue;
 
       const n = normalizeTemplateRow(row);
       if (!n.ok) {
-        validationErrors.push({
-          sheet: v.sheetName,
-          row: rowNum,
-          field: n.field,
-          message: n.message,
-        });
+        invalidRowCount += 1;
+        if (validationErrors.length < MAX_STORED_VALIDATION_ERRORS) {
+          validationErrors.push({
+            sheet: v.sheetName,
+            row: rowNum,
+            field: n.field,
+            message: n.message,
+          });
+        }
         continue;
       }
       diseases.add(n.value.disease);
@@ -387,98 +436,80 @@ export async function importOfficialCasesXlsx({
         formatType,
         reason: "No valid rows could be imported.",
         validationErrors,
+        validationErrorCount: invalidRowCount,
       };
     }
 
     const cesuCoverageError = validateCesuCoverage(normalized, providerType);
-    if (cesuCoverageError) return { success: false, formatType, reason: cesuCoverageError, validationErrors };
-    const { coverageStart, coverageEnd } = minMaxYearMonth(normalized);
-
-    if (reportingFrequency === "weekly" && normalized.some((row) => !row.epidemiologicalWeek)) {
+    if (cesuCoverageError) {
       return {
         success: false,
         formatType,
-        reason: "Weekly datasets require epidemiological_week or a report date for every row.",
+        reason: cesuCoverageError,
         validationErrors,
+        validationErrorCount: invalidRowCount,
+      };
+    }
+    const { coverageStart, coverageEnd } = minMaxYearMonth(normalized);
+
+    if (
+      reportingFrequency === "weekly" &&
+      normalized.some((row) => !row.epidemiologicalWeek)
+    ) {
+      return {
+        success: false,
+        formatType,
+        reason: "Weekly datasets require epidemiological_week for every valid row.",
+        validationErrors,
+        validationErrorCount: invalidRowCount,
       };
     }
 
-    const dataset = await Dataset.create({
-      name:
-        name?.trim() ||
-        path.basename(
-          originalFileName || storedFileName || "cleaned_official_cases.xlsx",
-        ),
-      dataSource: providerName,
+    const { dataset, insertedRows } = await persistOfficialCaseImport({
+      datasetPayload: {
+        name:
+          name?.trim() ||
+          path.basename(
+            originalFileName || storedFileName || "cleaned_official_cases.xlsx",
+          ),
+        dataSource: providerName,
+        providerType,
+        providerName,
+        reportingFrequency,
+        ingestionMethod: "excel",
+        coverageStart,
+        coverageEnd,
+        originalFileName: originalFileName || "cleaned_official_cases.xlsx",
+        storedFileName: storedFileName || path.basename(filePath),
+        filePath,
+        mimeType:
+          mimeType ||
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        status: "pending",
+        uploadedBy: userId || null,
+        contentHash,
+        formatType,
+        diseases: Array.from(diseases),
+        districts: Array.from(districts),
+        totalRows: rows.length,
+        insertedRows: 0,
+        skippedRows: invalidRowCount,
+        validationErrorCount: invalidRowCount,
+        validationErrors: validationErrors.length ? validationErrors : null,
+      },
+      normalized,
       providerType,
       providerName,
       reportingFrequency,
-      ingestionMethod: "excel",
-      coverageStart,
-      coverageEnd,
-      originalFileName: originalFileName || "cleaned_official_cases.xlsx",
-      storedFileName: storedFileName || path.basename(filePath),
-      filePath,
-      mimeType:
-        mimeType ||
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      status: "pending",
-      uploadedBy: userId || null,
-      formatType,
-      diseases: Array.from(diseases),
-      districts: Array.from(districts),
-      totalRows: rows.length,
-      insertedRows: 0,
-      skippedRows: validationErrors.length,
-      validationErrors: validationErrors.length ? validationErrors : null,
     });
-
-    // Upsert-like behavior within the dataset: group identical keys and sum cases
-    const byKey = new Map();
-    for (const r of normalized) {
-      const key = [
-        r.city,
-        r.district,
-        r.barangayNo,
-        r.disease,
-        r.year,
-        r.month,
-        r.epidemiologicalYear,
-        r.epidemiologicalWeek,
-        r.caseClassification,
-        r.source,
-      ].join("|");
-      const prev = byKey.get(key);
-      byKey.set(key, {
-        ...r,
-        cases: (prev?.cases || 0) + Number(r.cases || 0),
-      });
-    }
-    const docs = Array.from(byKey.values()).map((r) => ({
-      ...r,
-      datasetId: dataset._id,
-      providerType,
-      providerName,
-      reportingFrequency,
-    }));
-
-    await OfficialCase.deleteMany({ datasetId: dataset._id });
-    await OfficialCase.insertMany(docs, { ordered: false });
-
-    dataset.insertedRows = docs.length;
-    dataset.recordsCount = docs.length;
-    dataset.totalRows = rows.length;
-    dataset.skippedRows = validationErrors.length;
-    dataset.status = "validated";
-    await dataset.save();
-    await refreshDashboardSummaryAfterWrite();
 
     return {
       success: true,
       formatType,
       datasetId: String(dataset._id),
-      insertedRows: docs.length,
-      skippedRows: validationErrors.length,
+      insertedRows,
+      skippedRows: invalidRowCount,
+      validationErrorCount: invalidRowCount,
       coverageStart: dataset.coverageStart.toISOString(),
       coverageEnd: dataset.coverageEnd.toISOString(),
       diseases: dataset.diseases,
@@ -488,187 +519,4 @@ export async function importOfficialCasesXlsx({
   }
 
   return { success: false, reason: "Unsupported format type." };
-}
-
-/**
- * Imports official case CSV that matches OfficialCaseTemplate columns.
- */
-export async function importOfficialCasesCsv({
-  filePath,
-  name,
-  originalFileName,
-  storedFileName,
-  mimeType,
-  userId,
-  providerType = "cesu",
-  providerName = "CESU",
-  reportingFrequency = "weekly",
-} = {}) {
-  if (!filePath) throw new Error("filePath is required");
-
-  const rows = await parseCsvRows(filePath);
-  const requiredColumns = [
-    "city",
-    "district",
-    "barangay",
-    "disease",
-    "year",
-    "month",
-    "case_classification",
-    "cases",
-  ];
-
-  if (!rows.length) {
-    return {
-      success: false,
-      formatType: "processed_template_csv",
-      reason: "CSV file is empty.",
-      validationErrors: [],
-    };
-  }
-
-  const normalizedRows = rows.map(normalizeTemplateCsvRowKeys);
-  const headerSet = new Set(Object.keys(normalizedRows[0] || {}));
-  const missingColumns = requiredColumns.filter((c) => !headerSet.has(c));
-  if (missingColumns.length) {
-    return {
-      success: false,
-      formatType: "processed_template_csv",
-      reason: `Missing required columns: ${missingColumns.join(", ")}`,
-      validationErrors: [
-        {
-          sheet: "csv",
-          row: 1,
-          field: "headers",
-          message: `CSV must match OfficialCaseTemplate columns. Missing: ${missingColumns.join(", ")}`,
-        },
-      ],
-    };
-  }
-
-  const normalized = [];
-  const validationErrors = [];
-  const diseases = new Set();
-  const districts = new Set();
-
-  for (let i = 0; i < normalizedRows.length; i++) {
-    const rowNum = i + 2; // header row is 1
-    const n = normalizeTemplateRow(normalizedRows[i]);
-    if (!n.ok) {
-      validationErrors.push({
-        sheet: "csv",
-        row: rowNum,
-        field: n.field,
-        message: n.message,
-      });
-      continue;
-    }
-    diseases.add(n.value.disease);
-    districts.add(n.value.district);
-    normalized.push(n.value);
-  }
-
-  if (!normalized.length) {
-    return {
-      success: false,
-      formatType: "processed_template_csv",
-      reason: "No valid rows could be imported.",
-      validationErrors,
-    };
-  }
-
-  const cesuCoverageError = validateCesuCoverage(normalized, providerType);
-  if (cesuCoverageError) {
-    return { success: false, formatType: "processed_template_csv", reason: cesuCoverageError, validationErrors };
-  }
-  const { coverageStart, coverageEnd } = minMaxYearMonth(normalized);
-
-  if (reportingFrequency === "weekly" && normalized.some((row) => !row.epidemiologicalWeek)) {
-    return {
-      success: false,
-      formatType: "processed_template_csv",
-      reason: "Weekly datasets require epidemiological_week for every row.",
-      validationErrors,
-    };
-  }
-
-  const dataset = await Dataset.create({
-    name:
-      name?.trim() ||
-      path.basename(
-        originalFileName || storedFileName || "cleaned_official_cases.csv",
-      ),
-    dataSource: providerName,
-    providerType,
-    providerName,
-    reportingFrequency,
-    ingestionMethod: "csv",
-    coverageStart,
-    coverageEnd,
-    originalFileName: originalFileName || "cleaned_official_cases.csv",
-    storedFileName: storedFileName || path.basename(filePath),
-    filePath,
-    mimeType: mimeType || "text/csv",
-    status: "pending",
-    uploadedBy: userId || null,
-    formatType: "processed_template_csv",
-    diseases: Array.from(diseases),
-    districts: Array.from(districts),
-    totalRows: normalizedRows.length,
-    insertedRows: 0,
-    skippedRows: validationErrors.length,
-    validationErrors: validationErrors.length ? validationErrors : null,
-  });
-
-  const byKey = new Map();
-  for (const r of normalized) {
-    const key = [
-      r.city,
-      r.district,
-      r.barangayNo,
-      r.disease,
-      r.year,
-      r.month,
-      r.epidemiologicalYear,
-      r.epidemiologicalWeek,
-      r.caseClassification,
-      r.source,
-    ].join("|");
-    const prev = byKey.get(key);
-    byKey.set(key, {
-      ...r,
-      cases: (prev?.cases || 0) + Number(r.cases || 0),
-    });
-  }
-  const docs = Array.from(byKey.values()).map((r) => ({
-    ...r,
-    datasetId: dataset._id,
-    providerType,
-    providerName,
-    reportingFrequency,
-  }));
-
-  await OfficialCase.deleteMany({ datasetId: dataset._id });
-  await OfficialCase.insertMany(docs, { ordered: false });
-
-  dataset.insertedRows = docs.length;
-  dataset.recordsCount = docs.length;
-  dataset.totalRows = normalizedRows.length;
-  dataset.skippedRows = validationErrors.length;
-  dataset.status = "validated";
-  await dataset.save();
-  await refreshDashboardSummaryAfterWrite();
-
-  return {
-    success: true,
-    formatType: "processed_template_csv",
-    datasetId: String(dataset._id),
-    insertedRows: docs.length,
-    skippedRows: validationErrors.length,
-    coverageStart: dataset.coverageStart.toISOString(),
-    coverageEnd: dataset.coverageEnd.toISOString(),
-    diseases: dataset.diseases,
-    districts: dataset.districts,
-    validationErrors: dataset.validationErrors,
-  };
 }

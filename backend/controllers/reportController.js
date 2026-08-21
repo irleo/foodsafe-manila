@@ -570,7 +570,7 @@ export const completeInvestigation = async (req, res) => {
       status: "approved",
     }).select("_id").lean();
     if (validPersonnel.length !== personnelIds.length) {
-      return res.status(400).json({ message: "Investigation personnel must be approved CESU or Surveillance Team users." });
+      return res.status(400).json({ message: "Investigation personnel must be approved Data Managers or Surveillance Officers." });
     }
 
     report.investigation = {
@@ -708,7 +708,7 @@ export const validateReport = async (req, res) => {
   try {
     const result = String(req.body?.result || "").trim();
     if (!["confirmed", "not_validated"].includes(result)) {
-      return res.status(400).json({ message: "Validation result must be confirmed or not_validated." });
+      return res.status(400).json({ message: "Confirmation result must be Confirmed or Not Confirmed." });
     }
     const supportingFindings = requireText(req.body?.supportingFindings, "Supporting findings");
     if (supportingFindings.error) return res.status(400).json({ message: supportingFindings.error });
@@ -726,7 +726,7 @@ export const validateReport = async (req, res) => {
     const report = await Report.findById(req.params.id);
     if (!report) return res.status(404).json({ message: "Report not found." });
     if (report.currentStatus !== "suspected") {
-      return res.status(409).json({ message: "Only a suspected case can be validated." });
+      return res.status(409).json({ message: "Only a suspected case can receive a confirmation outcome." });
     }
 
     const previousStatus = report.currentStatus;
@@ -780,10 +780,10 @@ export const validateReport = async (req, res) => {
         console.error("Prediction refresh after report confirmation failed:", error);
       });
     }
-    return res.json({ message: "Case validation recorded.", report: await Report.findById(report._id).select(workflowStatusFields).lean() });
+    return res.json({ message: "Case confirmation recorded.", report: await Report.findById(report._id).select(workflowStatusFields).lean() });
   } catch (error) {
-    console.error("Error validating case:", error);
-    return res.status(500).json({ message: "Failed to record case validation." });
+    console.error("Error recording case confirmation:", error);
+    return res.status(500).json({ message: "Failed to record case confirmation." });
   }
 };
 

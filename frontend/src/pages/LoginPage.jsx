@@ -41,6 +41,8 @@ const Login = () => {
         accessToken: res.data.accessToken,
         role: res.data.user.role,
         username: res.data.user.username,
+        canAccessPatientIdentity:
+          res.data.user.canAccessPatientIdentity === true,
       });
 
       await notify.promise(Promise.resolve(res), {
@@ -158,7 +160,7 @@ const Login = () => {
                 {loading ? "Logging in..." : "Login"}
               </button>
 
-              <div className="flex items-center justify-between text-sm">
+              <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
                 <label className="inline-flex items-center gap-2 text-gray-700">
                   <input
                     type="checkbox"

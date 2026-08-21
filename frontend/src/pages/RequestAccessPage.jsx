@@ -17,7 +17,6 @@ import {
   validatePassword,
 } from "../utils/passwordValidation";
 
-const MAX_REASON = 300;
 const OTP_RESEND_COOLDOWN_SECONDS = 180;
 
 const RequestAccess = () => {
@@ -46,10 +45,9 @@ const RequestAccess = () => {
     confirmPassword: "",
     organization: "",
     position: "",
-    reason: "",
+    requestedRole: "cesu",
   });
 
-  const reasonCount = form.reason.length;
   const accessOtp = accessOtpDigits.join("");
 
   const passwordsMatch = useMemo(() => {
@@ -74,13 +72,12 @@ const RequestAccess = () => {
       form.confirmPassword &&
       form.organization.trim() &&
       form.position.trim() &&
-      form.reason.trim();
+      form.requestedRole;
 
     return (
       Boolean(requiredFilled) &&
       passwordValidation.isValid &&
       passwordsMatch &&
-      form.reason.length <= MAX_REASON &&
       !loading &&
       !submitted
     );
@@ -109,7 +106,7 @@ const RequestAccess = () => {
     }
     setForm((prev) => ({
       ...prev,
-      [key]: key === "reason" ? value.slice(0, MAX_REASON) : value,
+      [key]: value,
     }));
   };
 
@@ -135,7 +132,7 @@ const RequestAccess = () => {
     password: form.password,
     organization: form.organization.trim(),
     position: form.position.trim(),
-    reason: form.reason.trim(),
+    requestedRole: form.requestedRole,
   });
 
   const sendAccessOtp = async () => {
@@ -176,11 +173,6 @@ const RequestAccess = () => {
       setError(`Password must include: ${passwordValidation.errors.join(", ")}.`);
       return;
     }
-    if (form.reason.length > MAX_REASON) {
-      setError(`Reason must be ${MAX_REASON} characters or less.`);
-      return;
-    }
-
     setLoading(true);
     setError(null);
     try {
@@ -489,25 +481,24 @@ const RequestAccess = () => {
               </div>
 
               <div>
-                <label htmlFor="reason" className="block mb-2 text-sm text-gray-700">
-                  Reason for Access Request <span className="text-red-500">*</span>
+                <label htmlFor="requestedRole" className="block mb-2 text-sm text-gray-700">
+                  Role <span className="text-red-500">*</span>
                 </label>
-                <textarea
-                  id="reason"
-                  name="reason"
-                  rows={4}
-                  className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none border-gray-300"
-                  placeholder="Please describe your role and why you need access to this system..."
-                  value={form.reason}
-                  onChange={setField("reason")}
+                <select
+                  id="requestedRole"
+                  name="requestedRole"
+                  className="w-full px-4 py-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all border-gray-300"
+                  value={form.requestedRole}
+                  onChange={setField("requestedRole")}
                   disabled={loading}
                   required
-                />
-                <div className="flex items-center justify-between mt-1">
-                  <p className="text-xs text-gray-500 ml-auto">
-                    {reasonCount}/{MAX_REASON}
-                  </p>
-                </div>
+                >
+                  <option value="cesu">Data Manager</option>
+                  <option value="surveillance_team">Surveillance Officer</option>
+                </select>
+                <p className="mt-2 text-xs text-gray-500">
+                  The system administrator may adjust this role during access review.
+                </p>
               </div>
             </div>
 
@@ -550,7 +541,7 @@ const RequestAccess = () => {
           <div className="mt-6 pt-6 border-t border-gray-200 text-xs text-gray-600 text-center">
             <p>
               By submitting this form, you agree that your information will be
-              reviewed by MHD administrators. This system contains sensitive
+              reviewed by system administrators. This system contains sensitive
               health data and access is granted only to authorized personnel.
             </p>
           </div>
@@ -569,7 +560,7 @@ const RequestAccess = () => {
                 {devOtpExpiry ? ` (expires in ${devOtpExpiry} minutes)` : ""}
               </p>
             )}
-            <div className="mt-4 flex gap-2.5 justify-center">
+            <div className="mt-4 grid grid-cols-6 gap-1.5">
               {accessOtpDigits.map((digit, index) => (
                 <input
                   key={index}
@@ -583,7 +574,7 @@ const RequestAccess = () => {
                   value={digit}
                   onChange={(e) => handleOtpChange(index, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                  className="h-11 w-10 text-center text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="h-11 min-w-0 w-full text-center text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   disabled={loading}
                 />
               ))}

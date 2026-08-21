@@ -89,6 +89,41 @@ export default function RecentDatasetsList({
                         </p>
                       )}
 
+                      {Number.isFinite(d.totalRows) && d.totalRows > 0 && (
+                        <p className="mt-1 text-xs text-gray-600">
+                          Imported {Number(d.insertedRows || 0).toLocaleString()} aggregated records
+                          from {Number(d.totalRows).toLocaleString()} rows
+                          {d.skippedRows > 0
+                            ? `; ${Number(d.skippedRows).toLocaleString()} invalid rows skipped`
+                            : ""}
+                          .
+                        </p>
+                      )}
+
+                      {d.validationErrorCount > 0 && (
+                        <details className="mt-2 text-xs text-amber-800">
+                          <summary className="cursor-pointer py-2.5 font-medium">
+                            View {d.validationErrorCount.toLocaleString()} validation issue
+                            {d.validationErrorCount === 1 ? "" : "s"}
+                          </summary>
+                          <ul className="space-y-1 pl-4">
+                            {(d.validationErrors || []).map((issue, index) => (
+                              <li key={`${issue.sheet || "workbook"}-${issue.row || 0}-${index}`}>
+                                {[issue.sheet, issue.row ? `row ${issue.row}` : null]
+                                  .filter(Boolean)
+                                  .join(", ") || "Workbook"}
+                                : {issue.message || "Invalid record."}
+                              </li>
+                            ))}
+                          </ul>
+                          {d.validationErrorCount > (d.validationErrors?.length || 0) && (
+                            <p className="mt-1 pl-4 text-gray-500">
+                              Showing the first {d.validationErrors?.length || 0} issues.
+                            </p>
+                          )}
+                        </details>
+                      )}
+
                       <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-500">
                         <span className="flex items-center gap-1">
                           <CalendarIcon className="w-4 h-4" />
@@ -135,7 +170,7 @@ export default function RecentDatasetsList({
           </div>
 
           {/* Pagination footer */}
-          <div className="mt-4 flex items-center justify-between">
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-gray-500">
               Showing {(page - 1) * limit + 1}–
               {Math.min(page * limit, total)} of {total}
@@ -152,7 +187,7 @@ export default function RecentDatasetsList({
                 Prev
               </button>
 
-              <div className="flex items-center gap-1">
+              <div className="hidden items-center gap-1 sm:flex">
                 {Array.from({ length: totalPages }).map((_, i) => (
                   <button
                     key={i}

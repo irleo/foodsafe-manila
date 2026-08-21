@@ -172,7 +172,7 @@ export default function Predictions() {
   const onRefresh = () => {
     const refresh = async () => {
       if (!token) throw new Error("Sign in to refresh predictions.");
-      if (!canRefresh) throw new Error("Admin or CESU access is required to refresh.");
+      if (!canRefresh) throw new Error("System Administrator or Data Manager access is required to refresh.");
       setIsGenerating(true);
       try {
         await refreshPredictions(token);
@@ -280,7 +280,7 @@ export default function Predictions() {
         <div>
           <h1 className="text-2xl font-bold">Predictions</h1>
           <p className="mt-1 max-w-4xl text-gray-600">
-            Monthly district forecasts compare Prophet with a Seasonal Naïve baseline using identical rolling-origin historical targets. Users may inspect either method or use the district model with the lower historical MAE. Forecast inputs contain validated/confirmed cases only; reported, suspected, not-validated, ruled-out, and duplicate-suppressed reports are excluded.
+            Monthly district forecasts compare Prophet with a Seasonal Naïve baseline using identical rolling-origin historical targets. Users may inspect either method or use the district model with the lower historical MAE. Forecast inputs contain confirmed cases only; reported, suspected, not-confirmed, ruled-out, and duplicate-suppressed reports are excluded.
           </p>
         </div>
         {canRefresh && (
@@ -298,7 +298,7 @@ export default function Predictions() {
 
       <DataCoverageNotice
         dataset={dataset}
-        fallbackText="Forecasts use only validated/confirmed records available in this period. No complete CESU history before 2022 is implied."
+        fallbackText="Forecasts use only confirmed cases available in this period. No complete CESU history before 2022 is implied."
       />
 
       {!token && <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-700">Sign in to load saved forecasts.</p>}
@@ -318,7 +318,7 @@ export default function Predictions() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <p className="text-sm text-gray-600">Predicted validated/confirmed cases — not actual cases</p>
+          <p className="text-sm text-gray-600">Predicted confirmed cases — not actual cases</p>
           <p className="mt-2 text-3xl font-semibold text-gray-900">{nextForecast?.predicted ?? "—"}</p>
           <p className="mt-2 text-sm text-gray-600">
             {nextForecast ? "Whole-Manila analytical estimate" : "No complete Whole-Manila forecast available"}
@@ -341,7 +341,7 @@ export default function Predictions() {
               </div>
               <div className="col-span-2 flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-blue-800">
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" aria-hidden="true" />
-                Forecast input: validated/confirmed cases only
+                Forecast input: confirmed cases only
               </div>
             </div>
           )}
@@ -440,7 +440,7 @@ export default function Predictions() {
                   <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700">Best historical performance</span>
                 )}
               </div>
-              <p className="mt-4 text-xs text-gray-500">Predicted validated/confirmed cases — not actual</p>
+              <p className="mt-4 text-xs text-gray-500">Predicted confirmed cases — not actual</p>
               <p className="mt-1 text-2xl font-semibold">{item.forecast?.predicted ?? "—"}</p>
               <p className="mt-2 text-sm text-gray-600">Model: <strong>{modelLabel(item.model)}</strong></p>
               {forecastModel === "best" && !item.comparison?.sufficient && (
