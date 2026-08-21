@@ -18,7 +18,7 @@ const NOTIFICATION_POLL_MS =
     ? configuredPollMs
     : 60000;
 
-export default function Navbar() {
+export default function Navbar({ isSidebarOpen, toggleSidebar }) {
   const { auth, loading } = useAuth();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -59,8 +59,9 @@ export default function Navbar() {
         const data = await res.json();
         if (!isMounted) return;
         setNotifications(Array.isArray(data?.items) ? data.items : []);
-      } catch {
+      } catch (error) {
         if (!isMounted) return;
+        console.error("Failed to refresh notifications", error);
       } finally {
         requestInFlight = false;
       }
@@ -113,8 +114,9 @@ export default function Navbar() {
         const data = await res.json();
         if (!isMounted) return;
         setNotifications(Array.isArray(data?.items) ? data.items : []);
-      } catch {
+      } catch (error) {
         if (!isMounted) return;
+        console.error("Failed to load notifications", error);
         setNotifications([]);
       }
     })();
@@ -154,8 +156,8 @@ export default function Navbar() {
       });
       if (!res.ok) throw new Error("Failed to update notification");
       await fetchNotifications();
-    } catch {
-      // no-op
+    } catch (error) {
+      console.error("Failed to update notification", error);
     }
   };
 
@@ -169,8 +171,8 @@ export default function Navbar() {
       });
       if (!res.ok) throw new Error("Failed to mark all as read");
       await fetchNotifications();
-    } catch {
-      // no-op
+    } catch (error) {
+      console.error("Failed to mark notifications as read", error);
     }
   };
 
@@ -179,13 +181,23 @@ export default function Navbar() {
   return (
     <header className="bg-blue-600 border-b border-blue-800 sticky top-0 z-30 text-white">
       <nav className="px-4 sm:px-6 lg:px-8 shadow-sm z-50 relative">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex h-16 min-w-0 items-center justify-between gap-2">
 
           {/* Logo */}
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              aria-label={isSidebarOpen ? "Close navigation menu" : "Open navigation menu"}
+              aria-controls="dashboard-navigation"
+              aria-expanded={isSidebarOpen}
+              onClick={toggleSidebar}
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg hover:bg-blue-500 lg:hidden"
+            >
+              <Bars3Icon className="h-6 w-6" />
+            </button>
             <img
               src={logo}
-              className="h-9 sm:h-10 w-auto object-contain select-none"
+              className="h-8 w-auto max-w-[9rem] object-contain select-none sm:h-10 sm:max-w-none"
               alt="FoodSafe Manila"
               draggable="false"
               decoding="async"
@@ -193,7 +205,7 @@ export default function Navbar() {
           </div>
 
           {/* Right side */}
-          <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-4">
 
             {/* Notifications */}
             <div className="relative" ref={notificationsRef}>
@@ -226,10 +238,10 @@ export default function Navbar() {
 
             {/* User */}
             {auth?.accessToken && (
-              <div className="flex items-center gap-2 border-l border-blue-500 pl-4">
+              <div className="flex items-center gap-2 border-l border-blue-500 pl-2 sm:pl-4">
                 <UserCircleIcon className="h-7 w-7 text-white" />
 
-                <div className="mx-1 flex flex-col leading-tight">
+                <div className="mx-1 hidden flex-col leading-tight sm:flex">
                   <span className="font-medium text-white">
                     {auth?.username ?? "Guest"}
                   </span>

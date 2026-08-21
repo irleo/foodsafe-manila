@@ -170,7 +170,7 @@ export default function RecentDatasetsList({
           </div>
 
           {/* Pagination footer */}
-          <div className="mt-4 flex items-center justify-between">
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-gray-500">
               Showing {(page - 1) * limit + 1}–
               {Math.min(page * limit, total)} of {total}
@@ -187,7 +187,7 @@ export default function RecentDatasetsList({
                 Prev
               </button>
 
-              <div className="flex items-center gap-1">
+              <div className="hidden items-center gap-1 sm:flex">
                 {Array.from({ length: totalPages }).map((_, i) => (
                   <button
                     key={i}

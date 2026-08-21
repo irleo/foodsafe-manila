@@ -4,7 +4,7 @@ export default function NotificationsDropdown({
   onMarkAllRead,
 }) {
   return (
-    <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+    <div className="fixed left-3 right-3 top-16 z-50 mt-2 rounded-lg border border-gray-200 bg-white shadow-lg sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:w-80">
       <div className="p-4 border-b border-gray-200 flex items-center justify-between gap-2">
         <h3 className="font-semibold text-black text-[18px]">Notifications</h3>
         <button
@@ -16,7 +16,7 @@ export default function NotificationsDropdown({
         </button>
       </div>
 
-      <div className="max-h-96 overflow-y-auto">
+      <div className="max-h-96 overflow-x-hidden overflow-y-auto">
         {items.map((n) => (
           <div
             key={n.id}
@@ -40,9 +40,9 @@ export default function NotificationsDropdown({
                       : "bg-blue-500",
                 ].join(" ")}
               />
-              <div className="flex-1">
-                <p className="text-sm text-black">{n.title}</p>
-                <p className="text-xs text-gray-600 mt-1">{n.message}</p>
+              <div className="min-w-0 flex-1">
+                <p className="break-words text-sm text-black">{n.title}</p>
+                <p className="mt-1 break-words text-xs text-gray-600">{n.message}</p>
                 <p className="text-xs text-gray-400 mt-1">{n.time}</p>
                 <button
                   type="button"

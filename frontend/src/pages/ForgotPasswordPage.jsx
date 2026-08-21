@@ -263,7 +263,7 @@ export default function ForgotPassword() {
             <p className="text-sm text-gray-600 text-center mt-1">
               Enter the 6-digit code before continuing.
             </p>
-            <div className="mt-5 flex gap-2.5 justify-center">
+            <div className="mt-5 grid grid-cols-6 gap-1.5">
               {otp.map((digit, index) => (
                 <input
                   key={index}
@@ -277,7 +277,7 @@ export default function ForgotPassword() {
                   value={digit}
                   onChange={(e) => handleOtpChange(index, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                  className="h-11 w-10 text-center text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="h-11 min-w-0 w-full text-center text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   disabled={loading}
                 />
               ))}

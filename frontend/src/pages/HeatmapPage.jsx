@@ -49,7 +49,6 @@ const MONTH_OPTIONS = [
 const VIEW_MODES = [
   { value: "actual", label: "Actual" },
   { value: "forecast", label: "Forecast" },
-  { value: "comparison", label: "Actual vs Forecast" },
 ];
 
 function displayNumber(value) {
@@ -146,13 +145,6 @@ export default function Heatmap() {
     (sum, point) => sum + Number(point.predictedCases || 0),
     0,
   );
-  const comparisonActualTotal = comparisonPoints.reduce(
-    (sum, point) => sum + Number(point.actualCases || 0),
-    0,
-  );
-  const increasingDistricts = comparisonPoints.filter(
-    (point) => point.trend === "increasing",
-  ).length;
   const forecastCoverage = predictionRun?.payload?.coverage || {};
   const totalForecastDistricts = Number(forecastCoverage.totalDistricts || forecastDistrictPoints.length);
   const completeCityForecast = forecastCoverage.completeCityForecast !== false
@@ -164,13 +156,7 @@ export default function Heatmap() {
         { title: "Districts Forecasted", value: forecastDistrictPoints.length },
         { title: "Forecast Period", value: forecastLabel },
       ]
-    : viewMode === "comparison"
-      ? [
-          { title: `Actual (${basisLabel})`, value: displayNumber(comparisonActualTotal) },
-          { title: `Forecast (${forecastLabel})`, value: displayNumber(predictedTotal) },
-          { title: "Districts Forecast to Increase", value: increasingDistricts },
-        ]
-      : null;
+    : null;
 
   const topDistricts = useMemo(() => {
     if (viewMode === "actual") return buildTopDistrictsFromPoints(districtStats, 5);
@@ -190,9 +176,7 @@ export default function Heatmap() {
 
   const title = viewMode === "forecast"
     ? `District Forecast Concentration — ${forecastLabel}`
-    : viewMode === "comparison"
-      ? `Actual (${basisLabel}) vs Forecast (${forecastLabel})`
-      : "Manila Case Concentration Map";
+    : "Manila Case Concentration Map";
   const showNoData = viewMode === "actual"
     ? districtPoints.length === 0
     : !canUseForecast;
@@ -228,7 +212,7 @@ export default function Heatmap() {
       )}
 
       <div className="rounded-xl border border-blue-100 bg-white p-2 shadow-sm">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" aria-label="Map view">
+        <div className="grid grid-cols-2 gap-2" aria-label="Map view">
           {VIEW_MODES.map((mode) => {
             const isDisabled = mode.value !== "actual" && !canUseForecast;
             const isActive = viewMode === mode.value;

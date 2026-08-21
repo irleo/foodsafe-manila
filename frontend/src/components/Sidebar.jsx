@@ -14,7 +14,7 @@ import { useAuth } from "../context/AuthContext";
 import axios from "axios";
 import { notify } from "../utils/toast";
 
-export default function Sidebar({ isOpen }) {
+export default function Sidebar({ isOpen, onClose }) {
   const { auth, setAuth } = useAuth();
   const navigate = useNavigate();
 
@@ -67,9 +67,11 @@ export default function Sidebar({ isOpen }) {
 
   return (
     <aside
+      id="dashboard-navigation"
+      aria-label="Primary navigation"
       className={`
-        fixed lg:sticky top-16 left-0 h-[calc(100vh-4rem)] bg-white border-r border-gray-200 z-20
-        transition-transform duration-300 w-64
+        fixed left-0 top-16 z-20 h-[calc(100dvh-4rem)] w-64 overflow-y-auto border-r border-gray-200 bg-white
+        transition-transform duration-300 lg:sticky lg:shrink-0
         ${isOpen ? "translate-x-0" : "-translate-x-full"}
         lg:translate-x-0
       `}
@@ -81,6 +83,7 @@ export default function Sidebar({ isOpen }) {
               key={path}
               to={path}
               end={end}
+              onClick={onClose}
               className={({ isActive }) =>
                 [
                   "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",

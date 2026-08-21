@@ -560,7 +560,7 @@ const RequestAccess = () => {
                 {devOtpExpiry ? ` (expires in ${devOtpExpiry} minutes)` : ""}
               </p>
             )}
-            <div className="mt-4 flex gap-2.5 justify-center">
+            <div className="mt-4 grid grid-cols-6 gap-1.5">
               {accessOtpDigits.map((digit, index) => (
                 <input
                   key={index}
@@ -574,7 +574,7 @@ const RequestAccess = () => {
                   value={digit}
                   onChange={(e) => handleOtpChange(index, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                  className="h-11 w-10 text-center text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="h-11 min-w-0 w-full text-center text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   disabled={loading}
                 />
               ))}

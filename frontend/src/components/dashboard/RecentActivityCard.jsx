@@ -33,17 +33,19 @@ export default function RecentActivityCard({
   items = [],
   title = "Recent Activity",
 }) {
+  const visibleItems = items.slice(0, 4);
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <h2 className="mb-4 font-semibold">{title}</h2>
 
-      {items.length === 0 ? (
+      {visibleItems.length === 0 ? (
         <div className="flex min-h-85 flex-col items-center justify-center px-6 py-10 text-center">
           <p className="text-xs font-medium text-gray-700">No recent activity</p>
         </div>
       ) : (
         <div className="space-y-4">
-          {items.map((item) => (
+          {visibleItems.map((item) => (
             <div
               key={item.id}
               className="flex items-start gap-3 pb-4 border-b border-gray-100 last:border-0"

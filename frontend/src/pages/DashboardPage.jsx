@@ -81,15 +81,16 @@ export default function Dashboard() {
 
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/activity?page=1&limit=5`, {
+        const res = await fetch(`${API_BASE}/api/activity?page=1&limit=4`, {
           headers: { Authorization: token ? `Bearer ${token}` : "" },
           credentials: "include",
         });
         const data = await res.json();
         if (!isMounted) return;
         setActivity(Array.isArray(data?.items) ? data.items : []);
-      } catch {
+      } catch (error) {
         if (!isMounted) return;
+        console.error("Failed to load recent activity", error);
         setActivity([]);
       }
     })();

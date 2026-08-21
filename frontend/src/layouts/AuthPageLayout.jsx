@@ -19,8 +19,8 @@ export default function AuthPageLayout({
   }[contentWidth];
 
   return (
-    <div className="min-h-screen bg-white lg:grid lg:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.1fr)] xl:grid-cols-2">
-      <aside className="relative hidden h-screen overflow-hidden bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-700 p-12 text-white lg:sticky lg:top-0 lg:flex lg:flex-col">
+    <div className="min-h-[100dvh] bg-white lg:grid lg:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.1fr)] xl:grid-cols-2">
+      <aside className="relative hidden h-[100dvh] overflow-hidden bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-700 p-12 text-white lg:sticky lg:top-0 lg:flex lg:flex-col">
         <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/10" />
         <div className="absolute -bottom-36 -left-24 h-96 w-96 rounded-full bg-indigo-400/20" />
 
@@ -60,7 +60,7 @@ export default function AuthPageLayout({
         </header>
 
         <main
-          className={`relative flex min-h-[calc(100vh-5rem)] justify-center px-6 pb-12 pt-24 sm:px-10 lg:min-h-screen lg:px-16 lg:py-24 ${
+          className={`relative flex min-h-[calc(100dvh-5rem)] justify-center px-6 pb-12 pt-24 sm:px-10 lg:min-h-[100dvh] lg:px-16 lg:py-24 ${
             centerContent ? "items-center" : "items-start"
           }`}
         >

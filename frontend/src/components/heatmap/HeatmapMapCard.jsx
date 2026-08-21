@@ -153,7 +153,7 @@ export default function HeatmapMapCard({
       <h2 className="mb-4 text-lg font-semibold text-gray-900">{title}</h2>
       {controls}
 
-      <div className="relative h-[644px] min-h-[644px] overflow-hidden rounded">
+      <div className="relative h-[55dvh] min-h-96 overflow-hidden rounded sm:h-[36rem] lg:h-[644px]">
         {loadingOverlay}
 
         {showNoData && (

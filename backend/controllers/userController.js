@@ -47,9 +47,13 @@ export const getUsers = async (req, res) => {
 
     const total = await User.countDocuments(query);
 
+    const sort = status === "managed"
+      ? { role: 1, createdAt: -1 }
+      : { createdAt: -1 };
+
     const users = await User.find(query)
       .select("-password")
-      .sort({ createdAt: -1 })
+      .sort(sort)
       .skip(skip)
       .limit(limit)
       .lean();
