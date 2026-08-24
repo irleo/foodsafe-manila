@@ -340,31 +340,6 @@ Missing or unclear:
 - Uploaded files are stored in a local `uploads` folder. There is no retention, cleanup, or object-storage strategy documented.
 - Backend routes depend on environment secrets (`ACCESS_TOKEN_SECRET`, `REFRESH_TOKEN_SECRET`, SMTP values, Mongo URI), but production deployment guidance is minimal.
 
-## Suggested Next Steps
-
-The core Starter-tier safeguards—request caching and coalescing, MongoDB pool limits, serialized forecast execution, request and memory monitoring, notification-polling controls, mobile overlap protection, and load-test scripts—have already been implemented. The remaining work is:
-
-- [ ] Install k6 and run the included scenarios locally to establish baseline response times, throughput, and error rates.
-- [ ] Run a controlled staging load test on Render Starter and monitor memory, CPU usage, response latency, database connections, cache behavior, and the forecast queue. Do not load-test the production service without explicit approval.
-- [ ] Complete the full Flutter analyzer and mobile test suite when the local Flutter toolchain is stable.
-- [ ] Perform end-to-end testing against the configured MongoDB, Brevo, Semaphore, Firebase Cloud Messaging, and Firebase Crashlytics services.
-- [ ] Verify authentication, OTP delivery, risk alerts, dashboard data, report submission, and forecast refresh behavior in a staging deployment.
-- [ ] Tune cache durations, MongoDB pool limits, slow-request thresholds, and forecast scheduling using measurements from the staging tests.
-- [ ] Split the large frontend JavaScript bundle into lazily loaded routes or feature chunks to reduce its current initial download and parsing cost.
-- [ ] Configure Render health checks and deployment-after-CI behavior, then test a failed-release rollback before production rollout.
-- [ ] Review the final environment variables and secrets in Render, deploy the verified revision, and monitor the service during the pilot period.
-
-
-## Other Tasks
-
-- [ ] User/device-based rate-limit changes
-- [ ] Report-model index modifications
-- [ ] Firebase token storage and FCM integration
-- [ ] Authentication pagination
-- [ ] Dataset-file deletion
-- [ ] Moving forecasting to a separate Render service
-- [ ] Increasing the mobile polling interval beyond 45 seconds
-
 ## File Inventory
 
 ### Root
