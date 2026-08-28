@@ -70,12 +70,12 @@ function getLabel(row) {
   return "";
 }
 
-function monthIndex(row) {
-  if (row?.year == null || row?.month == null) return null;
+function periodIndex(row) {
+  if (row?.year == null) return null;
   const year = Number(row.year);
-  const month = Number(row.month);
-  if (!Number.isFinite(year) || !Number.isFinite(month)) return null;
-  return year * 12 + month - 1;
+  const period = Number(row.week ?? row.month);
+  if (!Number.isFinite(year) || !Number.isFinite(period)) return null;
+  return year * 12 + period - 1;
 }
 
 export default function YearlyActualVsPredictedLineChart({
@@ -99,12 +99,12 @@ export default function YearlyActualVsPredictedLineChart({
         const upperBound = Number(row?.upperBound ?? row?.upper);
 
         const isForecast = Boolean(row?.isForecast || row?.isPrimaryTarget);
-        const periodIndex = monthIndex(row);
+        const rowPeriodIndex = periodIndex(row);
 
         return {
           id: index,
           label: getLabel(row),
-          periodIndex,
+          periodIndex: rowPeriodIndex,
           actual: Number.isFinite(actual) ? actual : null,
           predicted: Number.isFinite(predicted) ? predicted : null,
           lowerBound: Number.isFinite(lowerBound) ? lowerBound : null,
@@ -186,7 +186,7 @@ export default function YearlyActualVsPredictedLineChart({
               <Tooltip
                 formatter={(value, name) => {
                   const labels = {
-                    actualLine: "Historical confirmed",
+                    actualLine: "Historical eligible cases",
                     predictedLine: "Predicted (not actual)",
                     lowerBound: "Lower Bound",
                     upperBound: "Upper Bound",
@@ -199,7 +199,7 @@ export default function YearlyActualVsPredictedLineChart({
               <Legend
                 formatter={(value) => {
                   const labels = {
-                    actualLine: "Historical confirmed",
+                    actualLine: "Historical eligible cases",
                     predictedLine: "Predicted (not actual)",
                     confidenceBand: "Prediction Range",
                   };

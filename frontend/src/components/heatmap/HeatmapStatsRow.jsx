@@ -10,6 +10,16 @@ function StatCard({ title, value }) {
 }
 
 function StatusCard({ value, options, onChange, disabled = false }) {
+  if (disabled) {
+    return (
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-center shadow-sm sm:p-6">
+        <p className="text-sm font-medium text-blue-700">Forecast Case Scope</p>
+        <p className="mt-2 text-base font-semibold text-blue-950">Disease-specific eligible cases</p>
+        <p className="mt-1 text-xs text-blue-600">Based on the selected disease case definition</p>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-center shadow-sm sm:p-6">
       <label htmlFor="heatmap-status" className="block text-sm font-medium text-blue-700">
@@ -21,8 +31,6 @@ function StatusCard({ value, options, onChange, disabled = false }) {
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
-        title={disabled ? "Forecasts use confirmed cases only" : undefined}
-        aria-describedby={disabled ? "heatmap-status-requirement" : undefined}
       >
         {options.map((option) => (
           <option key={option} value={option}>
@@ -30,11 +38,6 @@ function StatusCard({ value, options, onChange, disabled = false }) {
           </option>
         ))}
       </select>
-      {disabled && (
-        <p id="heatmap-status-requirement" className="mt-2 text-xs font-normal text-blue-600">
-          Required for forecast views
-        </p>
-      )}
     </div>
   );
 }

@@ -11,6 +11,11 @@ import { paginationMeta, parsePagination } from "../utils/pagination.js";
 import { refreshDashboardSummaryAfterWrite } from "../services/dashboardSummaryService.js";
 import { refreshMonthlyDistrictPredictions } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
 import { listReportAudit, recordReportAudit } from "../services/reportAuditService.js";
+import { getDohMorbidityWeek } from "../utils/dohMorbidityWeek.js";
+import {
+  normalizeSurveillanceDisease,
+  validateProbableClassification,
+} from "../constants/surveillanceMethodology.js";
 
 const REPORT_LIST_FIELDS = [
   "_id",
@@ -24,6 +29,12 @@ const REPORT_LIST_FIELDS = [
   "caseCount",
   "foodSource",
   "reportedAt",
+  "surveillanceDate",
+  "surveillanceDateBasis",
+  "epidemiologicalYear",
+  "epidemiologicalWeek",
+  "weekStartDate",
+  "disease",
   "createdAt",
   "reportedBy",
   "source",
@@ -34,6 +45,7 @@ const REPORT_LIST_FIELDS = [
   "investigation",
   "suspectedDecision",
   "validation",
+  "classificationEvidence",
   "remarks",
   "isCounted",
   "excludeReason",
@@ -230,6 +242,7 @@ export const createReport = async (req, res) => {
         ? Number(exposureBarangayNo)
         : null;
 
+    const morbidityWeek = getDohMorbidityWeek(parsedReportedAt);
     const payload = {
       datasetId: datasetId || null,
       location: {
@@ -252,6 +265,11 @@ export const createReport = async (req, res) => {
       caseCount: clampedCaseCount,
       foodSource: foodSource ? String(foodSource).trim() : null,
       reportedAt: parsedReportedAt,
+      surveillanceDate: parsedReportedAt,
+      surveillanceDateBasis: "report_date",
+      epidemiologicalYear: morbidityWeek.epidemiologicalYear,
+      epidemiologicalWeek: morbidityWeek.epidemiologicalWeek,
+      weekStartDate: morbidityWeek.weekStartDate,
       reportedBy: req.user.id,
       source: "citizen_app",
       caseClassification: "reported",
@@ -412,11 +430,45 @@ export const getReports = async (req, res) => {
     }
     const canAccessPatientIdentity =
       viewer.role === "admin" || viewer.canAccessPatientIdentity === true;
-    const { datasetId, district, onlyCounted, from, to } = req.query;
+    const {
+      datasetId,
+      district,
+      onlyCounted,
+      from,
+      to,
+      status,
+      search,
+      sortOrder = "desc",
+    } = req.query;
     const { page, limit, skip } = parsePagination(req.query);
 
     const query = {};
-    if (datasetId) query.datasetId = datasetId;
+    if (datasetId) {
+      if (!mongoose.Types.ObjectId.isValid(datasetId)) {
+        return res.status(400).json({ message: "Invalid dataset ID." });
+      }
+      query.datasetId = new mongoose.Types.ObjectId(datasetId);
+    }
+
+    const allowedStatuses = new Set([
+      "reported",
+      "suspected",
+      "probable",
+      "confirmed",
+      "not_validated",
+      "ruled_out",
+    ]);
+    if (status) {
+      const normalizedStatus = String(status).trim().toLowerCase();
+      if (!allowedStatuses.has(normalizedStatus)) {
+        return res.status(400).json({ message: "Invalid report status." });
+      }
+      query.currentStatus = normalizedStatus;
+    }
+
+    if (!["asc", "desc"].includes(String(sortOrder).toLowerCase())) {
+      return res.status(400).json({ message: "Invalid date sort order." });
+    }
 
     if (district) {
       const districtKey = normalizeDistrictKey(district);
@@ -432,6 +484,33 @@ export const getReports = async (req, res) => {
     }
 
     if (onlyCounted === "true") query.isCounted = true;
+
+    const normalizedSearch = String(search || "").trim();
+    if (normalizedSearch.length > 100) {
+      return res.status(400).json({ message: "Search is too long." });
+    }
+    if (normalizedSearch) {
+      const escapedSearch = normalizedSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const searchRegex = new RegExp(escapedSearch, "i");
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { "location.name": searchRegex },
+          { "location.barangay": searchRegex },
+          { "location.district": searchRegex },
+          { symptoms: searchRegex },
+          {
+            $expr: {
+              $regexMatch: {
+                input: { $toString: "$_id" },
+                regex: escapedSearch,
+                options: "i",
+              },
+            },
+          },
+        ],
+      });
+    }
 
     if (from || to) {
       query.reportedAt = {};
@@ -453,23 +532,45 @@ export const getReports = async (req, res) => {
       }
     }
 
-    let reportsQuery = Report.find(query)
-        .sort({ reportedAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .select(REPORT_LIST_FIELDS)
-        .populate("investigation.personnelIds", "username")
-        .populate("investigation.recordedBy", "username")
-        .populate("suspectedDecision.markedBy", "username")
-        .populate("validation.validatedBy", "username");
-    if (canAccessPatientIdentity) {
-      reportsQuery = reportsQuery.populate("reportedBy", "username email phone_number");
-    }
+    const statusPriority = {
+      $switch: {
+        branches: [
+          { case: { $eq: ["$currentStatus", "reported"] }, then: 0 },
+          { case: { $eq: ["$currentStatus", "suspected"] }, then: 1 },
+          { case: { $eq: ["$currentStatus", "probable"] }, then: 2 },
+          { case: { $eq: ["$currentStatus", "not_validated"] }, then: 3 },
+          { case: { $eq: ["$currentStatus", "ruled_out"] }, then: 4 },
+          { case: { $eq: ["$currentStatus", "confirmed"] }, then: 5 },
+        ],
+        default: 6,
+      },
+    };
+    const direction = String(sortOrder).toLowerCase() === "asc" ? 1 : -1;
+    const projection = Object.fromEntries(
+      REPORT_LIST_FIELDS.split(" ").map((field) => [field, 1]),
+    );
 
-    const [reports, total] = await Promise.all([
-      reportsQuery.lean(),
+    const [rawReports, total] = await Promise.all([
+      Report.aggregate([
+        { $match: query },
+        { $addFields: { _statusPriority: statusPriority } },
+        { $sort: { _statusPriority: 1, reportedAt: direction, _id: direction } },
+        { $skip: skip },
+        { $limit: limit },
+        { $project: projection },
+      ]),
       Report.countDocuments(query),
     ]);
+    const populatePaths = [
+      { path: "investigation.personnelIds", select: "username" },
+      { path: "investigation.recordedBy", select: "username" },
+      { path: "suspectedDecision.markedBy", select: "username" },
+      { path: "validation.validatedBy", select: "username" },
+    ];
+    if (canAccessPatientIdentity) {
+      populatePaths.push({ path: "reportedBy", select: "username email phone_number" });
+    }
+    const reports = await Report.populate(rawReports, populatePaths);
 
     // Back-compat: ensure caseClassification exists for old docs
     return res.json({
@@ -528,7 +629,7 @@ export const getReports = async (req, res) => {
 };
 
 const workflowStatusFields =
-  "currentStatus caseClassification investigationStatus validationStatus";
+  "currentStatus caseClassification investigationStatus validationStatus disease investigation.suspectedDisease classificationEvidence validation";
 
 function requireText(value, fieldName) {
   const normalized = String(value || "").trim();
@@ -553,6 +654,12 @@ export const completeInvestigation = async (req, res) => {
     const findings = requireText(req.body?.findings, "Investigation findings");
     if (locationVisited.error || findings.error) {
       return res.status(400).json({ message: locationVisited.error || findings.error });
+    }
+    const suspectedDisease = normalizeSurveillanceDisease(req.body?.suspectedDisease);
+    if (!suspectedDisease) {
+      return res.status(400).json({
+        message: "Select a supported suspected disease before completing the investigation.",
+      });
     }
 
     const symptoms = Array.isArray(req.body?.symptoms)
@@ -579,6 +686,7 @@ export const completeInvestigation = async (req, res) => {
       personnelIds: validPersonnel.map((person) => person._id),
       locationVisited: locationVisited.value,
       findings: findings.value,
+      suspectedDisease,
       symptoms,
       foodExposureInformation: String(req.body?.foodExposureInformation || "").trim(),
       remarks: String(req.body?.remarks || "").trim(),
@@ -586,6 +694,7 @@ export const completeInvestigation = async (req, res) => {
       recordedAt: new Date(),
     };
     report.investigationStatus = "completed";
+    report.disease = suspectedDisease;
     await report.save();
     await recordReportAudit({
       reportId: report._id,
@@ -593,7 +702,10 @@ export const completeInvestigation = async (req, res) => {
       action: "investigation_recorded",
       previousStatus: report.currentStatus,
       newStatus: report.currentStatus,
-      details: { investigationId: String(report.investigation.investigationId) },
+      details: {
+        investigationId: String(report.investigation.investigationId),
+        suspectedDisease,
+      },
     });
     return res.json({ message: "Investigation completed.", report: await Report.findById(report._id).select(workflowStatusFields).lean() });
   } catch (error) {
@@ -609,10 +721,19 @@ export const markReportSuspected = async (req, res) => {
     if (report.investigationStatus !== "completed" || report.currentStatus !== "reported") {
       return res.status(409).json({ message: "A completed investigation is required before marking this case as suspected." });
     }
+    const suspectedDisease = normalizeSurveillanceDisease(
+      report.disease || report.investigation?.suspectedDisease,
+    );
+    if (!suspectedDisease) {
+      return res.status(409).json({
+        message: "The completed investigation must identify a supported disease before this report can be marked suspected.",
+      });
+    }
 
     const previousStatus = report.currentStatus;
     report.caseClassification = "suspected";
     report.currentStatus = "suspected";
+    report.disease = suspectedDisease;
     report.suspectedDecision = {
       outcome: "suspected",
       markedBy: req.user.id,
@@ -707,42 +828,60 @@ export const ruleOutReport = async (req, res) => {
 export const validateReport = async (req, res) => {
   try {
     const result = String(req.body?.result || "").trim();
-    if (!["confirmed", "not_validated"].includes(result)) {
-      return res.status(400).json({ message: "Confirmation result must be Confirmed or Not Confirmed." });
+    if (!["probable", "confirmed", "not_validated"].includes(result)) {
+      return res.status(400).json({ message: "Classification result must be Probable, Confirmed, or Not Confirmed." });
     }
     const supportingFindings = requireText(req.body?.supportingFindings, "Supporting findings");
     if (supportingFindings.error) return res.status(400).json({ message: supportingFindings.error });
     const laboratoryEvidence = {
       value: String(req.body?.laboratoryEvidence || "").trim(),
     };
-    const condition =
-      result === "confirmed"
-        ? requireText(req.body?.condition, "Confirmed condition")
-        : { value: String(req.body?.condition || "").trim() };
-    if (condition.error) {
-      return res.status(400).json({ message: condition.error });
-    }
-
     const report = await Report.findById(req.params.id);
     if (!report) return res.status(404).json({ message: "Report not found." });
-    if (report.currentStatus !== "suspected") {
-      return res.status(409).json({ message: "Only a suspected case can receive a confirmation outcome." });
+    if (!["suspected", "probable"].includes(report.currentStatus)) {
+      return res.status(409).json({ message: "Only a suspected or probable case can receive a classification outcome." });
+    }
+    const disease = normalizeSurveillanceDisease(
+      report.disease || report.investigation?.suspectedDisease,
+    );
+    if (!disease) {
+      return res.status(409).json({ message: "This report has no supported investigated disease." });
+    }
+    const evidenceType = String(req.body?.evidenceType || "").trim().toLowerCase();
+    if (result === "probable") {
+      const probableValidation = validateProbableClassification(disease, evidenceType);
+      if (!probableValidation.ok) {
+        return res.status(400).json({ message: probableValidation.message });
+      }
     }
 
     const previousStatus = report.currentStatus;
     report.caseClassification = result;
     report.currentStatus = result;
     report.validationStatus = result;
+    report.disease = disease;
     report.validation = {
       validatedBy: req.user.id,
       validatedAt: new Date(),
       result,
-      condition: condition.value,
+      condition: disease,
       laboratoryEvidence: laboratoryEvidence.value,
       supportingFindings: supportingFindings.value,
       remarks: String(req.body?.remarks || "").trim(),
     };
-    if (result === "confirmed" && !report.datasetId) {
+    report.classificationEvidence = {
+      evidenceType: result === "probable"
+        ? evidenceType
+        : result === "confirmed"
+          ? "confirmatory_laboratory_result"
+          : "supporting_findings",
+      details: String(
+        req.body?.evidenceDetails || req.body?.laboratoryEvidence || supportingFindings.value,
+      ).trim(),
+      recordedBy: req.user.id,
+      recordedAt: new Date(),
+    };
+    if (["probable", "confirmed"].includes(result) && !report.datasetId) {
       const reportedAt = new Date(report.reportedAt);
       const monthStart = new Date(
         Date.UTC(reportedAt.getUTCFullYear(), reportedAt.getUTCMonth(), 1),
@@ -764,13 +903,17 @@ export const validateReport = async (req, res) => {
     await recordReportAudit({
       reportId: report._id,
       actorId: req.user.id,
-      action: result === "confirmed" ? "case_confirmed" : "case_not_validated",
+      action: result === "confirmed"
+        ? "case_confirmed"
+        : result === "probable"
+          ? "case_marked_probable"
+          : "case_not_validated",
       previousStatus,
       newStatus: result,
-      details: { condition: condition.value || undefined },
+      details: { condition: disease, evidenceType: evidenceType || undefined },
     });
     await refreshDashboardSummaryAfterWrite();
-    if (result === "confirmed" && report.datasetId) {
+    if (["probable", "confirmed"].includes(result) && report.datasetId) {
       refreshMonthlyDistrictPredictions({
         trigger: "report_confirmation",
         datasetId: String(report.datasetId),
@@ -780,7 +923,7 @@ export const validateReport = async (req, res) => {
         console.error("Prediction refresh after report confirmation failed:", error);
       });
     }
-    return res.json({ message: "Case confirmation recorded.", report: await Report.findById(report._id).select(workflowStatusFields).lean() });
+    return res.json({ message: "Case classification recorded.", report: await Report.findById(report._id).select(workflowStatusFields).lean() });
   } catch (error) {
     console.error("Error recording case confirmation:", error);
     return res.status(500).json({ message: "Failed to record case confirmation." });

@@ -12,7 +12,7 @@ const predictionRunSchema = new mongoose.Schema(
 
     granularity: {
       type: String,
-      enum: ["yearly_total_cases", "monthly_district_cases"],
+      enum: ["yearly_total_cases", "monthly_district_cases", "weekly_disease_district_cases", "monthly_disease_district_cases"],
       required: true,
       index: true,
     },
@@ -27,7 +27,7 @@ const predictionRunSchema = new mongoose.Schema(
 
     trigger: {
       type: String,
-      enum: ["official_upload", "report_confirmation", "monthly_fallback", "manual"],
+      enum: ["official_upload", "report_confirmation", "monthly_fallback", "weekly_fallback", "manual"],
       required: true,
       index: true,
     },
@@ -53,7 +53,7 @@ const predictionRunSchema = new mongoose.Schema(
     payload: {
       type: mongoose.Schema.Types.Mixed,
       default: null,
-      // API payload: model, totals, districts, plus basisYear / basisMonth / forecastStartYear / forecastEndYear.
+      // Active payload contains monthly forecasts for every supported disease and district.
     },
 
     status: {
@@ -93,6 +93,12 @@ const predictionRunSchema = new mongoose.Schema(
       min: 1,
       max: 12,
     },
+    basisWeek: {
+      type: Number,
+      default: null,
+      min: 1,
+      max: 53,
+    },
 
     // Calendar years covered by the forward-looking forecast (inclusive). Yearly Prophet currently emits one horizon year.
     forecastStartYear: {
@@ -126,11 +132,24 @@ const predictionRunSchema = new mongoose.Schema(
       max: 12,
       index: true,
     },
+    forecastTargetWeek: {
+      type: Number,
+      default: null,
+      min: 1,
+      max: 53,
+      index: true,
+    },
     forecastHorizonMonths: {
       type: Number,
       default: null,
       min: 1,
       max: 36,
+    },
+    forecastHorizonWeeks: {
+      type: Number,
+      default: null,
+      min: 1,
+      max: 12,
     },
     inputFingerprint: {
       type: String,

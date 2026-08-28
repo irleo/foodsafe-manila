@@ -3,6 +3,7 @@ import {
   ArrowTrendingDownIcon,
   BellAlertIcon,
   DevicePhoneMobileIcon,
+  InformationCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "../context/AuthContext";
 
@@ -24,8 +25,23 @@ import { fetchCurrentThreshold } from "../api/thresholds";
 import { formatStatusLabel } from "../utils/formatStatusLabel";
 import DataCoverageNotice from "../components/DataCoverageNotice";
 import { formatCoverageRange } from "../utils/dataCoverage";
+import { SURVEILLANCE_DISEASES } from "../constants/surveillanceMethodology.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const MANILA_DISTRICTS = Array.from(
+  { length: 6 },
+  (_, index) => `District ${index + 1}`,
+);
+const THRESHOLD_SCOPE_ALL = "whole_manila";
+
+function formatThresholdPeriod(result) {
+  if (!result?.targetYear) return "Not available";
+  if (!result.targetMonth) return String(result.targetYear);
+  return new Date(Date.UTC(result.targetYear, result.targetMonth - 1)).toLocaleString(
+    "en-PH",
+    { month: "long", year: "numeric", timeZone: "UTC" },
+  );
+}
 
 export default function Dashboard() {
   const { auth } = useAuth();
@@ -73,7 +89,10 @@ export default function Dashboard() {
   const diseaseData = useMemo(() => buildDiseaseData(caseRows), [caseRows]);
 
   const [activity, setActivity] = useState([]);
+  const [thresholdScope, setThresholdScope] = useState(THRESHOLD_SCOPE_ALL);
+  const [thresholdDisease, setThresholdDisease] = useState(SURVEILLANCE_DISEASES[0]);
   const [thresholdResult, setThresholdResult] = useState(null);
+  const [thresholdLoading, setThresholdLoading] = useState(false);
   const [thresholdError, setThresholdError] = useState("");
 
   useEffect(() => {
@@ -104,26 +123,35 @@ export default function Dashboard() {
     if (!token || !datasetId || !["admin", "cesu", "surveillance_team"].includes(auth?.role)) return;
     let isMounted = true;
 
-    fetchCurrentThreshold(token, datasetId)
-      .then((data) => {
+    (async () => {
+      setThresholdLoading(true);
+      setThresholdResult(null);
+      setThresholdError("");
+
+      try {
+        const district = thresholdScope === THRESHOLD_SCOPE_ALL ? undefined : thresholdScope;
+        const response = await fetchCurrentThreshold(token, datasetId, {
+          disease: thresholdDisease,
+          district,
+        });
         if (!isMounted) return;
-        setThresholdResult(data.result || null);
-        setThresholdError("");
-      })
-      .catch((error) => {
+        setThresholdResult(response?.result || null);
+      } catch (error) {
         if (!isMounted) return;
-        setThresholdResult(null);
-        setThresholdError(error.message || "Unable to calculate surveillance thresholds");
-      });
+        setThresholdError(error.message || "Unable to calculate threshold");
+      } finally {
+        if (isMounted) setThresholdLoading(false);
+      }
+    })();
 
     return () => {
       isMounted = false;
     };
-  }, [auth?.role, datasetId, token]);
+  }, [auth?.role, datasetId, thresholdDisease, thresholdScope, token]);
 
   const thresholdTone = thresholdResult?.outcome === "epidemic_threshold_exceeded"
     ? "border-red-300 bg-red-50 text-red-950"
-    : thresholdResult?.outcome === "alert_threshold_reached"
+    : thresholdResult?.outcome === "alert_threshold_exceeded"
       ? "border-amber-300 bg-amber-50 text-amber-950"
       : thresholdResult?.outcome === "within_expected_level"
         ? "border-blue-300 bg-blue-50 text-blue-950"
@@ -140,32 +168,6 @@ export default function Dashboard() {
 
       <DataCoverageNotice dataset={dataset} />
 
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6">
-        <div className="flex items-start gap-4">
-          <div className="bg-blue-600 p-3 rounded-lg flex-shrink-0">
-            <ArrowTrendingDownIcon className="w-8 h-8 text-white" />
-          </div>
-          <div className="flex-1">
-            <h2 className="mb-2">
-              Administrative Dashboard
-            </h2>
-            <p className="text-sm text-gray-700 mb-3">
-              This web platform is designed for MHD officials, health analysts,
-              and surveillance team to manage and analyze disease outbreak data.
-              <strong className="block mt-2">For Citizens:</strong> Check out
-              the mobile app version of <strong>Foodsafe Manila</strong>.
-            </p>
-            <a
-              href=""
-              className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm"
-            >
-              <DevicePhoneMobileIcon className="w-4 h-4" />
-              Mobile App Version
-            </a>
-          </div>
-        </div>
-      </div>
-
       {["admin", "cesu", "surveillance_team"].includes(auth?.role) && (
         <section className={`rounded-xl border p-4 sm:p-5 ${thresholdTone}`}>
           <div className="flex items-start gap-3">
@@ -175,18 +177,55 @@ export default function Dashboard() {
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide opacity-70">Automatic {thresholdResult?.periodType || "surveillance"} threshold</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide opacity-70">Latest observed monthly threshold status</p>
+                    <div className="group relative">
+                      <button type="button" aria-label="About threshold methodology" className="rounded-full opacity-60 transition hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300">
+                        <InformationCircleIcon className="h-4 w-4" />
+                      </button>
+                      <div role="tooltip" className="pointer-events-none invisible absolute left-0 top-6 z-20 w-80 rounded-lg bg-gray-950 px-3 py-2 text-xs font-normal normal-case leading-5 tracking-normal text-white opacity-0 shadow-xl transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+                        This checks recorded cases from the latest complete month. The comparison uses the same calendar month from exactly five eligible previous years. A count must be higher than a threshold to cross it.
+                      </div>
+                    </div>
+                  </div>
                   <h2 className="mt-1 text-lg font-semibold">
-                    {thresholdResult ? formatStatusLabel(thresholdResult.outcome) : "Calculating threshold status…"}
+                    {thresholdLoading
+                      ? "Calculating threshold status…"
+                      : thresholdResult
+                        ? formatStatusLabel(thresholdResult.outcome)
+                        : "Threshold unavailable"}
                   </h2>
+                  <div className="">
+                    {thresholdResult?.targetYear && (
+                      <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-medium">
+                        Cases checked: {formatThresholdPeriod(thresholdResult)} (latest complete month)
+                      </span>
+                    )}
+                  </div>
                 </div>
-                {thresholdResult?.targetYear && (
-                  <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-medium">
-                    {thresholdResult.periodType === "weekly"
-                      ? `Epidemiological Week ${thresholdResult.targetWeek}, ${thresholdResult.targetYear}`
-                      : new Date(Date.UTC(thresholdResult.targetYear, thresholdResult.targetMonth - 1)).toLocaleString("en-PH", { month: "long", year: "numeric", timeZone: "UTC" })}
-                  </span>
-                )}
+                <div className="flex flex-row items-stretch gap-2 sm:items-end">
+                  <select
+                    aria-label="Threshold disease"
+                    value={thresholdDisease}
+                    onChange={(event) => setThresholdDisease(event.target.value)}
+                    className="min-h-10 rounded-lg border border-white/80 bg-white/80 px-3 py-2 text-sm font-medium text-gray-800 shadow-sm outline-none focus:ring-2 focus:ring-blue-300"
+                  >
+                    {SURVEILLANCE_DISEASES.map((disease) => (
+                      <option key={disease} value={disease}>{disease}</option>
+                    ))}
+                  </select>
+                  <select
+                    aria-label="Threshold geographic scope"
+                    value={thresholdScope}
+                    onChange={(event) => setThresholdScope(event.target.value)}
+                    className="min-h-10 rounded-lg border border-white/80 bg-white/80 px-3 py-2 text-sm font-medium text-gray-800 shadow-sm outline-none focus:ring-2 focus:ring-blue-300"
+                  >
+                    <option value={THRESHOLD_SCOPE_ALL}>Whole Manila</option>
+                    {MANILA_DISTRICTS.map((district) => (
+                      <option key={district} value={district}>{district}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {thresholdError ? (
@@ -195,7 +234,7 @@ export default function Dashboard() {
                 <>
                   <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
                     {[
-                      ["Observed confirmed", thresholdResult.observedConfirmedCases],
+                      ["Observed eligible cases", thresholdResult.observedCases],
                       ["Historical mean", thresholdResult.baselineMean ?? "Insufficient data"],
                       ["Alert threshold", thresholdResult.alertThreshold ?? "—"],
                       ["Epidemic threshold", thresholdResult.epidemicThreshold ?? "—"],
@@ -207,12 +246,21 @@ export default function Dashboard() {
                     ))}
                   </div>
                   <p className="mt-3 text-xs opacity-75">
-                    Confirmed official cases and confirmed surveillance reports are combined automatically at query time. Reported and suspected submissions are excluded.
+                    {thresholdResult.caseDefinition}
                   </p>
                   {thresholdResult.insufficiencyReason && (
-                    <p className="mt-2 rounded-md bg-white/70 px-3 py-2 text-xs font-medium">
-                      {thresholdResult.insufficiencyReason}
-                    </p>
+                    <div className="mt-3 rounded-lg border border-gray-200/80 bg-white/80 px-3 py-3">
+                      <p className="text-sm font-semibold">{thresholdResult.outcome === "no_data" ? "No verified data for this scope." : "Insufficient historical data to establish a baseline."}</p>
+                      <p className="mt-1 text-xs opacity-75">{thresholdResult.insufficiencyReason}</p>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                        <span className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-700">
+                          Available: {thresholdResult.baselinePeriods?.length || 0} of 5 required years
+                        </span>
+                        <span className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-700">
+                          No alert or epidemic status assigned
+                        </span>
+                      </div>
+                    </div>
                   )}
                 </>
               )}

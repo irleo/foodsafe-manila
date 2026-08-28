@@ -21,7 +21,9 @@ export function getPrimaryDistrictForecast(district) {
     predictedCases: Math.max(0, predictedCases),
     lowerBound: finiteNumber(target?.lowerBound ?? target?.lower),
     upperBound: finiteNumber(target?.upperBound ?? target?.upper),
-    model: district?.selectedModel || district?.operationalModel || "prophet",
+    expectedStatus: target?.expectedStatus || target?.threshold?.classification || null,
+    threshold: target?.threshold || null,
+    model: district?.operationalModel || district?.selectedModel || "prophet",
   };
 }
 

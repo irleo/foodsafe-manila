@@ -1,5 +1,10 @@
 import { normalizeDistrict as normalizeDistrictKey } from "../utils/normalizeDistrict.js";
 import { legislativeDistrictFromBarangayNo } from "../utils/legislativeDistrict.js";
+import {
+  getDohMorbidityWeek,
+  morbidityWeekStartDate,
+} from "../utils/dohMorbidityWeek.js";
+import { normalizeSurveillanceDisease } from "../constants/surveillanceMethodology.js";
 
 const ALLOWED_DISTRICTS = new Set([
   "District 1",
@@ -9,7 +14,13 @@ const ALLOWED_DISTRICTS = new Set([
   "District 5",
   "District 6",
 ]);
-const ALLOWED_SOURCES = new Set(["official", "excel", "system", "file"]);
+const ALLOWED_SOURCES = new Set([
+  "official",
+  "excel",
+  "system",
+  "file",
+  "cesu",
+]);
 const MIN_YEAR = 2015;
 const MAX_YEAR = 2100;
 
@@ -35,28 +46,7 @@ export function parseExcelDate(v) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-export function getIsoWeekData(input) {
-  const date = new Date(input);
-  if (Number.isNaN(date.getTime())) return null;
-  const utcDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  const day = utcDate.getUTCDay() || 7;
-  utcDate.setUTCDate(utcDate.getUTCDate() + 4 - day);
-  const epidemiologicalYear = utcDate.getUTCFullYear();
-  const yearStart = new Date(Date.UTC(epidemiologicalYear, 0, 1));
-  const epidemiologicalWeek = Math.ceil((((utcDate - yearStart) / 86400000) + 1) / 7);
-  const weekStartDate = new Date(utcDate);
-  weekStartDate.setUTCDate(utcDate.getUTCDate() - ((utcDate.getUTCDay() || 7) - 1));
-  return { epidemiologicalYear, epidemiologicalWeek, weekStartDate };
-}
-
-function isoWeekStartDate(year, week) {
-  const januaryFourth = new Date(Date.UTC(year, 0, 4));
-  const day = januaryFourth.getUTCDay() || 7;
-  const firstMonday = new Date(januaryFourth);
-  firstMonday.setUTCDate(januaryFourth.getUTCDate() - day + 1);
-  firstMonday.setUTCDate(firstMonday.getUTCDate() + (week - 1) * 7);
-  return firstMonday;
-}
+export const getIsoWeekData = getDohMorbidityWeek;
 
 export function normalizeCaseClassification(input = "") {
   const v = String(input || "")
@@ -70,7 +60,8 @@ export function normalizeCaseClassification(input = "") {
 }
 
 export function normalizeDisease(input = "") {
-  return String(input || "").trim().replace(/\s+/g, " ");
+  const normalized = String(input || "").trim().replace(/\s+/g, " ");
+  return normalizeSurveillanceDisease(normalized) || normalized;
 }
 
 export function normalizeDistrict(input = "") {
@@ -92,12 +83,9 @@ export function normalizeDistrict(input = "") {
   const numbered = raw.match(/^district\s*([1-6])$/i);
   if (numbered) return `District ${numbered[1]}`;
 
-  // Fallback: normalize spacing/casing but preserve human-readable label
+  // Unknown district labels are handled as row-level validation errors.
   const normKey = normalizeDistrictKey(raw);
-  return normKey
-    .split("_")
-    .map((s) => (s ? s[0].toUpperCase() + s.slice(1) : s))
-    .join(" ");
+  return normKey || "";
 }
 
 export function isBlankRow(obj = {}) {
@@ -108,11 +96,28 @@ export function isBlankRow(obj = {}) {
 }
 
 export function normalizeRawHealthOfficeRow({ sheetName, row }) {
-  const { barangay, barangayNo } = normalizeBarangay(row["Barangay"]);
+  let { barangay, barangayNo } = normalizeBarangay(row["Barangay"]);
   const reportedAt = parseExcelDate(
     row["Report date"] ?? row["report_date"] ?? row["Report Date"],
   );
-  const district = normalizeDistrict(row["District"] ?? row["district"]);
+  const rawDistrict = row["District"] ?? row["district"];
+  let district = normalizeDistrict(rawDistrict);
+
+  // Some source workbooks place the barangay number in District when Barangay
+  // is blank. Only treat values outside the valid 1–6 district range this way.
+  if (!district && !barangayNo) {
+    const misplacedBarangay = normalizeBarangay(rawDistrict);
+    if (misplacedBarangay.barangayNo > 6) {
+      barangay = misplacedBarangay.barangay;
+      barangayNo = misplacedBarangay.barangayNo;
+    }
+  }
+
+  // Manila legislative districts are deterministic from the barangay number.
+  // Derive a missing district without modifying the uploaded source workbook.
+  if (!district && barangayNo) {
+    district = legislativeDistrictFromBarangayNo(barangayNo) || "";
+  }
   const cls = normalizeCaseClassification(
     row["Case Classification"] ??
       row["case_classification"] ??
@@ -160,7 +165,7 @@ export function normalizeRawHealthOfficeRow({ sheetName, row }) {
       message: `Barangay ${barangayNo} does not belong to ${district}.`,
     };
   const month = reportedAt.getUTCMonth() + 1;
-  const weekData = getIsoWeekData(reportedAt);
+  const weekData = getDohMorbidityWeek(reportedAt);
 
   return {
     ok: true,
@@ -175,6 +180,8 @@ export function normalizeRawHealthOfficeRow({ sheetName, row }) {
       epidemiologicalYear: weekData.epidemiologicalYear,
       epidemiologicalWeek: weekData.epidemiologicalWeek,
       weekStartDate: weekData.weekStartDate,
+      surveillanceDate: reportedAt,
+      surveillanceDateBasis: "report_date",
       caseClassification: cls,
       cases: 1,
       source: "official",
@@ -272,7 +279,7 @@ export function normalizeTemplateRow(row = {}) {
       message: "Week start date must be a valid Excel date or YYYY-MM-DD value.",
     };
   if (hasWeekStartDate && suppliedWeekStartDate && hasEpidemiologicalWeek) {
-    const suppliedWeek = getIsoWeekData(suppliedWeekStartDate);
+    const suppliedWeek = getDohMorbidityWeek(suppliedWeekStartDate);
     if (
       suppliedWeek?.epidemiologicalYear !== epidemiologicalYear ||
       suppliedWeek?.epidemiologicalWeek !== epidemiologicalWeek
@@ -300,7 +307,7 @@ export function normalizeTemplateRow(row = {}) {
     return {
       ok: false,
       field: "source",
-      message: "Source must be official, excel, system, or file.",
+      message: "Source must be official, excel, system, file, or CESU.",
     };
 
   return {
@@ -321,8 +328,10 @@ export function normalizeTemplateRow(row = {}) {
         : null,
       weekStartDate: suppliedWeekStartDate
         || (Number.isFinite(epidemiologicalWeek)
-          ? isoWeekStartDate(Math.trunc(epidemiologicalYear), Math.trunc(epidemiologicalWeek))
+          ? morbidityWeekStartDate(Math.trunc(epidemiologicalYear), Math.trunc(epidemiologicalWeek))
           : null),
+      surveillanceDate: suppliedWeekStartDate || null,
+      surveillanceDateBasis: suppliedWeekStartDate ? "provided_week_start" : "provided_period",
       caseClassification: cls,
       cases,
       source,

@@ -94,7 +94,7 @@ try {
   );
   const predictionQuery = predictionSample || {
     model: "prophet",
-    granularity: "monthly_district_cases",
+    granularity: "monthly_disease_district_cases",
     datasetScope: "all",
   };
   results.push(

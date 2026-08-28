@@ -8,6 +8,7 @@ import { logActivity } from "../utils/logActivity.js";
 import { importOfficialCasesXlsx } from "../services/officialCaseImportService.js";
 import { refreshMonthlyDistrictPredictions } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
 import { createNotification } from "../services/notificationService.js";
+import { resolveCumulativeDatasetContext } from "../services/cumulativeOfficialCaseService.js";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -47,6 +48,19 @@ export const uploadDataset = async (req, res) => {
     const reportingFrequency = String(req.body.reportingFrequency || "weekly")
       .trim()
       .toLowerCase();
+    let districtCoverage = [];
+    try {
+      districtCoverage = req.body.districtCoverage
+        ? JSON.parse(req.body.districtCoverage)
+        : [];
+    } catch {
+      cleanupUploadedFile(req);
+      return res.status(400).json({ message: "District coverage must be valid JSON." });
+    }
+    if (!Array.isArray(districtCoverage)) {
+      cleanupUploadedFile(req);
+      return res.status(400).json({ message: "District coverage must be a list." });
+    }
     const allowedProviderTypes = new Set([
       "hospital",
       "health_center",
@@ -112,6 +126,7 @@ export const uploadDataset = async (req, res) => {
       providerName,
       reportingFrequency,
       contentHash,
+      districtCoverage,
     });
 
     if (!result.success) {
@@ -265,7 +280,6 @@ export const handleDatasetUploadError = async (err, req, res, next) => {
     const filePath = req.file?.path || "upload_rejected";
     const mimeType = req.file?.mimetype || String(req.body?.mimeType || "");
     const reason = err?.message || "Upload rejected.";
-
     const failed = await Dataset.create({
       name,
       dataSource: "official_upload",
@@ -346,25 +360,32 @@ export const listDatasets = async (req, res) => {
         .skip(skip)
         .limit(limit)
         .select(
-          "name dataSource providerType providerName reportingFrequency ingestionMethod originalFileName storedFileName recordsCount status coverageStart coverageEnd createdAt errorMessage uploadedBy formatType totalRows insertedRows skippedRows validationErrorCount validationErrors",
+          "name dataSource dataMode providerType providerName reportingFrequency ingestionMethod originalFileName storedFileName recordsCount status coverageStart coverageEnd districtCoverage createdAt errorMessage uploadedBy formatType totalRows insertedRows skippedRows validationErrorCount validationErrors",
         )
         .populate("uploadedBy", "username email role")
         .lean(),
       Dataset.countDocuments(filter),
     ]);
 
-    const items = datasets.map((entry) => {
+    const items = await Promise.all(datasets.map(async (entry) => {
       const validationErrors = Array.isArray(entry.validationErrors)
         ? entry.validationErrors
         : [];
+      const cumulative = entry.status === "validated"
+        ? await resolveCumulativeDatasetContext(entry._id)
+        : null;
       return {
         ...entry,
+        analyticalCoverageStart: cumulative?.coverageStart || null,
+        analyticalCoverageEnd: cumulative?.coverageEnd || null,
+        cumulativeUploadCount: cumulative?.uploadCount || 0,
+        contributingAgencyCount: cumulative?.providerCount || 0,
         validationErrorCount: Number.isFinite(entry.validationErrorCount)
           ? entry.validationErrorCount
           : validationErrors.length,
         validationErrors: validationErrors.slice(0, 5),
       };
-    });
+    }));
 
     res.json({
       items,

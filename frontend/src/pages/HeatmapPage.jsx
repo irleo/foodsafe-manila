@@ -16,6 +16,7 @@ import { useAuth } from "../context/AuthContext";
 import { useLatestDatasetId } from "../hooks/useLatestDatasetId";
 import { useHeatmapPoints } from "../hooks/useHeatmapPoints";
 import { useLatestPredictionRun } from "../hooks/useLatestPredictionRun";
+import DataCoverageNotice from "../components/DataCoverageNotice";
 
 import HeatmapStatsRow from "../components/heatmap/HeatmapStatsRow";
 import HeatmapMapCard from "../components/heatmap/HeatmapMapCard";
@@ -61,7 +62,7 @@ function displayNumber(value) {
 export default function Heatmap() {
   const { auth } = useAuth();
   const token = auth?.accessToken;
-  const { datasetId } = useLatestDatasetId(token);
+  const { datasetId, dataset } = useLatestDatasetId(token);
   const { predictionRun, loading: forecastLoading, errorMsg: forecastError } =
     useLatestPredictionRun(token);
 
@@ -72,9 +73,23 @@ export default function Heatmap() {
   const [selectedCaseClassification, setSelectedCaseClassification] =
     useState("confirmed");
 
+  const selectedForecastPayload = useMemo(
+    () => {
+      const globalPayload = predictionRun?.payload || {};
+      if (!Array.isArray(globalPayload.diseases)) return globalPayload;
+      return globalPayload.diseases.find((item) => item.disease === selectedDisease)
+        || globalPayload.diseases[0]
+        || {};
+    },
+    [predictionRun, selectedDisease],
+  );
+  const selectedPredictionRun = useMemo(() => (
+    predictionRun ? { ...predictionRun, payload: selectedForecastPayload } : null
+  ), [predictionRun, selectedForecastPayload]);
+
   const forecastDistrictPoints = useMemo(
-    () => buildForecastDistrictPoints(predictionRun),
-    [predictionRun],
+    () => buildForecastDistrictPoints(selectedPredictionRun),
+    [selectedPredictionRun],
   );
   const forecastAvailable = forecastDistrictPoints.length > 0;
   const forecastMatchesDataset = !predictionRun?.basisDatasetId
@@ -85,10 +100,12 @@ export default function Heatmap() {
   const changeViewMode = (nextMode) => {
     if (nextMode !== "actual") {
       if (!canUseForecast) return;
-      setSelectedCaseClassification("confirmed");
-      setSelectedDisease("All");
-      if (predictionRun?.basisYear) setSelectedYear(Number(predictionRun.basisYear));
-      if (predictionRun?.basisMonth) setSelectedMonth(Number(predictionRun.basisMonth));
+    }
+    if (nextMode === "forecast") {
+      const forecastDiseases = predictionRun?.payload?.diseases?.map((item) => item.disease).filter(Boolean) || [];
+      if (!forecastDiseases.includes(selectedDisease) && forecastDiseases[0]) {
+        setSelectedDisease(forecastDiseases[0]);
+      }
     }
     setViewMode(nextMode);
   };
@@ -125,8 +142,12 @@ export default function Heatmap() {
     const diseases = Array.isArray(filterOptions?.diseases)
       ? filterOptions.diseases.filter(Boolean)
       : [];
-    return ["All", ...diseases.sort((a, b) => a.localeCompare(b))];
-  }, [filterOptions]);
+    const forecastDiseases = Array.isArray(predictionRun?.payload?.diseases)
+      ? predictionRun.payload.diseases.map((item) => item.disease).filter(Boolean)
+      : [];
+    const combined = [...new Set([...diseases, ...forecastDiseases])].sort((a, b) => a.localeCompare(b));
+    return viewMode === "forecast" ? combined : ["All", ...combined];
+  }, [filterOptions, predictionRun, viewMode]);
 
   const classificationOptions = useMemo(() => {
     const classes = Array.isArray(filterOptions?.caseClassifications)
@@ -136,7 +157,10 @@ export default function Heatmap() {
       .sort((a, b) => a.localeCompare(b));
   }, [filterOptions, selectedCaseClassification]);
 
-  const basisLabel = formatForecastPeriod(predictionRun?.basisYear, predictionRun?.basisMonth);
+  const basisLabel = formatForecastPeriod(
+    predictionRun?.basisYear,
+    predictionRun?.basisMonth,
+  );
   const forecastLabel = formatForecastPeriod(
     predictionRun?.forecastTargetYear,
     predictionRun?.forecastTargetMonth,
@@ -145,7 +169,9 @@ export default function Heatmap() {
     (sum, point) => sum + Number(point.predictedCases || 0),
     0,
   );
-  const forecastCoverage = predictionRun?.payload?.coverage || {};
+  const forecastCoverage = selectedForecastPayload?.wholeManila?.coverage
+    || selectedForecastPayload?.coverage
+    || {};
   const totalForecastDistricts = Number(forecastCoverage.totalDistricts || forecastDistrictPoints.length);
   const completeCityForecast = forecastCoverage.completeCityForecast !== false
     && forecastDistrictPoints.length === totalForecastDistricts;
@@ -175,7 +201,7 @@ export default function Heatmap() {
   );
 
   const title = viewMode === "forecast"
-    ? `District Forecast Concentration — ${forecastLabel}`
+    ? `Confirmed-Case Forecast Concentration — ${forecastLabel}`
     : "Manila Case Concentration Map";
   const showNoData = viewMode === "actual"
     ? districtPoints.length === 0
@@ -199,6 +225,8 @@ export default function Heatmap() {
           Explore actual case concentration or the same district-level Best Model forecast saved by the Predictions module. Forecast values are displayed separately from observed cases.
         </p>
       </div>
+
+      <DataCoverageNotice dataset={dataset} />
 
       {errorMsg && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -235,7 +263,7 @@ export default function Heatmap() {
         <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 text-sm text-blue-950">
           <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
             <p>
-              <strong>Forecast—not actual cases.</strong> Target: {forecastLabel}. Input basis: confirmed cases through {basisLabel}. Each district uses the model selected by rolling-backtest MAE, with the operational fallback identified where comparison history is insufficient.
+              <strong>Forecast—not actual cases.</strong> Showing {selectedDisease} for {forecastLabel}, based on monthly records through {basisLabel}. Each district uses the forecasting method that performed better on recent historical months.
             </p>
             <p className="shrink-0 text-xs text-blue-700">
               Prediction run {predictionRun.predictionRunId?.slice(-8)} · {predictionRun.generatedAt ? new Date(predictionRun.generatedAt).toLocaleString("en-PH") : "date unavailable"}
@@ -265,7 +293,7 @@ export default function Heatmap() {
             <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <label className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                  {viewMode === "actual" ? "Year" : "Actual basis year"}
+                  {viewMode === "actual" ? "Year" : "Forecast basis year"}
                   <select
                     className={selectClass}
                     value={selectedYear}
@@ -279,17 +307,21 @@ export default function Heatmap() {
                 </label>
 
                 <label className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                  {viewMode === "actual" ? "Month" : "Actual basis month"}
+                  {viewMode === "actual" ? "Month" : "Forecast basis month"}
                   <select
                     className={selectClass}
-                    value={selectedMonth}
+                    value={viewMode === "actual" ? selectedMonth : predictionRun?.basisMonth || "All"}
                     disabled={viewMode !== "actual"}
                     onChange={(event) => setSelectedMonth(event.target.value === "All" ? "All" : Number(event.target.value))}
                   >
-                    <option value="All">All Months</option>
-                    {MONTH_OPTIONS.map((month) => (
-                      <option key={month.value} value={month.value}>{month.label}</option>
-                    ))}
+                    {viewMode === "actual" ? (
+                      <>
+                        <option value="All">All Months</option>
+                        {MONTH_OPTIONS.map((month) => (
+                          <option key={month.value} value={month.value}>{month.label}</option>
+                        ))}
+                      </>
+                    ) : <option value={predictionRun?.basisMonth || "All"}>{basisLabel}</option>}
                   </select>
                 </label>
 
@@ -297,19 +329,21 @@ export default function Heatmap() {
                   Disease
                   <select
                     className={selectClass}
-                    value={selectedDisease}
+                    value={viewMode === "actual" ? selectedDisease : "confirmed_all"}
                     disabled={viewMode !== "actual"}
                     onChange={(event) => setSelectedDisease(event.target.value)}
                   >
-                    {diseaseOptions.map((option) => (
-                      <option key={option} value={option}>{option === "All" ? "All Diseases" : option}</option>
-                    ))}
+                    {viewMode === "actual"
+                      ? diseaseOptions.map((option) => (
+                          <option key={option} value={option}>{option === "All" ? "All Diseases" : option}</option>
+                        ))
+                      : <option value="confirmed_all">All Confirmed Diseases</option>}
                   </select>
                 </label>
               </div>
               {viewMode !== "actual" && (
                 <p className="mt-3 text-xs text-gray-500">
-                  Forecast filters are locked because the stored model predicts all confirmed foodborne cases by district for one target month.
+                  The saved forecast shows eligible case totals by district for the selected disease and month.
                 </p>
               )}
             </div>
@@ -336,7 +370,7 @@ export default function Heatmap() {
           />
           {viewMode === "actual"
             ? <TopDiseaseCard items={topDiseases} />
-            : <SurveillanceAttentionCard items={comparisonPoints} />}
+            : <SurveillanceAttentionCard items={forecastDistrictPoints} />}
         </div>
       </div>
     </div>

@@ -15,6 +15,13 @@ function formatModel(value) {
   return value === "seasonal_naive" ? "Seasonal Naïve" : "Prophet";
 }
 
+function formatExpectedStatus(value) {
+  if (!value) return "Threshold unavailable";
+  return String(value)
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 export default function HeatmapMapCard({
   title,
   controls,
@@ -110,7 +117,8 @@ export default function HeatmapMapCard({
         <div class="text-sm">
           <p><strong>${district}</strong></p>
           <p>Forecast target: <strong>${forecastLabel}</strong></p>
-          <p>Predicted confirmed cases: <strong>${formatNumber(forecast.predictedCases)}</strong></p>
+          <p>Predicted eligible cases: <strong>${formatNumber(forecast.predictedCases)}</strong></p>
+          <p>Expected threshold status: <strong>${formatExpectedStatus(forecast.expectedStatus)}</strong></p>
           <p>Selected district model: <strong>${formatModel(forecast.model)}</strong></p>
           <p>95% prediction interval: <strong>${formatNumber(forecast.lowerBound)} – ${formatNumber(forecast.upperBound)}</strong></p>
           <p style="margin-top:6px;color:#475569;font-size:12px">District-level forecast repeated across district polygons. This is not a barangay prediction or an actual case count.</p>
@@ -210,7 +218,7 @@ export default function HeatmapMapCard({
         <p className="text-sm text-gray-600">
           {viewMode === "actual"
             ? "Actual colors show relative concentration within the selected status and period. They are not an official DOH/CESU risk classification."
-            : "Forecast values come from the same saved monthly district prediction run displayed by the Predictions module. They are estimates for the stated period and must not be presented as observed cases."}
+            : "Forecast values come from the same saved monthly district prediction run displayed by the Predictions module. They are analytical estimates for the stated month and must not be presented as observed cases."}
         </p>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { SURVEILLANCE_DISEASES } from "../constants/surveillanceMethodology.js";
 
 const reportSchema = new mongoose.Schema(
   {
@@ -73,6 +74,16 @@ const reportSchema = new mongoose.Schema(
     foodSource: { type: String, default: null, trim: true },
 
     reportedAt: { type: Date, required: true, index: true },
+    surveillanceDate: { type: Date, default: null, index: true },
+    surveillanceDateBasis: {
+      type: String,
+      enum: ["report_date", "symptom_onset", "legacy_unknown"],
+      default: "report_date",
+    },
+    epidemiologicalYear: { type: Number, default: null, min: 2015, max: 2100 },
+    epidemiologicalWeek: { type: Number, default: null, min: 1, max: 53 },
+    weekStartDate: { type: Date, default: null },
+    disease: { type: String, enum: SURVEILLANCE_DISEASES, default: null, index: true },
 
     reportedBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -93,6 +104,7 @@ const reportSchema = new mongoose.Schema(
       enum: [
         "reported",
         "suspected",
+        "probable",
         "not_validated",
         "ruled_out",
         "confirmed",
@@ -104,7 +116,7 @@ const reportSchema = new mongoose.Schema(
 
     currentStatus: {
       type: String,
-      enum: ["reported", "suspected", "confirmed", "not_validated", "ruled_out"],
+      enum: ["reported", "suspected", "probable", "confirmed", "not_validated", "ruled_out"],
       default: "reported",
       required: true,
     },
@@ -116,7 +128,7 @@ const reportSchema = new mongoose.Schema(
     },
     validationStatus: {
       type: String,
-      enum: ["not_started", "confirmed", "not_validated"],
+      enum: ["not_started", "probable", "confirmed", "not_validated"],
       default: "not_started",
       required: true,
     },
@@ -126,6 +138,7 @@ const reportSchema = new mongoose.Schema(
       personnelIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "WebUser" }],
       locationVisited: { type: String, trim: true, maxlength: 500 },
       findings: { type: String, trim: true, maxlength: 4000 },
+      suspectedDisease: { type: String, enum: SURVEILLANCE_DISEASES },
       symptoms: [{ type: String, trim: true }],
       foodExposureInformation: { type: String, trim: true, maxlength: 4000 },
       remarks: { type: String, trim: true, maxlength: 4000 },
@@ -152,12 +165,27 @@ const reportSchema = new mongoose.Schema(
       validatedAt: { type: Date },
       result: {
         type: String,
-        enum: ["confirmed", "not_validated"],
+        enum: ["probable", "confirmed", "not_validated"],
       },
       condition: { type: String, trim: true, maxlength: 200 },
       laboratoryEvidence: { type: String, trim: true, maxlength: 4000 },
       supportingFindings: { type: String, trim: true, maxlength: 4000 },
       remarks: { type: String, trim: true, maxlength: 4000 },
+    },
+    classificationEvidence: {
+      evidenceType: {
+        type: String,
+        enum: [
+          "typhoid_rdt_positive",
+          "epidemiological_link_to_confirmed_outbreak_case",
+          "cholera_rdt_positive",
+          "confirmatory_laboratory_result",
+          "supporting_findings",
+        ],
+      },
+      details: { type: String, trim: true, maxlength: 4000 },
+      recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: "WebUser" },
+      recordedAt: { type: Date },
     },
     remarks: { type: String, default: null, trim: true, maxlength: 4000 },
 

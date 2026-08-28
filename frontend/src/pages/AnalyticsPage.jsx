@@ -9,7 +9,7 @@ import DataCoverageNotice from "../components/DataCoverageNotice";
 import { buildMonthlyTimelineData } from "../utils/analyticsCaseBuilders";
 import { formatStatusLabel } from "../utils/formatStatusLabel";
 
-const CASE_STATUS_OPTIONS = ["reported", "suspected", "confirmed"];
+const CASE_STATUS_OPTIONS = ["reported", "suspected", "probable", "confirmed"];
 
 export default function Analytics() {
   const [selectedCaseStatus, setSelectedCaseStatus] = useState("confirmed");
@@ -23,7 +23,7 @@ export default function Analytics() {
   } = useOfficialCases({
     token,
     datasetId,
-    caseClassification: ["reported", "suspected", "confirmed"],
+    caseClassification: ["reported", "suspected", "probable", "confirmed"],
     limit: 5000,
   });
 
@@ -157,9 +157,10 @@ export default function Analytics() {
             monthlyTimelineData={allStatusTimelineData}
             diseaseData={vm.diseaseData}
             districtData={vm.districtData}
-            districtStats={vm.districtStats}
             diseaseTrendData={vm.diseaseTrendData}
             diseaseTrendKeys={vm.diseaseTrendKeys}
+            token={token}
+            datasetId={datasetId}
           />
         </>
       )}

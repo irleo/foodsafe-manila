@@ -16,6 +16,9 @@ export function useReports(token, { fetchAll = false, autoFetch = true } = {}) {
       onlyCounted,
       from,
       to,
+      status,
+      search,
+      sortOrder,
       page = 1,
       limit = fetchAll ? 50 : 20,
     } = {}) => {
@@ -41,6 +44,9 @@ export function useReports(token, { fetchAll = false, autoFetch = true } = {}) {
           }
           if (from) params.set("from", from);
           if (to) params.set("to", to);
+          if (status) params.set("status", status);
+          if (search) params.set("search", search);
+          if (sortOrder) params.set("sortOrder", sortOrder);
 
           const res = await fetch(`${API_BASE}/api/reports?${params}`, {
             headers: { Authorization: `Bearer ${token}` },

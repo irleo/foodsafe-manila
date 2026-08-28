@@ -1,10 +1,8 @@
 import mongoose from "mongoose";
-import OfficialCase from "../models/OfficialCase.js";
-import Report from "../models/Report.js";
 import { normalizeDistrictKey } from "../constants/manilaDistrictCoords.js";
 import { getAnalyticalCaseRows } from "../services/analyticalCaseService.js";
 
-const ALLOWED_STATUSES = new Set(["reported", "suspected", "confirmed", "not_validated"]);
+const ALLOWED_STATUSES = new Set(["reported", "suspected", "probable", "confirmed", "not_validated"]);
 
 function getBarangayNo(value, fallback) {
   const direct = Number(value);
@@ -106,19 +104,10 @@ export const getDistrictHeatmap = async (req, res) => {
       districtConcentrationShare: statsByDistrict.get(point.districtKey)?.concentrationShare || 0,
     }));
 
-    const [officialOptions, reportOptions] = await Promise.all([
-      OfficialCase.aggregate([
-        { $match: { datasetId: new mongoose.Types.ObjectId(datasetId) } },
-        { $group: { _id: null, years: { $addToSet: "$year" }, months: { $addToSet: "$month" }, diseases: { $addToSet: "$disease" } } },
-      ]),
-      Report.aggregate([
-        { $match: { isCounted: true, caseClassification: "confirmed" } },
-        { $project: { year: { $year: "$reportedAt" }, month: { $month: "$reportedAt" }, disease: "$validation.condition" } },
-        { $group: { _id: null, years: { $addToSet: "$year" }, months: { $addToSet: "$month" }, diseases: { $addToSet: "$disease" } } },
-      ]),
-    ]);
-    const officialFilterOptions = officialOptions[0] || {};
-    const reportFilterOptions = reportOptions[0] || {};
+    const optionRows = await getAnalyticalCaseRows({
+      datasetId,
+      statuses: [...ALLOWED_STATUSES],
+    });
 
     return res.json({
       points,
@@ -131,9 +120,9 @@ export const getDistrictHeatmap = async (req, res) => {
       caseDefinition: `${selectedStatus.replace("_", " ")} cases only; statuses are kept separate. Confirmed results combine uploaded official cases and confirmed surveillance reports at query time without copying records.`,
       metricDefinition: "Map color and ordering represent case concentration, not an official risk classification.",
       filterOptions: {
-        years: [...new Set([...(officialFilterOptions.years || []), ...(reportFilterOptions.years || [])])],
-        months: [...new Set([...(officialFilterOptions.months || []), ...(reportFilterOptions.months || [])])],
-        diseases: [...new Set([...(officialFilterOptions.diseases || []), ...(reportFilterOptions.diseases || [])])].filter(Boolean),
+        years: [...new Set(optionRows.map((row) => row.year).filter(Number.isFinite))],
+        months: [...new Set(optionRows.map((row) => row.month).filter(Number.isFinite))],
+        diseases: [...new Set(optionRows.map((row) => row.disease).filter(Boolean))],
         caseClassifications: [...ALLOWED_STATUSES],
       },
     });

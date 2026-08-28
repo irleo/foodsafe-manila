@@ -2,16 +2,17 @@ import SwitchableYearlyChart from "../charts/SwitchableYearlyChart";
 import DiseasePieChart from "../charts/DiseasePieChart.jsx";
 import DistrictBarChart from "../charts/DistrictBarChart";
 import DiseaseTrendStackedAreaChart from "../charts/DiseaseTrendStackedAreaChart.jsx";
-import DistrictStatisticsTable from "../tables/DistrictStatisticsTable.jsx";
+import DistrictThresholdOverview from "./DistrictThresholdOverview.jsx";
 
 export default function AnalyticsGrid({
   caseStatusLabel,
   monthlyTimelineData,
   diseaseData,
   districtData,
-  districtStats,
   diseaseTrendData,
   diseaseTrendKeys,
+  token,
+  datasetId,
 }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 analytics-print-grid">
@@ -60,10 +61,7 @@ export default function AnalyticsGrid({
         </p>
       </div>
       <div className="lg:col-span-2 analytics-print-block">
-        <DistrictStatisticsTable
-          data={districtStats}
-          caseStatusLabel={caseStatusLabel}
-        />
+        <DistrictThresholdOverview token={token} datasetId={datasetId} />
       </div>
     </div>
   );

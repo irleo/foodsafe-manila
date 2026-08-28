@@ -8,6 +8,14 @@ import Spinner from "../Spinner.jsx";
 import { delay } from "../../utils/delay.js";
 import { notify } from "../../utils/toast.js";
 
+const MANILA_DISTRICTS = Array.from({ length: 6 }, (_, index) => `District ${index + 1}`);
+const PROVIDER_DEFAULT_NAMES = {
+  hospital: "Hospital",
+  health_center: "Health Center",
+  cesu: "CESU",
+  doh: "DOH",
+};
+
 export default function OfficialDatasetsTab() {
   const fileInputRef = useRef(null);
   const { auth } = useAuth();
@@ -17,11 +25,10 @@ export default function OfficialDatasetsTab() {
   const [file, setFile] = useState(null);
 
   const [datasetName, setDatasetName] = useState("");
-  const [coverageStart, setCoverageStart] = useState("");
-  const [coverageEnd, setCoverageEnd] = useState("");
   const [providerType, setProviderType] = useState("cesu");
   const [providerName, setProviderName] = useState("CESU");
   const [reportingFrequency, setReportingFrequency] = useState("weekly");
+  const [coverageVerified, setCoverageVerified] = useState(false);
 
   const [validating, setValidating] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -46,11 +53,9 @@ export default function OfficialDatasetsTab() {
     if (!file) return false;
     if (!datasetName.trim()) return false;
     if (!providerType || !providerName.trim()) return false;
-    // Coverage dates are optional for XLSX (backend derives coverage). Keep optional for better UX.
-    if (coverageStart && coverageEnd && new Date(coverageStart) > new Date(coverageEnd))
-      return false;
+    if (!coverageVerified) return false;
     return true;
-  }, [file, datasetName, coverageStart, coverageEnd, providerType, providerName]);
+  }, [file, datasetName, coverageVerified, providerType, providerName]);
 
   const resetMessages = () => {
     setErrorMsg("");
@@ -105,12 +110,14 @@ export default function OfficialDatasetsTab() {
         upload({
           file,
           name: datasetName.trim(),
-          coverageStart,
-          coverageEnd,
           dataSource: providerName.trim(),
           providerType,
           providerName: providerName.trim(),
           reportingFrequency,
+          districtCoverage: MANILA_DISTRICTS.map((district) => ({
+            district,
+            verifiedComplete: true,
+          })),
         }),
         {
           success: (res) =>
@@ -121,11 +128,15 @@ export default function OfficialDatasetsTab() {
         },
       );
 
-      setStatusMsg(
-        result?.formatType
-          ? `Imported: ${result.formatType} (${result.insertedRows} rows)`
-          : `Uploaded and validated: ${result?.dataset?.name || datasetName}`,
-      );
+      if (
+        result?.success !== true ||
+        !result?.datasetId ||
+        !Number.isFinite(result?.insertedRows)
+      ) {
+        throw new Error("The server did not confirm a successful dataset import.");
+      }
+
+      setStatusMsg(`Imported: ${result.formatType} (${result.insertedRows} records)`);
       setFile(null);
       await fetchRecent();
     } catch (err) {
@@ -216,6 +227,7 @@ export default function OfficialDatasetsTab() {
             <div>
               <label className="block text-sm mb-2">Dataset name</label>
               <input
+                required
                 type="text"
                 value={datasetName}
                 onChange={(e) => setDatasetName(e.target.value)}
@@ -224,42 +236,12 @@ export default function OfficialDatasetsTab() {
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Coverage start
-                </label>
-                <input
-                  type="date"
-                  value={coverageStart}
-                  onChange={(e) => setCoverageStart(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Coverage end
-                </label>
-                <input
-                  type="date"
-                  value={coverageEnd}
-                  onChange={(e) => setCoverageEnd(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {coverageStart &&
-              coverageEnd &&
-              new Date(coverageStart) > new Date(coverageEnd) && (
-                <p className="text-xs text-red-600">
-                  Coverage start date cannot be after the end date.
-                </p>
-              )}
-
+            <label className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
+              <input type="checkbox" className="mt-0.5 h-4 w-4" checked={coverageVerified} onChange={(event) => setCoverageVerified(event.target.checked)} />
+              <span>I confirm that reporting was complete for each included district throughout the period detected from the workbook. Covered weeks without a case row may therefore be encoded as zero.</span>
+            </label>
             <p className="text-xs text-gray-500">
-              Coverage dates are optional for XLSX imports (the system derives coverage from the data).
+              Each district uses its own earliest and latest valid record dates. Without this confirmation, missing rows cannot safely be interpreted as zero.
             </p>
 
             <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-4">
@@ -268,7 +250,17 @@ export default function OfficialDatasetsTab() {
               <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                 <label className="text-sm text-gray-700">
                   Source type
-                  <select value={providerType} onChange={(event) => setProviderType(event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm">
+                  <select
+                    value={providerType}
+                    onChange={(event) => {
+                      const nextType = event.target.value;
+                      setProviderType(nextType);
+                      if (!providerName.trim() || Object.values(PROVIDER_DEFAULT_NAMES).includes(providerName)) {
+                        setProviderName(PROVIDER_DEFAULT_NAMES[nextType] || "");
+                      }
+                    }}
+                    className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm"
+                  >
                     <option value="hospital">Hospital</option>
                     <option value="health_center">Health Center</option>
                     <option value="cesu">CESU</option>

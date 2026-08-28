@@ -1,55 +1,56 @@
 import { useEffect, useState } from "react";
-import { MapPin } from "lucide-react";
+import { ArrowUpDown, Search } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useReports } from "../../hooks/useReports.js";
 import ReportsLogList from "../reports/ReportsLogList";
 
-const DISTRICT_OPTIONS = [
-  { value: "", label: "All districts" },
-  { value: "binondo", label: "Binondo" },
-  { value: "quiapo", label: "Quiapo" },
-  { value: "sampaloc", label: "Sampaloc" },
-  { value: "san_miguel", label: "San Miguel" },
-  { value: "santa_cruz", label: "Santa Cruz" },
-  { value: "tondo", label: "Tondo" },
-  { value: "ermita", label: "Ermita" },
-  { value: "intramuros", label: "Intramuros" },
-  { value: "malate", label: "Malate" },
-  { value: "paco", label: "Paco" },
-  { value: "pandacan", label: "Pandacan" },
-  { value: "port_area", label: "Port Area" },
-  { value: "san_andres", label: "San Andres" },
-  { value: "santa_ana", label: "Santa Ana" },
+const STATUS_OPTIONS = [
+  { value: "", label: "All statuses" },
+  { value: "reported", label: "Reported" },
+  { value: "suspected", label: "Suspected" },
+  { value: "probable", label: "Probable" },
+  { value: "not_validated", label: "Not Confirmed" },
+  { value: "ruled_out", label: "Ruled Out" },
+  { value: "confirmed", label: "Confirmed" },
 ];
 
 export default function ReportLogsTab() {
   const { auth } = useAuth();
   const token = auth?.accessToken;
 
-  const [reportDistrict, setReportDistrict] = useState("");
+  const [status, setStatus] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [sortOrder, setSortOrder] = useState("desc");
   const { reports, pagination, permissions, loading, errorMsg, fetchReports } =
     useReports(token, { autoFetch: false });
 
   const [onlyCounted] = useState(false);
 
   const loadReports = async ({
-    district = reportDistrict,
     counted = onlyCounted,
     page = 1,
   } = {}) => {
     await fetchReports({
-      district: district || undefined,
       onlyCounted: counted,
+      status: status || undefined,
+      search: search || undefined,
+      sortOrder,
       page,
       limit: 10,
     });
   };
 
   useEffect(() => {
+    const timeoutId = window.setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => window.clearTimeout(timeoutId);
+  }, [searchInput]);
+
+  useEffect(() => {
     if (!token) return;
     loadReports();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, reportDistrict, onlyCounted]);
+  }, [token, status, search, sortOrder, onlyCounted]);
 
   return (
     <div className="space-y-5">
@@ -64,18 +65,31 @@ export default function ReportLogsTab() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap xl:flex-nowrap xl:items-end xl:justify-end">
-            <div className="min-w-[220px]">
+          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-[minmax(260px,1fr)_190px_190px]">
+            <div>
               <label className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-                <MapPin className="h-3.5 w-3.5" />
-                District
+                <Search className="h-3.5 w-3.5" />
+                Search
+              </label>
+              <input
+                type="search"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                placeholder="Report ID or location"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
+                Status
               </label>
               <select
-                value={reportDistrict}
-                onChange={(e) => setReportDistrict(e.target.value)}
+                value={status}
+                onChange={(event) => setStatus(event.target.value)}
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {DISTRICT_OPTIONS.map((option) => (
+                {STATUS_OPTIONS.map((option) => (
                   <option key={option.value || "all"} value={option.value}>
                     {option.label}
                   </option>
@@ -83,7 +97,22 @@ export default function ReportLogsTab() {
               </select>
             </div>
 
-                {/* Visibility */}
+            <div>
+              <label className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+                <ArrowUpDown className="h-3.5 w-3.5" />
+                Reported date
+              </label>
+              <select
+                value={sortOrder}
+                onChange={(event) => setSortOrder(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="desc">Newest first</option>
+                <option value="asc">Oldest first</option>
+              </select>
+            </div>
+
+            {/* Visibility */}
             {/* <div>
               <div className="mb-1 flex items-center gap-4  text-xs font-medium uppercase tracking-wide text-gray-500">
                 Visibility
@@ -123,6 +152,9 @@ export default function ReportLogsTab() {
             </div> */}
           </div>
         </div>
+        <p className="mt-3 text-xs text-gray-500">
+          Reports requiring review appear first. Date order is applied within each status, while Confirmed reports remain at the end.
+        </p>
       </div>
 
       {errorMsg ? (

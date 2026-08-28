@@ -40,6 +40,7 @@ export const listCasesByDataset = async (req, res) => {
     const allowedStatuses = new Set([
       "reported",
       "suspected",
+      "probable",
       "confirmed",
       "not_validated",
     ]);

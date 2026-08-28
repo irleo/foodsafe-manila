@@ -10,7 +10,7 @@ export default function ReportLogsPage() {
           Investigate citizen reports, classify suspected cases, and record confirmation outcomes.
         </p>
       </div>
-      <DataCoverageNotice fallbackText="Citizen report logs show submissions received by FoodSafe Manila. They are not a complete historical case record before CESU surveillance began in 2022." />
+      <DataCoverageNotice fallbackText="Citizen report logs show submissions received by FoodSafe Manila and do not establish coverage outside the dates represented in the selected dataset." />
       <ReportLogsTab />
     </div>
   );

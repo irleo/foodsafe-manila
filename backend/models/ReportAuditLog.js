@@ -29,6 +29,7 @@ const ReportAuditLogSchema = new mongoose.Schema(
         "marked_suspected",
         "report_ruled_out",
         "case_confirmed",
+        "case_marked_probable",
         "case_not_validated",
       ],
       required: true,

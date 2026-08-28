@@ -4,6 +4,7 @@ import { createAsyncTtlCache } from "../utils/asyncTtlCache.js";
 import { getDashboardSummary } from "../services/dashboardSummaryService.js";
 import { getAnalyticalCaseRows } from "../services/analyticalCaseService.js";
 import { calculateLatestSurveillanceThreshold } from "../services/surveillanceThresholdService.js";
+import { SURVEILLANCE_DISEASES } from "../constants/surveillanceMethodology.js";
 
 const riskSnapshotCache = createAsyncTtlCache({
   name: "mobile-risk-snapshot",
@@ -187,7 +188,22 @@ function getNearbyAreaRisk(barangayNo, months) {
 function getLatestSurveillanceThreshold() {
   return surveillanceThresholdCache.getOrLoad(
     "latest",
-    () => calculateLatestSurveillanceThreshold(),
+    async () => {
+      const thresholds = await Promise.all(SURVEILLANCE_DISEASES.map(
+        (disease) => calculateLatestSurveillanceThreshold({ disease }),
+      ));
+      const priority = {
+        epidemic_threshold_exceeded: 4,
+        alert_threshold_exceeded: 3,
+        within_expected_level: 2,
+        insufficient_baseline: 1,
+        no_data: 0,
+      };
+      const primary = [...thresholds].sort(
+        (a, b) => (priority[b?.outcome] || 0) - (priority[a?.outcome] || 0),
+      )[0] || null;
+      return { primary, thresholds };
+    },
     { ttlMs: riskCacheTtlMs() },
   );
 }
@@ -258,16 +274,18 @@ export const getMobileNearbyRisk = async (req, res) => {
       }),
     ]);
 
+    const thresholdBundle = surveillanceThreshold || { primary: null, thresholds: [] };
+    const primaryThreshold = thresholdBundle.primary;
     const hasThresholdSignal = [
-      "alert_threshold_reached",
+      "alert_threshold_exceeded",
       "epidemic_threshold_exceeded",
-    ].includes(surveillanceThreshold?.outcome);
-    const thresholdMessage = surveillanceThreshold?.outcome === "epidemic_threshold_exceeded"
-      ? "The epidemic threshold has been exceeded for the latest evaluated month. Follow official CESU advisories."
-      : surveillanceThreshold?.outcome === "alert_threshold_reached"
-        ? "The alert threshold has been reached for the latest evaluated month. This is an early surveillance signal, not a public risk classification."
-        : surveillanceThreshold?.outcome === "within_expected_level"
-          ? "Confirmed cases are within the expected surveillance level for the latest evaluated month."
+    ].includes(primaryThreshold?.outcome);
+    const thresholdMessage = primaryThreshold?.outcome === "epidemic_threshold_exceeded"
+      ? `${primaryThreshold.disease} was above its epidemic threshold for the latest complete month. Follow official CESU advisories.`
+      : primaryThreshold?.outcome === "alert_threshold_exceeded"
+        ? `${primaryThreshold.disease} was above its alert threshold for the latest complete month. This is an early surveillance signal, not a public risk classification.`
+        : primaryThreshold?.outcome === "within_expected_level"
+          ? "Eligible cases were below the alert threshold for the latest complete month."
           : "There is not yet enough eligible historical data to calculate a surveillance threshold.";
 
     return res.json({
@@ -276,7 +294,8 @@ export const getMobileNearbyRisk = async (req, res) => {
       isHighRisk: false,
       hasActiveAdvisory: false,
       hasThresholdSignal,
-      surveillanceThreshold,
+      surveillanceThreshold: primaryThreshold,
+      surveillanceThresholds: thresholdBundle.thresholds,
       highRiskAreas: snapshot.alerts,
       message: thresholdMessage,
     });

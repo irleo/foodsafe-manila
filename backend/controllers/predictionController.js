@@ -1,13 +1,23 @@
 import mongoose from "mongoose";
 import PredictionRun from "../models/PredictionRun.js";
-import { refreshMonthlyDistrictPredictions } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
 import Dataset from "../models/Dataset.js";
+import { refreshMonthlyDistrictPredictions } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
+
+let refreshJob = {
+  status: "idle",
+  requestedAt: null,
+  completedAt: null,
+  errorMessage: null,
+};
+
+function publicRefreshJob() {
+  return { ...refreshJob };
+}
 
 function toDatasetScope(datasetId) {
-  if (datasetId && mongoose.Types.ObjectId.isValid(datasetId)) {
-    return new mongoose.Types.ObjectId(datasetId);
-  }
-  return "all";
+  return datasetId && mongoose.Types.ObjectId.isValid(datasetId)
+    ? new mongoose.Types.ObjectId(datasetId)
+    : "all";
 }
 
 export const getPredictions = async (req, res) => {
@@ -21,48 +31,25 @@ export const getPredictions = async (req, res) => {
       datasetId = latest?._id ? String(latest._id) : null;
     }
 
-    const datasetScope = toDatasetScope(datasetId);
     const run = await PredictionRun.findOne({
       model: "prophet",
-      granularity: "monthly_district_cases",
-      datasetScope,
+      granularity: "monthly_disease_district_cases",
+      datasetScope: toDatasetScope(datasetId),
       status: "success",
     })
       .sort({ generatedAt: -1 })
-      .select(
-        "_id granularity basisDatasetId basisYear basisMonth forecastTargetYear forecastTargetMonth forecastHorizonMonths generatedAt trigger status payload",
-      )
+      .select("_id granularity basisDatasetId basisYear basisMonth forecastTargetYear forecastTargetMonth forecastHorizonMonths generatedAt trigger status payload")
       .lean();
-
     if (!run) {
       return res.json({
         success: true,
         hasPrediction: false,
-        message: "No saved monthly district prediction run found.",
+        message: "No saved monthly forecast is available yet.",
+        refreshJob: publicRefreshJob(),
       });
     }
 
-    const districtFilter =
-      req.query.districtKey || req.query.district ? String(req.query.districtKey || req.query.district) : null;
     const payload = run.payload || {};
-    const districts = Array.isArray(payload.districts) ? payload.districts : [];
-    const filtered =
-      districtFilter && districts.length
-        ? districts.filter(
-            (d) => d.districtKey === districtFilter || d.district === districtFilter,
-          )
-        : districts;
-    const normalizedDistricts = filtered.map((district) => {
-      const forecast = Array.isArray(district.forecast)
-        ? district.forecast.find((f) => f.isPrimaryTarget) || district.forecast[0]
-        : null;
-      const nextForecast = district.nextForecast || forecast || null;
-      return {
-        ...district,
-        nextForecast,
-      };
-    });
-
     return res.json({
       success: true,
       hasPrediction: true,
@@ -77,57 +64,68 @@ export const getPredictions = async (req, res) => {
       generatedAt: run.generatedAt,
       trigger: run.trigger,
       status: run.status,
-      payload: { ...payload, districts: normalizedDistricts },
+      refreshJob: publicRefreshJob(),
+      payload,
     });
-  } catch (err) {
-    return res.status(500).json({ message: err?.message || "Server error" });
+  } catch (error) {
+    return res.status(500).json({ message: error?.message || "Server error" });
   }
 };
 
 export const refreshPredictions = async (req, res) => {
   try {
-    const datasetId = req.body?.datasetId;
     const horizonMonths = Number(req.body?.forecastHorizonMonths ?? 1);
-
-    const saved = await refreshMonthlyDistrictPredictions({
-      trigger: "manual",
-      datasetId,
-      horizonMonths: Number.isFinite(horizonMonths) ? horizonMonths : 1,
-      force: true,
-    });
-
-    if (saved?.status === "failed") {
-      const msg = saved?.errorMessage || "Refresh failed";
-      const isSetup =
-        /Prophet|Python|prophet_import|pip install/i.test(msg) ||
-        msg.includes("PYTHON_BIN");
-      const isEligibility = /required continuous|complete monthly observations|missing months|No monthly confirmed case data/i.test(msg);
-      return res.status(isSetup ? 503 : isEligibility ? 422 : 500).json({
-        message: msg,
-        code: isEligibility ? "INSUFFICIENT_FORECAST_HISTORY" : "FORECAST_REFRESH_FAILED",
+    if (refreshJob.status === "running") {
+      return res.status(202).json({
+        success: true,
+        accepted: true,
+        message: "The global forecast refresh is already running.",
+        refreshJob: publicRefreshJob(),
       });
     }
 
-    return res.json({
-      success: true,
-      predictionRunId: saved?._id ? String(saved._id) : null,
-      granularity: saved?.granularity,
-      basisDatasetId: saved?.basisDatasetId ? String(saved.basisDatasetId) : null,
-      basisYear: saved?.basisYear,
-      basisMonth: saved?.basisMonth,
-      forecastTargetYear: saved?.forecastTargetYear,
-      forecastTargetMonth: saved?.forecastTargetMonth,
-      status: saved?.status,
+    const requestedAt = new Date();
+    refreshJob = {
+      status: "running",
+      requestedAt: requestedAt.toISOString(),
+      completedAt: null,
+      errorMessage: null,
+    };
+    void refreshMonthlyDistrictPredictions({
+      trigger: "manual",
+      datasetId: req.body?.datasetId,
+      horizonMonths: Number.isFinite(horizonMonths) ? horizonMonths : 1,
+      force: true,
+    }).then((saved) => {
+      refreshJob = {
+        status: "succeeded",
+        requestedAt: requestedAt.toISOString(),
+        completedAt: new Date().toISOString(),
+        predictionRunId: saved?._id ? String(saved._id) : null,
+        errorMessage: null,
+      };
+    }).catch((error) => {
+      console.error("[forecast] global refresh failed", error);
+      refreshJob = {
+        status: "failed",
+        requestedAt: requestedAt.toISOString(),
+        completedAt: new Date().toISOString(),
+        errorMessage: error?.message || "Global forecast refresh failed.",
+      };
     });
-  } catch (err) {
-    const msg = err?.message || "Server error";
-    const isSetup =
-      /Prophet|Python|prophet_import|pip install/i.test(msg) ||
-      msg.includes("PYTHON_BIN");
-    const isEligibility = /required continuous|complete monthly observations|missing months|No monthly confirmed case data/i.test(msg);
-    return res.status(isSetup ? 503 : isEligibility ? 422 : 500).json({
-      message: msg,
-      code: isEligibility ? "INSUFFICIENT_FORECAST_HISTORY" : "FORECAST_REFRESH_FAILED",
+    return res.status(202).json({
+      success: true,
+      accepted: true,
+      message: "The monthly forecast for all diseases and districts has started.",
+      refreshJob: publicRefreshJob(),
+    });
+  } catch (error) {
+    const message = error?.message || "Server error";
+    const setupError = /Prophet|Python|prophet_import|PYTHON_BIN/i.test(message);
+    const eligibilityError = /verified complete coverage|required|months|unavailable/i.test(message);
+    return res.status(setupError ? 503 : eligibilityError ? 422 : 500).json({
+      message,
+      code: eligibilityError ? "INSUFFICIENT_FORECAST_HISTORY" : "FORECAST_REFRESH_FAILED",
     });
   }
 };

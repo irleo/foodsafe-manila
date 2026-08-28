@@ -50,6 +50,12 @@ const officialCaseSchema = new mongoose.Schema(
     epidemiologicalYear: { type: Number, default: null, min: 2015, max: 2100 },
     epidemiologicalWeek: { type: Number, default: null, min: 1, max: 53 },
     weekStartDate: { type: Date, default: null },
+    surveillanceDate: { type: Date, default: null },
+    surveillanceDateBasis: {
+      type: String,
+      enum: ["report_date", "provided_week_start", "provided_period", "legacy_unknown"],
+      default: "legacy_unknown",
+    },
     reportingFrequency: {
       type: String,
       enum: ["weekly", "monthly"],
@@ -76,7 +82,7 @@ const officialCaseSchema = new mongoose.Schema(
 
     source: {
       type: String,
-      enum: ["official", "csv", "excel", "system", "file"],
+      enum: ["official", "csv", "excel", "system", "file", "cesu"],
       default: "official",
     },
   },

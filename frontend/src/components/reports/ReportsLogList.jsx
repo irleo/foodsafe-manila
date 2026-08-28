@@ -1,16 +1,18 @@
 import { Fragment, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Spinner from "../Spinner.jsx";
 import ReportWorkflowPanel from "./ReportWorkflowPanel.jsx";
+import ReportAuditTrail from "./ReportAuditTrail.jsx";
 import { formatStatusLabel } from "../../utils/formatStatusLabel";
 import {
   RefreshCw,
   MapPin,
   TriangleAlert,
   ChevronDown,
-  ChevronUp,
   CircleX,
   Clock3,
   Flag,
+  X,
 } from "lucide-react";
 
 function formatDistrictKey(value) {
@@ -86,59 +88,61 @@ export default function ReportsLogList({
   token,
   canAccessPatientIdentity,
 }) {
-  const [expandedId, setExpandedId] = useState(null);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setExpandedId(null);
-  }, [reports]);
+  const [selectedReportId, setSelectedReportId] = useState(null);
 
   const page = pagination?.page || 1;
   const limit = pagination?.limit || 10;
   const total = pagination?.total || 0;
   const totalPages = pagination?.totalPages || 1;
   const paginatedReports = reports;
+  const selectedReport = paginatedReports.find(
+    (report) => report._id === selectedReportId,
+  );
   const rangeStart = total === 0 ? 0 : (page - 1) * limit + 1;
   const rangeEnd = Math.min(page * limit, total);
 
-  const toggleExpanded = (reportId) => {
-    setExpandedId((prev) => (prev === reportId ? null : reportId));
-  };
+  useEffect(() => {
+    if (!selectedReport) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setSelectedReportId(null);
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedReport]);
 
   const renderExpandedDetails = (report) => (
-    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-      <h4 className="mb-4 font-semibold text-gray-900">Additional report information</h4>
-      <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Report ID</p>
-          <p className="break-all font-mono text-sm text-gray-800">{report._id}</p>
-        </div>
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Food/exposure information</p>
-          <p className="text-sm text-gray-800">{report.foodSource || "—"}</p>
-        </div>
-
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Source
-          </p>
-          <p className="text-sm text-gray-800">{formatSourceLabel(report.source)}</p>
-        </div>
-
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Submitted by
-          </p>
-          <p className="text-sm text-gray-800">
-            {formatSubmittedBy(report.reportedBy, canAccessPatientIdentity)}
-          </p>
-        </div>
-      </div>
+    <div className="space-y-4">
+      <details open className="group overflow-hidden rounded-xl border border-gray-200 bg-white">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold text-gray-900 marker:content-none">
+          Report information
+          <ChevronDown className="h-4 w-4 transition group-open:rotate-180" />
+        </summary>
+        <dl className="grid gap-4 border-t border-gray-100 px-4 py-4 text-sm md:grid-cols-2">
+          <div><dt className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Report ID</dt><dd className="break-all font-mono text-gray-800">{report._id}</dd></div>
+          <div><dt className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Reported at</dt><dd className="text-gray-800">{new Date(report.reportedAt).toLocaleString()}</dd></div>
+          <div><dt className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Reporter location</dt><dd className="text-gray-800">{formatActualLocation(report.location)}</dd></div>
+          <div><dt className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Exposure location</dt><dd className="text-gray-800">{formatActualLocation({ barangay: report.exposureBarangay, district: report.exposureDistrict })}</dd></div>
+          <div><dt className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Source</dt><dd className="text-gray-800">{formatSourceLabel(report.source)}</dd></div>
+          <div><dt className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Submitted by</dt><dd className="text-gray-800">{formatSubmittedBy(report.reportedBy, canAccessPatientIdentity)}</dd></div>
+          <div><dt className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Case count</dt><dd className="text-gray-800">{report.caseCount ?? 1}</dd></div>
+          <div><dt className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Symptoms</dt><dd className="text-gray-800">{formatSymptoms(report.symptoms).join(", ") || "—"}</dd></div>
+          <div className="md:col-span-2"><dt className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Food/exposure information</dt><dd className="text-gray-800">{report.foodSource || "—"}</dd></div>
+        </dl>
+      </details>
       <ReportWorkflowPanel report={report} token={token} onUpdated={onRefresh} />
     </div>
   );
 
   return (
+    <Fragment>
     <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
       <div className="flex flex-col gap-3 border-b border-gray-200 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -173,7 +177,7 @@ export default function ReportsLogList({
           </div>
           <p className="text-sm font-medium text-gray-700">No reports found</p>
           <p className="mt-1 text-sm text-gray-500">
-            Try adjusting the selected district filter.
+            Try adjusting the search or status filter.
           </p>
         </div>
       ) : (
@@ -186,8 +190,9 @@ export default function ReportsLogList({
               <thead className="bg-gray-50">
                 <tr className="border-y border-gray-200 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                   <th className="px-6 py-3">Reported at</th>
+                  <th className="px-6 py-3">Report ID</th>
                   <th className="px-6 py-3">Current status</th>
-                  <th className="px-6 py-3">Location</th>
+                  <th className="px-6 py-3">Reporter location</th>
                   <th className="px-6 py-3">Symptoms</th>
                   <th className="px-6 py-3">Case count</th>
                   <th className="px-6 py-3">Actions</th>
@@ -198,13 +203,9 @@ export default function ReportsLogList({
                 {paginatedReports.map((report) => {
                   const reportedAt = formatReportedAt(report.reportedAt);
                   const symptoms = formatSymptoms(report.symptoms);
-                  const isExpanded = expandedId === report._id;
 
                   return (
-                    <Fragment key={report._id}>
-                      <tr
-                        className="align-top transition hover:bg-gray-50/70"
-                      >
+                      <tr key={report._id} className="align-top transition hover:bg-gray-50/70">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="font-medium text-gray-900">
                             {reportedAt.date}
@@ -217,39 +218,22 @@ export default function ReportsLogList({
                           </div>
                         </td>
 
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="font-mono text-xs font-semibold text-gray-700" title={report._id}>
+                            {formatShortReportId(report._id)}
+                          </span>
+                        </td>
+
                         <td className="px-6 py-4">
                           {classificationBadge(report.currentStatus || report.caseClassification)}
                           {decisionIndicator(report)}
                         </td>
 
                         <td className="px-6 py-4">
-                          <div className="space-y-2">
-                            <div>
-                              <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
-                                Reporter location
-                              </div>
-                              <span className="inline-flex max-w-72 items-center gap-1 whitespace-normal rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-                                <MapPin className="h-3 w-3 shrink-0" />
-                                {formatActualLocation({
-                                  barangay: report.location?.barangay,
-                                  district: report.location?.district,
-                                })}
-                              </span>
-                            </div>
-
-                            <div>
-                              <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
-                                Exposure location
-                              </div>
-                              <span className="inline-flex max-w-72 items-center gap-1 whitespace-normal rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-                                <MapPin className="h-3 w-3 shrink-0" />
-                                {formatActualLocation({
-                                  barangay: report.exposureBarangay,
-                                  district: report.exposureDistrict,
-                                })}
-                              </span>
-                            </div>
-                          </div>
+                          <span className="inline-flex max-w-72 items-center gap-1 whitespace-normal rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                            <MapPin className="h-3 w-3 shrink-0" />
+                            {formatActualLocation(report.location)}
+                          </span>
                         </td>
 
                         <td className="px-6 py-4">
@@ -282,32 +266,16 @@ export default function ReportsLogList({
 
                         <td className="px-6 py-4">
                           <button
-                            onClick={() => toggleExpanded(report._id)}
+                            type="button"
+                            onClick={() => setSelectedReportId(report._id)}
+                            aria-label={`View details for report ${report._id}`}
                             className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                           >
-                            {isExpanded ? (
-                              <>
-                                <ChevronUp className="h-4 w-4" />
-                                Hide details
-                              </>
-                            ) : (
-                              <>
-                                <ChevronDown className="h-4 w-4" />
-                                View details
-                              </>
-                            )}
+                            <ChevronDown className="h-4 w-4 -rotate-90" />
+                            View details
                           </button>
                         </td>
                       </tr>
-
-                      {isExpanded && (
-                        <tr className="bg-white">
-                          <td colSpan={6} className="px-6 pb-4">
-                            {renderExpandedDetails(report)}
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
                   );
                 })}
               </tbody>
@@ -319,7 +287,6 @@ export default function ReportsLogList({
             {paginatedReports.map((report) => {
               const reportedAt = formatReportedAt(report.reportedAt);
               const symptoms = formatSymptoms(report.symptoms);
-              const isExpanded = expandedId === report._id;
 
               return (
                 <div
@@ -333,6 +300,9 @@ export default function ReportsLogList({
                         {reportedAt.date}
                       </div>
                       <p className="mt-1 text-sm text-gray-500">{reportedAt.time}</p>
+                      <p className="mt-1 font-mono text-xs font-semibold text-gray-600" title={report._id}>
+                        {formatShortReportId(report._id)}
+                      </p>
                       <div className="mt-2">
                         {classificationBadge(report.currentStatus || report.caseClassification)}
                         {decisionIndicator(report)}
@@ -351,24 +321,7 @@ export default function ReportsLogList({
                       </p>
                       <span className="inline-flex max-w-full items-center gap-1 whitespace-normal rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
                         <MapPin className="h-3 w-3 shrink-0" />
-                        {formatActualLocation({
-                          name: report.location?.name,
-                          barangay: report.location?.barangay,
-                          district: report.location?.district,
-                        })}
-                      </span>
-                    </div>
-
-                    <div>
-                      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Exposure location
-                      </p>
-                      <span className="inline-flex max-w-full items-center gap-1 whitespace-normal rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-                        <MapPin className="h-3 w-3 shrink-0" />
-                        {formatActualLocation({
-                          barangay: report.exposureBarangay,
-                          district: report.exposureDistrict,
-                        })}
+                        {formatActualLocation(report.location)}
                       </span>
                     </div>
 
@@ -394,23 +347,13 @@ export default function ReportsLogList({
                   </div>
 
                   <button
-                    onClick={() => toggleExpanded(report._id)}
-                    className="mt-4 inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                    type="button"
+                    onClick={() => setSelectedReportId(report._id)}
+                    className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                   >
-                    {isExpanded ? (
-                      <>
-                        <ChevronUp className="h-4 w-4" />
-                        Hide details
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="h-4 w-4" />
-                        View details
-                      </>
-                    )}
+                    <ChevronDown className="h-4 w-4 -rotate-90" />
+                    View details
                   </button>
-
-                  {isExpanded && <div className="mt-4">{renderExpandedDetails(report)}</div>}
                 </div>
               );
             })}
@@ -446,7 +389,60 @@ export default function ReportsLogList({
         </>
       )}
     </div>
+    {selectedReport && typeof document !== "undefined"
+      ? createPortal(
+          <div className="fixed inset-0 z-50" role="presentation">
+            <button
+              type="button"
+              aria-label="Close report details"
+              className="absolute inset-0 h-full w-full cursor-default bg-gray-950/40 backdrop-blur-[1px]"
+              onClick={() => setSelectedReportId(null)}
+            />
+            <aside
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="report-details-title"
+              className="absolute inset-y-0 right-0 flex w-full flex-col bg-white shadow-2xl sm:max-w-2xl"
+            >
+              <header className="shrink-0 border-b border-gray-200 bg-white px-5 py-4 sm:px-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Citizen report</p>
+                    <h3 id="report-details-title" className="mt-1 text-xl font-semibold text-gray-950">Report details</h3>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {classificationBadge(selectedReport.currentStatus || selectedReport.caseClassification)}
+                      <span className="font-mono text-xs font-semibold text-gray-500" title={selectedReport._id}>
+                        {formatShortReportId(selectedReport._id)}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedReportId(null)}
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    aria-label="Close report details"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <ReportAuditTrail reportId={selectedReport._id} token={token} />
+              </header>
+
+              <div className="min-h-0 flex-1 overflow-y-auto bg-gray-50/70 p-4 sm:p-6">
+                {renderExpandedDetails(selectedReport)}
+              </div>
+            </aside>
+          </div>,
+          document.body,
+        )
+      : null}
+    </Fragment>
   );
+}
+
+function formatShortReportId(value) {
+  const normalized = String(value || "");
+  return normalized ? `#${normalized.slice(-8).toUpperCase()}` : "—";
 }
 
 function decisionIndicator(report) {

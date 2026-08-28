@@ -1,9 +1,40 @@
 import mongoose from "mongoose";
 
+const DistrictCoverageSchema = new mongoose.Schema(
+  {
+    district: {
+      type: String,
+      enum: ["District 1", "District 2", "District 3", "District 4", "District 5", "District 6"],
+      required: true,
+    },
+    coverageStart: { type: Date, required: true },
+    coverageEnd: { type: Date, required: true },
+    verifiedComplete: { type: Boolean, default: false },
+    verificationSource: {
+      type: String,
+      enum: [
+        "uploader_confirmation",
+        "uploader_confirmation_file_range",
+        "uploader_confirmation_derived_range",
+        "derived_from_records",
+        "legacy_unverified",
+      ],
+      default: "derived_from_records",
+    },
+  },
+  { _id: false },
+);
+
 const DatasetSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     dataSource: { type: String, default: "" },
+    dataMode: {
+      type: String,
+      enum: ["official", "development"],
+      required: true,
+      default: "official",
+    },
     providerType: {
       type: String,
       enum: ["hospital", "health_center", "cesu", "doh", "citizen_patient_report"],
@@ -26,6 +57,7 @@ const DatasetSchema = new mongoose.Schema(
     },
     coverageStart: { type: Date, required: true },
     coverageEnd: { type: Date, required: true },
+    districtCoverage: { type: [DistrictCoverageSchema], default: [] },
 
     originalFileName: { type: String, required: true },
     storedFileName: { type: String, required: true },
