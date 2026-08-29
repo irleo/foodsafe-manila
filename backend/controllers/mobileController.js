@@ -223,6 +223,7 @@ export const getMobileDashboard = async (req, res) => {
       totalCases: summary.totalCases,
       reportedCases: summary.reportedCases,
       suspectedCases: summary.suspectedCases,
+      probableCases: summary.probableCases,
       confirmedCases: summary.confirmedCases,
       notValidatedCases: summary.notValidatedCases,
       topDistrict: summary.topDistrict || "N/A",

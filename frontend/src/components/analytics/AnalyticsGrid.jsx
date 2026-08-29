@@ -6,6 +6,7 @@ import DistrictThresholdOverview from "./DistrictThresholdOverview.jsx";
 
 export default function AnalyticsGrid({
   caseStatusLabel,
+  caseStatus,
   monthlyTimelineData,
   diseaseData,
   districtData,
@@ -20,10 +21,12 @@ export default function AnalyticsGrid({
         <SwitchableYearlyChart
           title="Cases Over Time"
           data={monthlyTimelineData}
+          movingAverageStatus={caseStatus}
         />
         <p className="print-only mt-2 text-sm text-gray-700">
-          This comparison graph shows reported, suspected, and confirmed case
-          volume by month.
+          This comparison graph shows reported, suspected, probable, and
+          confirmed case volume by month, with 3-month and 6-month moving
+          averages for the selected status.
         </p>
       </div>
 

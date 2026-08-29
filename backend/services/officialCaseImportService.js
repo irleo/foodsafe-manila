@@ -226,6 +226,7 @@ function aggregateRecords(records) {
       record.epidemiologicalWeek,
       record.caseClassification,
       record.source,
+      record.surveillanceDateBasis,
     ].join("|");
     const previous = byKey.get(key);
     byKey.set(key, {

@@ -104,7 +104,7 @@ function baseResult({ disease, district, target, observedCases = null, baselineP
     disease, condition: disease, geographicLevel: district ? "district" : "city", district: district || null,
     observedCases, observedConfirmedCases: observedCases, includedCaseStatuses: includedStatuses,
     baselinePeriods, baselineYearsRequired: FIXED_THRESHOLD_SETTINGS.baselineYears, formula: THRESHOLD_FORMULA,
-    caseDefinition: `${disease}: ${includedStatuses.join(", ")} cases from official uploads and eligible investigated surveillance reports.`,
+    caseDefinition: `${disease}: ${includedStatuses.join(", ")} cases from authoritative official surveillance uploads only. Citizen reports are retained for early warning and audit review but do not affect this threshold.`,
   };
 }
 
@@ -131,7 +131,13 @@ export async function calculateSurveillanceThreshold({ datasetId, disease: reque
   }
 
   const includedStatuses = includedStatusesForDisease(disease);
-  const rows = await getAnalyticalCaseRows({ datasetId, statuses: includedStatuses, district: district || undefined, disease });
+  const rows = await getAnalyticalCaseRows({
+    datasetId,
+    statuses: includedStatuses,
+    district: district || undefined,
+    disease,
+    includeReports: false,
+  });
   const eligibleRows = rows.filter((row) => includedStatuses.includes(row.caseClassification) && Number.isInteger(Number(row.year)) && Number.isInteger(Number(row.month)));
   const years = [];
   for (let year = target.year - 1; year >= coverage.start.getUTCFullYear(); year -= 1) {

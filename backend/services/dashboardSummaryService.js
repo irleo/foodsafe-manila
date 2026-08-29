@@ -9,7 +9,7 @@ export async function refreshDashboardSummary(year = new Date().getFullYear()) {
     getAnalyticalCaseRows({ year: year - 1, statuses: ["confirmed"] }),
     getAnalyticalCaseRows({
       year,
-      statuses: ["reported", "suspected", "confirmed", "not_validated"],
+      statuses: ["reported", "suspected", "probable", "confirmed", "not_validated"],
       includeOfficial: false,
     }),
   ]);
@@ -53,6 +53,7 @@ export async function refreshDashboardSummary(year = new Date().getFullYear()) {
     suspectedReports: counts.suspected,
     reportedCases: counts.reported,
     suspectedCases: counts.suspected,
+    probableCases: counts.probable,
     confirmedCases: currentYearTotal,
     notValidatedCases: counts.notValidated,
     totalDefinition:
@@ -72,10 +73,12 @@ export async function refreshDashboardSummary(year = new Date().getFullYear()) {
 export async function getDashboardSummary(year = new Date().getFullYear()) {
   const existing = await DashboardSummary.findOne({ scope: GLOBAL_SCOPE, year })
     .select(
-      "year totalCases currentYearTotal previousYearTotal reportedCases suspectedCases confirmedCases notValidatedCases totalDefinition topDistrict topDisease generatedAt",
+      "year totalCases currentYearTotal previousYearTotal reportedCases suspectedCases probableCases confirmedCases notValidatedCases totalDefinition topDistrict topDisease generatedAt",
     )
     .lean();
-  return existing || refreshDashboardSummary(year);
+  return existing && Number.isFinite(Number(existing.probableCases))
+    ? existing
+    : refreshDashboardSummary(year);
 }
 
 export async function refreshDashboardSummaryAfterWrite() {

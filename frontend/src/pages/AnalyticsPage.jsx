@@ -9,7 +9,14 @@ import DataCoverageNotice from "../components/DataCoverageNotice";
 import { buildMonthlyTimelineData } from "../utils/analyticsCaseBuilders";
 import { formatStatusLabel } from "../utils/formatStatusLabel";
 
-const CASE_STATUS_OPTIONS = ["reported", "suspected", "probable", "confirmed"];
+const ALL_ANALYTICS_STATUSES = "all";
+const CASE_STATUS_OPTIONS = [
+  ALL_ANALYTICS_STATUSES,
+  "reported",
+  "suspected",
+  "probable",
+  "confirmed",
+];
 
 export default function Analytics() {
   const [selectedCaseStatus, setSelectedCaseStatus] = useState("confirmed");
@@ -42,9 +49,11 @@ export default function Analytics() {
 
   const selectedRows = useMemo(
     () =>
-      caseRows.filter(
-        (row) => row.caseClassification === selectedCaseStatus,
-      ),
+      selectedCaseStatus === ALL_ANALYTICS_STATUSES
+        ? caseRows
+        : caseRows.filter(
+            (row) => row.caseClassification === selectedCaseStatus,
+          ),
     [caseRows, selectedCaseStatus],
   );
 
@@ -57,7 +66,10 @@ export default function Analytics() {
     [caseRows],
   );
 
-  const selectedStatusLabel = formatStatusLabel(selectedCaseStatus);
+  const selectedStatusLabel =
+    selectedCaseStatus === ALL_ANALYTICS_STATUSES
+      ? "All Included"
+      : formatStatusLabel(selectedCaseStatus);
 
   const handleExportPdf = () => {
     window.print();
@@ -112,6 +124,13 @@ export default function Analytics() {
             </label>
             <p className="mt-1 text-sm text-gray-600">
               This selection updates every statistic, chart, and district summary below.
+              {selectedCaseStatus === ALL_ANALYTICS_STATUSES && (
+                <span className="mt-1 block text-amber-700">
+                  All statuses is a descriptive sum of reported, suspected,
+                  probable, and confirmed records—not a formal epidemiological
+                  case definition.
+                </span>
+              )}
             </p>
           </div>
           <select
@@ -122,7 +141,9 @@ export default function Analytics() {
           >
             {CASE_STATUS_OPTIONS.map((status) => (
               <option key={status} value={status}>
-                {formatStatusLabel(status)}
+                {status === ALL_ANALYTICS_STATUSES
+                  ? "All statuses (descriptive total)"
+                  : formatStatusLabel(status)}
               </option>
             ))}
           </select>
@@ -154,6 +175,7 @@ export default function Analytics() {
 
           <AnalyticsGrid
             caseStatusLabel={selectedStatusLabel}
+            caseStatus={selectedCaseStatus}
             monthlyTimelineData={allStatusTimelineData}
             diseaseData={vm.diseaseData}
             districtData={vm.districtData}

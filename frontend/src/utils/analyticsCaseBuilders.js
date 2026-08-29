@@ -9,6 +9,7 @@ export function buildMonthlyTimelineData(casesRows = []) {
         month,
         reportedCases: 0,
         suspectedCases: 0,
+        probableCases: 0,
         confirmedCases: 0,
       };
     }
@@ -28,6 +29,7 @@ export function buildMonthlyTimelineData(casesRows = []) {
     const seriesKey = {
       reported: "reportedCases",
       suspected: "suspectedCases",
+      probable: "probableCases",
       confirmed: "confirmedCases",
     }[classification];
     if (!seriesKey) continue;
@@ -55,10 +57,14 @@ export function buildMonthlyTimelineData(casesRows = []) {
     const totals = byMonthKey.get(key) || {
       reportedCases: 0,
       suspectedCases: 0,
+      probableCases: 0,
       confirmedCases: 0,
     };
     const totalCases =
-      totals.reportedCases + totals.suspectedCases + totals.confirmedCases;
+      totals.reportedCases +
+      totals.suspectedCases +
+      totals.probableCases +
+      totals.confirmedCases;
     rows.push({
       date: `${year}-${String(month).padStart(2, "0")}-01`,
       ...totals,

@@ -9,9 +9,7 @@ import {
   MapPin,
   TriangleAlert,
   ChevronDown,
-  CircleX,
   Clock3,
-  Flag,
   X,
 } from "lucide-react";
 
@@ -120,12 +118,12 @@ export default function ReportsLogList({
 
   const renderExpandedDetails = (report) => (
     <div className="space-y-4">
-      <details open className="group overflow-hidden rounded-xl border border-gray-200 bg-white">
-        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold text-gray-900 marker:content-none">
+      <details open className="group overflow-hidden rounded-xl border border-blue-200 bg-white">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between bg-blue-50 px-4 py-3 font-semibold text-blue-950 marker:content-none hover:bg-blue-100/70">
           Report information
-          <ChevronDown className="h-4 w-4 transition group-open:rotate-180" />
+          <ChevronDown className="h-4 w-4 text-blue-700 transition group-open:rotate-180" />
         </summary>
-        <dl className="grid gap-4 border-t border-gray-100 px-4 py-4 text-sm md:grid-cols-2">
+        <dl className="grid gap-4 border-t border-blue-100 px-4 py-4 text-sm md:grid-cols-2">
           <div><dt className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Report ID</dt><dd className="break-all font-mono text-gray-800">{report._id}</dd></div>
           <div><dt className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Reported at</dt><dd className="text-gray-800">{new Date(report.reportedAt).toLocaleString()}</dd></div>
           <div><dt className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Reporter location</dt><dd className="text-gray-800">{formatActualLocation(report.location)}</dd></div>
@@ -226,7 +224,6 @@ export default function ReportsLogList({
 
                         <td className="px-6 py-4">
                           {classificationBadge(report.currentStatus || report.caseClassification)}
-                          {decisionIndicator(report)}
                         </td>
 
                         <td className="px-6 py-4">
@@ -305,7 +302,6 @@ export default function ReportsLogList({
                       </p>
                       <div className="mt-2">
                         {classificationBadge(report.currentStatus || report.caseClassification)}
-                        {decisionIndicator(report)}
                       </div>
                     </div>
 
@@ -443,34 +439,6 @@ export default function ReportsLogList({
 function formatShortReportId(value) {
   const normalized = String(value || "");
   return normalized ? `#${normalized.slice(-8).toUpperCase()}` : "—";
-}
-
-function decisionIndicator(report) {
-  if (!report.suspectedDecision?.markedAt) return null;
-
-  const isRuledOut = ["ruled_out", "not_suspected"].includes(
-    report.suspectedDecision.outcome,
-  );
-  const DecisionIcon = isRuledOut ? CircleX : Flag;
-
-  return (
-    <div
-      className={`mt-2 flex max-w-64 items-start gap-1.5 rounded-md border px-2 py-1.5 text-[11px] leading-tight ${
-        isRuledOut
-          ? "border-red-200 bg-red-50 text-red-800"
-          : "border-amber-200 bg-amber-50 text-amber-800"
-      }`}
-    >
-      <DecisionIcon
-        aria-hidden="true"
-        className={`mt-px h-3 w-3 shrink-0 ${isRuledOut ? "text-red-600" : "fill-amber-200 text-amber-600"}`}
-      />
-      <span>
-        {isRuledOut ? "Ruled Out" : "Marked as Suspected"} by{" "}
-        <strong>{report.suspectedDecision.markedBy?.username || "authorized personnel"}</strong>
-      </span>
-    </div>
-  );
 }
 
 function formatActualLocation({ name, barangay, district } = {}) {

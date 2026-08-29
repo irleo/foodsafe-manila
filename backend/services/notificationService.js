@@ -28,6 +28,7 @@ export async function createUnusualReportNotification({
   districtKey,
   fromDate,
   count,
+  triggerCount,
 }) {
   const hour = new Date(fromDate).toISOString().slice(0, 13); // YYYY-MM-DDTHH
   const existing = await Notification.findOne({
@@ -40,9 +41,17 @@ export async function createUnusualReportNotification({
 
   return createNotification({
     type: "report_unusual",
-    title: "Unusual Report Volume",
-    message: `${count} reports were submitted in the last 24 hours for ${districtKey.replace(/_/g, " ")}.`,
-    dotColor: "red",
-    metadata: { districtKey, windowHour: hour, count },
+    title: "Operational report-review trigger reached",
+    message: `${count} counted citizen reports were logged for ${districtKey.replace(/_/g, " ")} within the rolling 24-hour review window. Review the Report Logs for possible follow-up.`,
+    dotColor: "orange",
+    metadata: {
+      districtKey,
+      windowHour: hour,
+      count,
+      triggerCount,
+      windowHours: 24,
+      basis: "configured_operational_review_trigger",
+      officialThreshold: false,
+    },
   });
 }

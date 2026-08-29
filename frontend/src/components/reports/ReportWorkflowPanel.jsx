@@ -148,12 +148,12 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
       </div>
 
       {report.investigationStatus === "completed" && report.investigation && (
-        <details open className="group overflow-hidden rounded-xl border border-gray-200 bg-white text-sm text-gray-700">
-          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold text-gray-900 marker:content-none">
+        <details open className="group overflow-hidden rounded-xl border border-amber-200 bg-white text-sm text-gray-700">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between bg-amber-50 px-4 py-3 font-semibold text-amber-950 marker:content-none hover:bg-amber-100/70">
             Investigation record
-            <ChevronDown className="h-4 w-4 transition group-open:rotate-180" />
+            <ChevronDown className="h-4 w-4 text-amber-700 transition group-open:rotate-180" />
           </summary>
-          <dl className="grid grid-cols-1 gap-3 border-t border-gray-100 px-4 py-4 md:grid-cols-2">
+          <dl className="grid grid-cols-1 gap-3 border-t border-amber-100 px-4 py-4 md:grid-cols-2">
             <div><dt className="font-medium">Date</dt><dd>{report.investigation.investigationDate ? new Date(report.investigation.investigationDate).toLocaleDateString() : "—"}</dd></div>
             <div><dt className="font-medium">Location visited</dt><dd>{report.investigation.locationVisited || "—"}</dd></div>
             <div><dt className="font-medium">Suspected disease</dt><dd>{report.investigation.suspectedDisease || report.disease || "—"}</dd></div>
@@ -166,9 +166,9 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
 
       {report.validation?.validatedAt && (
         <details open className="group overflow-hidden rounded-xl border border-emerald-200 bg-white text-sm text-gray-700">
-          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between bg-emerald-50/50 px-4 py-3 font-semibold text-gray-900 marker:content-none">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between bg-emerald-50 px-4 py-3 font-semibold text-emerald-950 marker:content-none hover:bg-emerald-100/70">
             Confirmation record
-            <ChevronDown className="h-4 w-4 transition group-open:rotate-180" />
+            <ChevronDown className="h-4 w-4 text-emerald-700 transition group-open:rotate-180" />
           </summary>
           <div className="space-y-1 border-t border-emerald-100 px-4 py-4">
             <p>Recorded {new Date(report.validation.validatedAt).toLocaleString()} by {report.validation.validatedBy?.username || "authorized personnel"}.</p>

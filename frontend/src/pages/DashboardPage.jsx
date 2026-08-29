@@ -97,13 +97,20 @@ export default function Dashboard() {
 
   useEffect(() => {
     let isMounted = true;
+    if (!token) {
+      setActivity([]);
+      return () => {
+        isMounted = false;
+      };
+    }
 
-    (async () => {
+    const fetchActivity = async () => {
       try {
         const res = await fetch(`${API_BASE}/api/activity?page=1&limit=4`, {
-          headers: { Authorization: token ? `Bearer ${token}` : "" },
+          headers: { Authorization: `Bearer ${token}` },
           credentials: "include",
         });
+        if (!res.ok) throw new Error(`Activity request failed (${res.status})`);
         const data = await res.json();
         if (!isMounted) return;
         setActivity(Array.isArray(data?.items) ? data.items : []);
@@ -112,10 +119,20 @@ export default function Dashboard() {
         console.error("Failed to load recent activity", error);
         setActivity([]);
       }
-    })();
+    };
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void fetchActivity();
+    };
+
+    void fetchActivity();
+    const intervalId = window.setInterval(refreshWhenVisible, 60_000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
 
     return () => {
       isMounted = false;
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [token]);
 

@@ -9,7 +9,6 @@ import {
 } from "../services/notificationService.js";
 import { paginationMeta, parsePagination } from "../utils/pagination.js";
 import { refreshDashboardSummaryAfterWrite } from "../services/dashboardSummaryService.js";
-import { refreshMonthlyDistrictPredictions } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
 import { listReportAudit, recordReportAudit } from "../services/reportAuditService.js";
 import { getDohMorbidityWeek } from "../utils/dohMorbidityWeek.js";
 import {
@@ -306,13 +305,19 @@ export const createReport = async (req, res) => {
 
     await createNotification({
       type: "report_new",
-      title: "New Report Received",
-      message: `Report from ${alertDistrict.replace(/_/g, " ")} (${clampedCaseCount} case/s).`,
+      title: "Citizen report logged",
+      message: isCounted
+        ? `A citizen report from ${alertDistrict.replace(/_/g, " ")} representing ${clampedCaseCount} reported ${clampedCaseCount === 1 ? "person" : "people"} was added to Report Logs.`
+        : `A citizen report from ${alertDistrict.replace(/_/g, " ")} was retained for audit but excluded from report-activity counts.`,
       dotColor: "yellow",
       metadata: {
         reportId: String(report._id),
         districtKey: alertDistrict,
         caseCount: clampedCaseCount,
+        isCounted,
+        excludeReason,
+        reportCount24h: districtReportCount24h,
+        windowHours: 24,
       },
     });
 
@@ -321,6 +326,7 @@ export const createReport = async (req, res) => {
         districtKey: alertDistrict,
         fromDate: windowStart,
         count: districtReportCount24h,
+        triggerCount: UNUSUAL_REPORT_THRESHOLD_24H,
       });
     }
 
@@ -913,16 +919,6 @@ export const validateReport = async (req, res) => {
       details: { condition: disease, evidenceType: evidenceType || undefined },
     });
     await refreshDashboardSummaryAfterWrite();
-    if (["probable", "confirmed"].includes(result) && report.datasetId) {
-      refreshMonthlyDistrictPredictions({
-        trigger: "report_confirmation",
-        datasetId: String(report.datasetId),
-        horizonMonths: 1,
-        force: true,
-      }).catch((error) => {
-        console.error("Prediction refresh after report confirmation failed:", error);
-      });
-    }
     return res.json({ message: "Case classification recorded.", report: await Report.findById(report._id).select(workflowStatusFields).lean() });
   } catch (error) {
     console.error("Error recording case confirmation:", error);

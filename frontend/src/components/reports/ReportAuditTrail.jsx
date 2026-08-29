@@ -30,18 +30,18 @@ export default function ReportAuditTrail({ reportId, token }) {
   }, [reportId, token]);
 
   return (
-    <details className="group mt-3 rounded-lg border border-gray-200 bg-gray-50">
-      <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-medium text-gray-700 marker:content-none">
+    <details className="group mt-3 overflow-hidden rounded-lg border border-violet-200 bg-white">
+      <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 bg-violet-50 px-3 py-2 text-sm font-medium text-violet-950 marker:content-none hover:bg-violet-100/70">
         <span className="inline-flex items-center gap-2">
-          <History className="h-4 w-4 text-gray-500" />
+          <History className="h-4 w-4 text-violet-700" />
           Audit trail
           {items.length > 0 && (
-            <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600">{items.length}</span>
+            <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs text-violet-700">{items.length}</span>
           )}
         </span>
-        <ChevronDown className="h-4 w-4 transition group-open:rotate-180" />
+        <ChevronDown className="h-4 w-4 text-violet-700 transition group-open:rotate-180" />
       </summary>
-      <div className="max-h-56 overflow-y-auto border-t border-gray-200 px-3 py-3">
+      <div className="max-h-56 overflow-y-auto border-t border-violet-100 px-3 py-3">
         {errorMessage ? (
           <p className="text-xs text-red-700">{errorMessage}</p>
         ) : items.length === 0 ? (

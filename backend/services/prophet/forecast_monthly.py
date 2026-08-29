@@ -4,21 +4,10 @@ Prophet monthly forecast for case counts.
 stdin JSON:
 {
   "series": [
-    {
-      "year": 2025,
-      "month": 1,
-      "y": 12,
-      "lag1": 5,
-      "lag2": 4,
-      "avg3": 4.33
-    },
+    { "year": 2025, "month": 1, "y": 12 },
     ...
   ],
-  "horizonMonths": 3,
-  "futureRegressors": [
-    { "lag1": 8, "lag2": 7, "avg3": 7.0 },
-    ...
-  ]
+  "horizonMonths": 3
 }
 
 stdout JSON:
@@ -75,37 +64,17 @@ def _make_model() -> Prophet:
         seasonality_mode="additive",
         interval_width=0.95,
     )
-    model.add_regressor("lag1", standardize=False)
-    model.add_regressor("lag2", standardize=False)
-    model.add_regressor("avg3", standardize=False)
     return model
 
 
-def _fit_predict(
-    train_df: pd.DataFrame, periods: int, future_regressors: list | None = None
-) -> pd.DataFrame:
+def _fit_predict(train_df: pd.DataFrame, periods: int) -> pd.DataFrame:
     model = _make_model()
     model.fit(train_df)
     future = model.make_future_dataframe(periods=int(periods), freq="MS", include_history=False)
-    rows = future_regressors or []
-    if len(rows) < len(future):
-        last = rows[-1] if rows else {"lag1": 0, "lag2": 0, "avg3": 0}
-        rows = rows + [last for _ in range(len(future) - len(rows))]
-    rows = rows[: len(future)]
-    future["lag1"] = [float(r.get("lag1", 0) or 0) for r in rows]
-    future["lag2"] = [float(r.get("lag2", 0) or 0) for r in rows]
-    future["avg3"] = [float(r.get("avg3", 0) or 0) for r in rows]
     return model.predict(future)
 
 
-def _norm(v) -> float:
-    try:
-        return float(v)
-    except Exception:
-        return 0.0
-
-
-def run_forecast(series: list, horizon_months: int, future_regressors: list | None = None) -> dict:
+def run_forecast(series: list, horizon_months: int) -> dict:
     rows = []
     for r in series or []:
         y = int(r.get("year"))
@@ -116,9 +85,6 @@ def run_forecast(series: list, horizon_months: int, future_regressors: list | No
                 "year": y,
                 "month": m,
                 "y": v,
-                "lag1": _norm(r.get("lag1", 0)),
-                "lag2": _norm(r.get("lag2", 0)),
-                "avg3": _norm(r.get("avg3", 0)),
             }
         )
     rows.sort(key=lambda x: (x["year"], x["month"]))
@@ -132,9 +98,6 @@ def run_forecast(series: list, horizon_months: int, future_regressors: list | No
         {
             "ds": [_to_ds(int(r["year"]), int(r["month"])) for r in rows],
             "y": [float(r["y"]) for r in rows],
-            "lag1": [float(r["lag1"]) for r in rows],
-            "lag2": [float(r["lag2"]) for r in rows],
-            "avg3": [float(r["avg3"]) for r in rows],
         }
     )
 
@@ -145,19 +108,9 @@ def run_forecast(series: list, horizon_months: int, future_regressors: list | No
             {
                 "ds": [_to_ds(int(r["year"]), int(r["month"])) for r in rows[:i]],
                 "y": [float(r["y"]) for r in rows[:i]],
-                "lag1": [float(r["lag1"]) for r in rows[:i]],
-                "lag2": [float(r["lag2"]) for r in rows[:i]],
-                "avg3": [float(r["avg3"]) for r in rows[:i]],
             }
         )
-        one_step_reg = [
-            {
-                "lag1": float(rows[i]["lag1"]),
-                "lag2": float(rows[i]["lag2"]),
-                "avg3": float(rows[i]["avg3"]),
-            }
-        ]
-        one_step = _fit_predict(rolling_train_df, 1, one_step_reg)
+        one_step = _fit_predict(rolling_train_df, 1)
         target = rows[i]
         backtest.append(
             {
@@ -165,12 +118,13 @@ def run_forecast(series: list, horizon_months: int, future_regressors: list | No
                 "month": int(target["month"]),
                 "actualCases": max(0, int(round(float(target["y"])))),
                 "predictedCases": max(0, int(round(float(one_step["yhat"].iloc[0])))),
+                "rawPredictedCases": max(0.0, float(one_step["yhat"].iloc[0])),
                 "lowerBound": max(0, int(round(float(one_step["yhat_lower"].iloc[0])))),
                 "upperBound": max(0, int(round(float(one_step["yhat_upper"].iloc[0])))),
             }
         )
 
-    fcst = _fit_predict(train_df, horizon_months, future_regressors)
+    fcst = _fit_predict(train_df, horizon_months)
 
     out = []
     for i in range(len(fcst)):
@@ -180,6 +134,7 @@ def run_forecast(series: list, horizon_months: int, future_regressors: list | No
                 "year": int(ds.year),
                 "month": int(ds.month),
                 "predictedCases": max(0, int(round(float(fcst["yhat"].iloc[i])))),
+                "rawPredictedCases": max(0.0, float(fcst["yhat"].iloc[i])),
                 "lowerBound": max(0, int(round(float(fcst["yhat_lower"].iloc[i])))),
                 "upperBound": max(0, int(round(float(fcst["yhat_upper"].iloc[i])))),
                 "isPrimaryTarget": i == 0,
@@ -195,8 +150,7 @@ def main() -> None:
         payload = json.loads(raw) if raw.strip() else {}
         series = payload.get("series") or []
         horizon = int(payload.get("horizonMonths") or 1)
-        future_regressors = payload.get("futureRegressors") or []
-        out = run_forecast(series, horizon, future_regressors)
+        out = run_forecast(series, horizon)
         print(json.dumps(out), flush=True)
     except Exception as e:
         print(

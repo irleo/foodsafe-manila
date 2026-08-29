@@ -10,6 +10,7 @@ const dashboardSummarySchema = new mongoose.Schema(
     suspectedReports: { type: Number, required: true, default: 0 },
     reportedCases: { type: Number, required: true, default: 0 },
     suspectedCases: { type: Number, required: true, default: 0 },
+    probableCases: { type: Number, required: true, default: 0 },
     confirmedCases: { type: Number, required: true, default: 0 },
     notValidatedCases: { type: Number, required: true, default: 0 },
     totalDefinition: {
