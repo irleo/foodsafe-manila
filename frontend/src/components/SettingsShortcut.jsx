@@ -12,7 +12,7 @@ export default function SettingsShortcut() {
   }
 
   return (
-    <div className="group fixed bottom-5 right-5 z-40 flex items-center gap-2 sm:bottom-6 sm:right-6">
+    <div className="no-print group fixed bottom-5 right-5 z-40 flex items-center gap-2 sm:bottom-6 sm:right-6">
       <div
         role="tooltip"
         className="pointer-events-none invisible max-w-64 translate-x-2 rounded-lg border border-gray-200 bg-gray-900 px-3 py-2 text-right text-xs font-medium leading-5 text-white opacity-0 shadow-lg transition-all duration-150 group-hover:visible group-hover:translate-x-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-x-0 group-focus-within:opacity-100"

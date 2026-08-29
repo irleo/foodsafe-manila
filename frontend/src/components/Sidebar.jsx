@@ -70,7 +70,7 @@ export default function Sidebar({ isOpen, onClose }) {
       id="dashboard-navigation"
       aria-label="Primary navigation"
       className={`
-        fixed left-0 top-16 z-20 h-[calc(100dvh-4rem)] w-64 overflow-y-auto border-r border-gray-200 bg-white
+        no-print fixed left-0 top-16 z-20 h-[calc(100dvh-4rem)] w-64 overflow-y-auto border-r border-gray-200 bg-white
         transition-transform duration-300 lg:sticky lg:shrink-0
         ${isOpen ? "translate-x-0" : "-translate-x-full"}
         lg:translate-x-0

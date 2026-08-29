@@ -11,6 +11,11 @@
 }
 
 @media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
@@ -19,6 +24,7 @@
   html,
   body {
     background: #ffffff !important;
+    width: 100% !important;
   }
 
   .no-print {
@@ -29,8 +35,30 @@
     display: block !important;
   }
 
+  .dashboard-shell,
+  .dashboard-content-row {
+    display: block !important;
+    min-height: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .dashboard-main {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+  }
+
   .analytics-print-root {
+    display: block !important;
+    width: 100% !important;
     break-inside: auto;
+  }
+
+  .analytics-print-heading {
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #2563eb;
   }
 
   .analytics-print-grid {
@@ -56,5 +84,13 @@
   svg {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
+  }
+
+  .analytics-print-block {
+    overflow: visible !important;
+  }
+
+  .recharts-responsive-container {
+    width: 100% !important;
   }
 }

@@ -21,7 +21,7 @@ export default function DashboardLayout() {
   }, [isSidebarOpen]);
 
   return (
-    <div className="min-h-[100dvh] bg-gray-50">
+    <div className="dashboard-shell min-h-[100dvh] bg-gray-50">
       <div className="flex min-h-[100dvh] flex-col">
         {/* Navbar */}
         <Navbar
@@ -29,7 +29,7 @@ export default function DashboardLayout() {
           toggleSidebar={toggleSidebar}
         />
 
-        <div className="flex min-w-0 flex-1">
+        <div className="dashboard-content-row flex min-w-0 flex-1">
           {/* Sidebar */}
           <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} />
           {isSidebarOpen && (
@@ -41,7 +41,7 @@ export default function DashboardLayout() {
             />
           )}
           {/* Main content */}
-          <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
+          <main className="dashboard-main min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
             <Outlet />
           </main>
         </div>
