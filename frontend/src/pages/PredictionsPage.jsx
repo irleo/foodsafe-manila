@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { InformationCircleIcon } from "@heroicons/react/24/outline";
 
 import { useAuth } from "../context/AuthContext";
 import { notify } from "../utils/toast";
@@ -10,7 +9,6 @@ import DataCoverageNotice from "../components/DataCoverageNotice";
 import YearlyActualVsPredictedLineChart from "../components/charts/YearlyActualVsPredictedLineChart";
 import YearlyPredictionErrorBarChart from "../components/charts/YearlyPredictionErrorBarChart";
 import {
-  FORECAST_MODEL_OPTIONS,
   buildPredictionRows,
   getDistrictScope,
   getPredictionScope,
@@ -47,9 +45,6 @@ function displayMetric(value, suffix = "") {
 function DistrictSelect({ id, value, options, onChange, title }) {
   return (
     <div className="flex flex-col gap-1 sm:flex-row sm:items-center">
-      <label className="text-sm text-gray-600" htmlFor={id}>
-        District
-      </label>
       <select
         id={id}
         value={value}
@@ -67,7 +62,7 @@ function DistrictSelect({ id, value, options, onChange, title }) {
   );
 }
 
-function EvaluationTable({ evaluation, selectedMode }) {
+function EvaluationTable({ evaluation }) {
   if (!evaluation?.prophet || !evaluation?.seasonalNaive) {
     return (
       <div className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow-sm">
@@ -102,17 +97,15 @@ function EvaluationTable({ evaluation, selectedMode }) {
             <tr>
               <th className="p-4 text-left font-medium">Metric</th>
               <th
-                className={`p-4 text-right font-medium ${selectedMode === "prophet" ? "bg-blue-50 text-blue-800" : ""}`}
+                className="bg-blue-50 p-4 text-right font-medium text-blue-800"
               >
-                Trend-based method (Prophet){" "}
+                Operational: Trend-based method (Prophet){" "}
                 {prophetWins && (
                   <span className="ml-1 text-xs">Smaller average error</span>
                 )}
               </th>
-              <th
-                className={`p-4 text-right font-medium ${selectedMode === "seasonal_naive" ? "bg-blue-50 text-blue-800" : ""}`}
-              >
-                Same month last year{" "}
+              <th className="p-4 text-right font-medium">
+                Benchmark: Same month last year{" "}
                 {naiveWins && (
                   <span className="ml-1 text-xs">Smaller average error</span>
                 )}
@@ -129,7 +122,7 @@ function EvaluationTable({ evaluation, selectedMode }) {
                   {row.label}
                   {row.primary && (
                     <span className="ml-2 text-xs font-medium text-blue-700">
-                      Used to choose the method
+                      Benchmark comparison only
                     </span>
                   )}
                 </td>
@@ -162,7 +155,7 @@ function EvaluationTable({ evaluation, selectedMode }) {
           "There is not enough shared history to compare both methods fairly."
         )}
         <span className="ml-2 text-xs text-gray-500">
-          Error rates omit months where the actual count is zero.
+          Prophet remains the operational method regardless of the benchmark result. Error rates omit months where the actual count is zero.
         </span>
       </div>
     </div>
@@ -179,7 +172,7 @@ export default function Predictions() {
   const [loading, setLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [emptyMsg, setEmptyMsg] = useState("");
-  const [forecastModel, setForecastModel] = useState("best");
+  const forecastModel = "prophet";
   const [selectedDisease, setSelectedDisease] = useState("");
   const [selectedChartDistrict, setSelectedChartDistrict] = useState("manila");
   const [selectedErrorDistrict, setSelectedErrorDistrict] = useState("manila");
@@ -235,7 +228,6 @@ export default function Predictions() {
           throw new Error(response.message || "No prediction run was created.");
         }
         setRun(response);
-        setForecastModel("best");
         setSelectedChartDistrict("manila");
         setSelectedErrorDistrict("manila");
         setSelectedHistoryDistrict("manila");
@@ -342,7 +334,6 @@ export default function Predictions() {
   );
 
   const nextForecast = getPrimaryForecast(wholeManilaScope);
-  const selectedModelName = modelLabel(wholeManilaScope?.resolvedModel);
   const evaluation = payload.modelEvaluation || null;
   const modelCoverage = payload.modelCoverage || null;
   const activeCoverage = wholeManilaScope?.coverage || payload.coverage || {};
@@ -356,6 +347,7 @@ export default function Predictions() {
     districtOptions.find((option) => option.value === selectedHistoryDistrict)
       ?.label || "Whole Manila";
   const horizonMonths = Number(run?.forecastHorizonMonths || 1);
+  const aggregateInterval = wholeManilaScope?.intervalAggregation || null;
 
   const districtOutlooks = useMemo(
     () =>
@@ -371,22 +363,6 @@ export default function Predictions() {
       }),
     [districts, forecastModel],
   );
-  const hasInsufficientDistrictComparison = districtOutlooks.some(
-    (item) => forecastModel === "best" && !item.comparison?.sufficient,
-  );
-  const hasOperationalFallback = districtOutlooks.some(
-    (item) =>
-      forecastModel === "best" &&
-      item.comparison?.sufficient &&
-      item.comparison?.selectedModel &&
-      item.model !== item.comparison.selectedModel,
-  );
-
-  const changeForecastModel = (nextModel) => {
-    setForecastModel(nextModel);
-    setHistoryPage(1);
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
@@ -453,8 +429,8 @@ export default function Predictions() {
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
             The trend-based method produced a forecast for{" "}
             {modelCoverage.prophet.successfulDistricts} of{" "}
-            {modelCoverage.prophet.totalDistricts} districts. The
-            same-month-last-year method remains available where possible.
+            {modelCoverage.prophet.totalDistricts} districts. Missing districts
+            remain unavailable because no fallback method is substituted.
           </p>
         )}
 
@@ -496,17 +472,22 @@ export default function Predictions() {
               {formatStatusLabel(nextForecast.expectedStatus)}
             </p>
           )}
-          {forecastModel === "prophet" &&
-            nextForecast?.lower != null &&
+          {nextForecast?.lower != null &&
             nextForecast?.upper != null && (
               <p className="mt-2 text-xs text-gray-500">
                 95% prediction interval: {nextForecast.lower}–
                 {nextForecast.upper} cases
               </p>
             )}
-          {nextForecast && wholeManilaScope?.resolvedModel === "mixed" && (
+          {nextForecast &&
+            (nextForecast.lower == null || nextForecast.upper == null) && (
+              <p className="mt-2 text-xs text-amber-700">
+                Whole-Manila prediction interval not calculated: {aggregateInterval?.calibrationObservations || 0} of {aggregateInterval?.minimumRequiredObservations || 19} required common rolling-origin errors are available.
+              </p>
+            )}
+          {nextForecast && (
             <p className="mt-2 text-xs text-blue-700">
-              Sum of each district’s selected best-model forecast.
+              Coherent bottom-up sum of all six district Prophet forecasts.
             </p>
           )}
           {run && (
@@ -543,68 +524,22 @@ export default function Predictions() {
         </div>
 
         <div className="rounded-xl border border-blue-100 bg-white p-6 shadow-sm">
-          <div className="flex items-center gap-1.5">
-            <label
-              htmlFor="forecast-model"
-              className="text-sm font-medium text-gray-600"
-            >
-              Forecasting method shown
-            </label>
-            <div className="group relative flex">
-              <button
-                type="button"
-                aria-label="About forecast model selection"
-                aria-describedby="forecast-model-help"
-                className="rounded-full text-gray-400 transition-colors hover:text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
-              >
-                <InformationCircleIcon className="h-4 w-4" aria-hidden="true" />
-              </button>
-              <div
-                id="forecast-model-help"
-                role="tooltip"
-                className="pointer-events-none invisible absolute right-0 top-6 z-20 w-72 rounded-lg bg-gray-900 px-3 py-2 text-xs font-normal leading-5 text-white opacity-0 shadow-lg transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
-              >
-                Best Model uses whichever method had the smaller average error
-                in recent historical checks. Changing this only changes what is
-                displayed.
-              </div>
-            </div>
-          </div>
-
-          <select
-            id="forecast-model"
-            value={forecastModel}
-            onChange={(event) => changeForecastModel(event.target.value)}
-            className="mt-2 w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-semibold text-blue-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-          >
-            {FORECAST_MODEL_OPTIONS.map((option) => (
-              <option
-                key={option.value}
-                value={option.value}
-                disabled={
-                  option.value === "seasonal_naive" && !comparisonAvailable
-                }
-              >
-                {option.label}
-              </option>
-            ))}
-          </select>
-
-          <p className="mt-3 text-xs text-gray-500">Currently displaying</p>
+          <p className="text-sm font-medium text-gray-600">Operational forecasting method</p>
           <p className="mt-0.5 text-xl font-semibold text-gray-900">
-            {forecastModel === "prophet"
-              ? "Trend-based monthly method (Prophet)"
-              : selectedModelName}
+            Trend-based monthly method (Prophet)
           </p>
-          {forecastModel === "best" && (
-            <p className="mt-2 text-sm text-blue-700">
-              {hasInsufficientDistrictComparison
-                ? "There is not enough shared history for a full comparison in every district, so an available method is shown."
-                : hasOperationalFallback
-                  ? "The available method is shown where the historically better method could not produce this month."
-                  : "The method with the smaller recent historical error is shown."}
+          <p className="mt-2 text-sm text-blue-700">
+            Prophet is used for every operational district forecast. Same-month-last-year remains visible only as a performance benchmark and is never substituted as a fallback.
+          </p>
+          <div className="mt-4 border-t border-blue-100 pt-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Whole-Manila uncertainty</p>
+            <p className="mt-1 text-sm text-gray-600">
+              The city point forecast is the sum of all six district Prophet forecasts. Its 95% interval is calibrated from common rolling-origin errors of that same summed pipeline; district bounds are never added together.
             </p>
-          )}
+            <p className="mt-2 text-xs text-gray-500">
+              Calibration history: {aggregateInterval?.calibrationObservations || 0}/{aggregateInterval?.minimumRequiredObservations || 19} required observations
+            </p>
+          </div>
           {!comparisonAvailable && (
             <p className="mt-2 text-sm text-amber-700">
               Refresh Forecast to generate the model comparison.
@@ -621,6 +556,11 @@ export default function Predictions() {
       <YearlyActualVsPredictedLineChart
         title={`Historical Confirmed Cases vs Predicted — ${modelLabel(chartScope?.resolvedModel)} (${chartLabel})`}
         data={chartRows}
+        description={selectedChartDistrict === "manila"
+          ? aggregateInterval?.status === "calculated"
+            ? `The Whole-Manila point forecast is the sum of six district Prophet forecasts. Its target interval is calibrated from ${aggregateInterval.calibrationObservations} common rolling-origin aggregate errors; historical aggregate rows do not reuse district marginal bounds.`
+            : "The Whole-Manila series is the bottom-up sum of district Prophet forecasts. No aggregate prediction band is shown until sufficient common rolling-origin calibration history is available."
+          : "The shaded area is the district-level Prophet 95% posterior-predictive interval; a zero lower endpoint does not mean zero uncertainty."}
         controls={
           <DistrictSelect
             id="chart-district"
@@ -635,16 +575,18 @@ export default function Predictions() {
       <div>
         <h2 className="text-lg font-semibold">Model Evaluation</h2>
         <p className="mt-1 text-sm text-gray-500">
-          Both methods are checked against the same historical months. The
-          method with the smaller average error is preferred.
+          Prophet is checked against the same-month-last-year benchmark on shared historical months. The comparison monitors performance but does not switch the operational method.
         </p>
       </div>
-      <EvaluationTable evaluation={evaluation} selectedMode={forecastModel} />
+      <EvaluationTable evaluation={evaluation} />
 
       <YearlyPredictionErrorBarChart
         title={`Prediction Error by Period — ${modelLabel(errorScope?.resolvedModel)} (${errorLabel})`}
         data={errorRows}
         mode="signed"
+        description={selectedErrorDistrict === "manila"
+          ? "Each bar compares the actual Whole-Manila count with the coherent bottom-up sum of the six district Prophet predictions for that historical month."
+          : "Each bar is a rolling one-step Prophet error for the selected district. Seasonal Naive benchmark errors are excluded from this operational chart."}
         controls={
           <DistrictSelect
             id="error-district"
@@ -679,11 +621,9 @@ export default function Predictions() {
             >
               <div className="flex items-start justify-between gap-3">
                 <h3 className="font-semibold text-gray-900">{item.district}</h3>
-                {forecastModel === "best" && item.comparison?.sufficient && (
-                  <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700">
-                    {item.model === item.comparison.selectedModel
-                      ? "Best historical performance"
-                      : "Target-available fallback"}
+                {item.comparison?.sufficient && item.comparison.bestHistoricalModel === "seasonal_naive" && (
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700">
+                    Benchmark had smaller historical error
                   </span>
                 )}
               </div>
@@ -701,18 +641,14 @@ export default function Predictions() {
               <p className="mt-2 text-sm text-gray-600">
                 Model: <strong>{modelLabel(item.model)}</strong>
               </p>
-              {forecastModel === "best" && !item.comparison?.sufficient && (
-                <p className="mt-2 text-xs text-amber-700">
-                  There is not enough shared history to compare both methods
-                  fairly, so the available method is shown.
+              {item.forecast?.lower != null && item.forecast?.upper != null && (
+                <p className="mt-2 text-xs text-gray-500">
+                  Prophet 95% prediction interval: {item.forecast.lower}–{item.forecast.upper} cases
                 </p>
               )}
-              {forecastModel === "best" &&
-                item.comparison?.operationalModelReason && (
-                  <p className="mt-2 text-xs text-blue-700">
-                    {item.comparison.operationalModelReason}
-                  </p>
-                )}
+              {item.forecast && (item.forecast.lower == null || item.forecast.upper == null) && (
+                <p className="mt-2 text-xs text-amber-700">Prediction interval not calculated.</p>
+              )}
               {!item.forecast && (
                 <p className="mt-2 text-xs text-amber-700">
                   {item.message || "No sufficient data"}
@@ -733,6 +669,11 @@ export default function Predictions() {
               {historyLabel} — one-step{" "}
               {modelLabel(historyScope?.resolvedModel)} predictions
             </p>
+            {selectedHistoryDistrict === "manila" && (
+              <p className="mt-1 text-xs text-gray-500">
+                Aggregate rows are bottom-up Prophet backtests. Their errors calibrate the current Whole-Manila interval; district marginal bounds are not added together.
+              </p>
+            )}
           </div>
           <DistrictSelect
             id="history-district"
@@ -755,8 +696,7 @@ export default function Predictions() {
                 <th className="p-3 text-right">Historical Confirmed Cases</th>
                 <th className="p-3 text-right">Absolute Error</th>
                 <th className="p-3 text-right">Error %</th>
-                <th className="p-3 text-left">Model</th>
-                <th className="p-3 text-left">95% Prediction Interval</th>
+                <th className="p-3 text-center">95% Prediction Interval</th>
               </tr>
             </thead>
             <tbody>
@@ -783,11 +723,10 @@ export default function Predictions() {
                       <td className="p-3 text-right">{row.actual}</td>
                       <td className="p-3 text-right">{absoluteError}</td>
                       <td className="p-3 text-right">{errorPercent}</td>
-                      <td className="p-3">{modelLabel(row.model)}</td>
-                      <td className="p-3 text-gray-600">
+                      <td className="p-3 text-gray-600 text-center">
                         {row.lower != null && row.upper != null
                           ? `${row.lower}–${row.upper}`
-                          : "Not applicable"}
+                          : "Not calculated"}
                       </td>
                     </tr>
                   );

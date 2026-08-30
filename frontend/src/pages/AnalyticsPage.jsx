@@ -71,29 +71,12 @@ export default function Analytics() {
       ? "All Included"
       : formatStatusLabel(selectedCaseStatus);
 
-  const handleExportPdf = async () => {
-    const originalTitle = document.title;
-    document.title = `FoodSafe Manila - Analytics - ${selectedStatusLabel}`;
-
-    try {
-      await document.fonts?.ready;
-      window.requestAnimationFrame(() => window.print());
-    } finally {
-      window.setTimeout(() => {
-        document.title = originalTitle;
-      }, 1000);
-    }
+  const handleExportPdf = () => {
+    window.print();
   };
 
   return (
     <div className="space-y-6 analytics-print-root">
-      <div className="print-only analytics-print-heading">
-        <p className="text-sm font-semibold text-blue-700">FoodSafe Manila</p>
-        <h1 className="mt-1 text-2xl font-bold text-gray-950">Analytics Report</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Case status: {selectedStatusLabel}
-        </p>
-      </div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Analytics</h1>

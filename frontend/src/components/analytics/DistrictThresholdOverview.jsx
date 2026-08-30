@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchCurrentThreshold } from "../../api/thresholds";
 import { SURVEILLANCE_DISEASES } from "../../constants/surveillanceMethodology.js";
 import { formatStatusLabel } from "../../utils/formatStatusLabel";
+import { formatThresholdValue } from "../../utils/formatThresholdValue.js";
 
 const MANILA_DISTRICTS = Array.from(
   { length: 6 },
@@ -124,9 +125,9 @@ export default function DistrictThresholdOverview({ token, datasetId }) {
                     </td>
                     <td className="px-5 py-4 text-right font-medium text-gray-900">{result?.observedConfirmedCases ?? "—"}</td>
                     <td className="px-5 py-4 text-right text-gray-600">{result ? `${result.baselinePeriods?.length || 0} / 5` : "—"}</td>
-                    <td className="px-5 py-4 text-right text-gray-600">{result?.baselineMean ?? "—"}</td>
-                    <td className="px-5 py-4 text-right text-gray-600">{result?.alertThreshold ?? "—"}</td>
-                    <td className="px-5 py-4 text-right text-gray-600">{result?.epidemicThreshold ?? "—"}</td>
+                    <td className="px-5 py-4 text-right text-gray-600">{formatThresholdValue(result?.baselineMean)}</td>
+                    <td className="px-5 py-4 text-right text-gray-600">{formatThresholdValue(result?.alertThreshold)}</td>
+                    <td className="px-5 py-4 text-right text-gray-600">{formatThresholdValue(result?.epidemicThreshold)}</td>
                     <td className="px-5 py-4">
                       {result ? (
                         <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${thresholdStatusClass(result.outcome)}`}>

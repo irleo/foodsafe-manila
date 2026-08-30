@@ -15,7 +15,7 @@ const dashboardSummarySchema = new mongoose.Schema(
     notValidatedCases: { type: Number, required: true, default: 0 },
     totalDefinition: {
       type: String,
-      default: "Confirmed official cases and confirmed surveillance reports",
+      default: "Confirmed cases from authoritative CESU uploads only",
     },
     topDistrict: { type: String, default: null },
     topDisease: { type: String, default: null },

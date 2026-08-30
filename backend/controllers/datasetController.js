@@ -11,6 +11,8 @@ import { createNotification } from "../services/notificationService.js";
 import { resolveCumulativeDatasetContext } from "../services/cumulativeOfficialCaseService.js";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
+const OFFICIAL_PROVIDER_TYPE = "cesu";
+const OFFICIAL_PROVIDER_NAME = "CESU";
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
 function cleanupUploadedFile(req) {
@@ -42,9 +44,11 @@ export const uploadDataset = async (req, res) => {
   let dataset = null;
 
   try {
-    const { name, dataSource } = req.body;
-    const providerType = String(req.body.providerType || "").trim().toLowerCase();
-    const providerName = String(req.body.providerName || dataSource || "").trim();
+    const { name } = req.body;
+    // CESU is the sole authoritative uploader. Provider metadata is assigned
+    // server-side so a custom client cannot introduce another official source.
+    const providerType = OFFICIAL_PROVIDER_TYPE;
+    const providerName = OFFICIAL_PROVIDER_NAME;
     const reportingFrequency = String(req.body.reportingFrequency || "weekly")
       .trim()
       .toLowerCase();
@@ -61,26 +65,11 @@ export const uploadDataset = async (req, res) => {
       cleanupUploadedFile(req);
       return res.status(400).json({ message: "District coverage must be a list." });
     }
-    const allowedProviderTypes = new Set([
-      "hospital",
-      "health_center",
-      "cesu",
-      "doh",
-    ]);
-
     if (!req.file)
       return res.status(400).json({ message: "No file uploaded." });
     if (!name) {
       cleanupUploadedFile(req);
       return res.status(400).json({ message: "Name is required." });
-    }
-    if (!allowedProviderTypes.has(providerType)) {
-      cleanupUploadedFile(req);
-      return res.status(400).json({ message: "Select a valid dataset source." });
-    }
-    if (!providerName) {
-      cleanupUploadedFile(req);
-      return res.status(400).json({ message: "Provider or facility name is required." });
     }
     if (!["weekly", "monthly"].includes(reportingFrequency)) {
       cleanupUploadedFile(req);
@@ -335,6 +324,9 @@ export const listDatasets = async (req, res) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
     const statusParam = String(req.query.status || "validated").toLowerCase();
+    const providerTypeParam = String(req.query.providerType || "")
+      .trim()
+      .toLowerCase();
 
     let filter = {};
     if (statusParam === "all") {
@@ -352,6 +344,19 @@ export const listDatasets = async (req, res) => {
       filter = safeStatuses.length
         ? { status: { $in: safeStatuses } }
         : { status: "validated" };
+    }
+    if (providerTypeParam) {
+      const allowedProviderTypes = new Set([
+        "hospital",
+        "health_center",
+        "cesu",
+        "doh",
+        "citizen_patient_report",
+      ]);
+      if (!allowedProviderTypes.has(providerTypeParam)) {
+        return res.status(400).json({ message: "Invalid providerType filter." });
+      }
+      filter.providerType = providerTypeParam;
     }
 
     const [datasets, total] = await Promise.all([
@@ -371,7 +376,7 @@ export const listDatasets = async (req, res) => {
       const validationErrors = Array.isArray(entry.validationErrors)
         ? entry.validationErrors
         : [];
-      const cumulative = entry.status === "validated"
+      const cumulative = entry.status === "validated" && entry.providerType === "cesu"
         ? await resolveCumulativeDatasetContext(entry._id)
         : null;
       return {
@@ -379,7 +384,6 @@ export const listDatasets = async (req, res) => {
         analyticalCoverageStart: cumulative?.coverageStart || null,
         analyticalCoverageEnd: cumulative?.coverageEnd || null,
         cumulativeUploadCount: cumulative?.uploadCount || 0,
-        contributingAgencyCount: cumulative?.providerCount || 0,
         validationErrorCount: Number.isFinite(entry.validationErrorCount)
           ? entry.validationErrorCount
           : validationErrors.length,

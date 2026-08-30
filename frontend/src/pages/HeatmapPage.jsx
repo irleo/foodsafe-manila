@@ -23,7 +23,6 @@ import HeatmapMapCard from "../components/heatmap/HeatmapMapCard";
 import LegendCard from "../components/heatmap/LegendCard";
 import TopDistrictsCard from "../components/heatmap/TopDistrictsCard";
 import TopDiseaseCard from "../components/heatmap/TopDiseaseCard";
-import SurveillanceAttentionCard from "../components/heatmap/SurveillanceAttentionCard";
 
 const MANILA_CITY_BOUNDS = [
   [14.53, 120.93],
@@ -145,8 +144,9 @@ export default function Heatmap() {
     const forecastDiseases = Array.isArray(predictionRun?.payload?.diseases)
       ? predictionRun.payload.diseases.map((item) => item.disease).filter(Boolean)
       : [];
-    const combined = [...new Set([...diseases, ...forecastDiseases])].sort((a, b) => a.localeCompare(b));
-    return viewMode === "forecast" ? combined : ["All", ...combined];
+    const available = viewMode === "forecast" ? forecastDiseases : diseases;
+    const unique = [...new Set(available)].sort((a, b) => a.localeCompare(b));
+    return viewMode === "forecast" ? unique : ["All", ...unique];
   }, [filterOptions, predictionRun, viewMode]);
 
   const classificationOptions = useMemo(() => {
@@ -178,7 +178,7 @@ export default function Heatmap() {
 
   const statCards = viewMode === "forecast"
     ? [
-        { title: completeCityForecast ? "Predicted Cases" : "Predicted Cases (Available Districts)", value: displayNumber(predictedTotal) },
+        { title: completeCityForecast ? "Predicted Eligible Cases" : "Predicted Eligible Cases (Available Districts)", value: displayNumber(predictedTotal) },
         { title: "Districts Forecasted", value: forecastDistrictPoints.length },
         { title: "Forecast Period", value: forecastLabel },
       ]
@@ -201,7 +201,7 @@ export default function Heatmap() {
   );
 
   const title = viewMode === "forecast"
-    ? `Confirmed-Case Forecast Concentration — ${forecastLabel}`
+    ? `${selectedDisease} Eligible-Case Forecast Concentration — ${forecastLabel}`
     : "Manila Case Concentration Map";
   const showNoData = viewMode === "actual"
     ? districtPoints.length === 0
@@ -213,6 +213,7 @@ export default function Heatmap() {
   ) : null;
 
   const selectClass = "mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-normal normal-case tracking-normal text-gray-800 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500";
+  const metadataClass = "mt-1 flex min-h-11 w-full items-center rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-gray-800";
   const forecastDisabledReason = !forecastMatchesDataset
     ? "The saved forecast belongs to a different dataset. Refresh it in Predictions."
     : forecastError;
@@ -222,7 +223,7 @@ export default function Heatmap() {
       <div>
         <h1 className="text-2xl font-bold">Case Concentration and Forecast Map</h1>
         <p className="mt-1 max-w-4xl text-gray-600">
-          Explore actual case concentration or the same district-level Best Model forecast saved by the Predictions module. Forecast values are displayed separately from observed cases.
+          Explore actual CESU case concentration or a saved district-level operational forecast from Predictions. Forecasts use Prophet for every district; the same-month-last-year method is retained only as a performance benchmark and never replaces an unavailable Prophet forecast.
         </p>
       </div>
 
@@ -263,7 +264,7 @@ export default function Heatmap() {
         <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 text-sm text-blue-950">
           <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
             <p>
-              <strong>Forecast—not actual cases.</strong> Showing {selectedDisease} for {forecastLabel}, based on monthly records through {basisLabel}. Each district uses the forecasting method that performed better on recent historical months.
+              <strong>Forecast—not actual cases.</strong> Showing Prophet-predicted eligible {selectedDisease} cases for {forecastLabel}, using authoritative CESU monthly records through {basisLabel}. District forecasts remain unavailable when Prophet cannot produce a valid target forecast.
             </p>
             <p className="shrink-0 text-xs text-blue-700">
               Prediction run {predictionRun.predictionRunId?.slice(-8)} · {predictionRun.generatedAt ? new Date(predictionRun.generatedAt).toLocaleString("en-PH") : "date unavailable"}
@@ -294,56 +295,57 @@ export default function Heatmap() {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <label className="text-xs font-medium uppercase tracking-wide text-gray-500">
                   {viewMode === "actual" ? "Year" : "Forecast basis year"}
-                  <select
-                    className={selectClass}
-                    value={selectedYear}
-                    disabled={viewMode !== "actual"}
-                    onChange={(event) => setSelectedYear(event.target.value === "All" ? "All" : Number(event.target.value))}
-                  >
-                    {yearOptions.map((option) => (
-                      <option key={option} value={option}>{option === "All" ? "All Years" : option}</option>
-                    ))}
-                  </select>
+                  {viewMode === "actual" ? (
+                    <select
+                      className={selectClass}
+                      value={selectedYear}
+                      onChange={(event) => setSelectedYear(event.target.value === "All" ? "All" : Number(event.target.value))}
+                    >
+                      {yearOptions.map((option) => (
+                        <option key={option} value={option}>{option === "All" ? "All Years" : option}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className={metadataClass}>{predictionRun?.basisYear || "Unavailable"}</div>
+                  )}
                 </label>
 
                 <label className="text-xs font-medium uppercase tracking-wide text-gray-500">
                   {viewMode === "actual" ? "Month" : "Forecast basis month"}
-                  <select
-                    className={selectClass}
-                    value={viewMode === "actual" ? selectedMonth : predictionRun?.basisMonth || "All"}
-                    disabled={viewMode !== "actual"}
-                    onChange={(event) => setSelectedMonth(event.target.value === "All" ? "All" : Number(event.target.value))}
-                  >
-                    {viewMode === "actual" ? (
+                  {viewMode === "actual" ? (
+                    <select
+                      className={selectClass}
+                      value={selectedMonth}
+                      onChange={(event) => setSelectedMonth(event.target.value === "All" ? "All" : Number(event.target.value))}
+                    >
                       <>
                         <option value="All">All Months</option>
                         {MONTH_OPTIONS.map((month) => (
                           <option key={month.value} value={month.value}>{month.label}</option>
                         ))}
                       </>
-                    ) : <option value={predictionRun?.basisMonth || "All"}>{basisLabel}</option>}
-                  </select>
+                    </select>
+                  ) : (
+                    <div className={metadataClass}>{basisLabel}</div>
+                  )}
                 </label>
 
                 <label className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                  Disease
+                  {viewMode === "actual" ? "Disease" : "Forecast disease"}
                   <select
                     className={selectClass}
-                    value={viewMode === "actual" ? selectedDisease : "confirmed_all"}
-                    disabled={viewMode !== "actual"}
+                    value={selectedDisease}
                     onChange={(event) => setSelectedDisease(event.target.value)}
                   >
-                    {viewMode === "actual"
-                      ? diseaseOptions.map((option) => (
-                          <option key={option} value={option}>{option === "All" ? "All Diseases" : option}</option>
-                        ))
-                      : <option value="confirmed_all">All Confirmed Diseases</option>}
+                    {diseaseOptions.map((option) => (
+                      <option key={option} value={option}>{option === "All" ? "All Diseases" : option}</option>
+                    ))}
                   </select>
                 </label>
               </div>
               {viewMode !== "actual" && (
                 <p className="mt-3 text-xs text-gray-500">
-                  The saved forecast shows eligible case totals by district for the selected disease and month.
+                  The basis fields are fixed metadata for this saved run. Choose a forecast disease to view its predicted eligible case totals by district for {forecastLabel}. To change the basis period, generate a new run in Predictions.
                 </p>
               )}
             </div>
@@ -368,9 +370,7 @@ export default function Heatmap() {
             title={viewMode === "actual" ? undefined : "Areas with Highest Forecast Concentration"}
             subtitle={viewMode === "actual" ? undefined : `Predicted share for ${forecastLabel}; not actual cases.`}
           />
-          {viewMode === "actual"
-            ? <TopDiseaseCard items={topDiseases} />
-            : <SurveillanceAttentionCard items={forecastDistrictPoints} />}
+          {viewMode === "actual" && <TopDiseaseCard items={topDiseases} />}
         </div>
       </div>
     </div>

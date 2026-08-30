@@ -107,7 +107,7 @@ export async function getAnalyticalCaseRows({
   datasetId,
   statuses = ["confirmed"],
   includeOfficial = true,
-  includeReports = true,
+  includeReports = false,
   year,
   month,
   district,
@@ -240,8 +240,7 @@ export async function getAnalyticalCaseRows({
 }
 
 /**
- * Returns a bounded, database-paginated union of official and surveillance rows.
- * This avoids materializing the entire analytical dataset for every API page.
+ * Returns a bounded, database-paginated page of authoritative official rows.
  */
 export async function getAnalyticalCasePage({
   datasetId,

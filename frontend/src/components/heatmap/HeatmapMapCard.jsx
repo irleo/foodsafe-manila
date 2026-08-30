@@ -114,7 +114,7 @@ export default function HeatmapMapCard({
 
     if (viewMode === "forecast" && forecast) {
       return `
-        <div class="text-sm">
+        <div className="text-sm">
           <p><strong>${district}</strong></p>
           <p>Forecast target: <strong>${forecastLabel}</strong></p>
           <p>Predicted eligible cases: <strong>${formatNumber(forecast.predictedCases)}</strong></p>
@@ -131,7 +131,7 @@ export default function HeatmapMapCard({
         ? `+${formatNumber(comparison.difference)}`
         : formatNumber(comparison.difference);
       return `
-        <div class="text-sm">
+        <div className="text-sm">
           <p><strong>${district}</strong></p>
           <p>Actual confirmed (${basisLabel}): <strong>${formatNumber(comparison.actualCases)}</strong></p>
           <p>Forecast (${forecastLabel}): <strong>${formatNumber(comparison.predictedCases)}</strong></p>
@@ -145,7 +145,7 @@ export default function HeatmapMapCard({
 
     if (!actual) return null;
     return `
-      <div class="text-sm">
+      <div className="text-sm">
         <p><strong>${barangay}</strong></p>
         <p>Barangay No.: <strong>${barangayNo}</strong></p>
         <p>District: <strong>${actual.district || district}</strong></p>

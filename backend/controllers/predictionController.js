@@ -24,7 +24,7 @@ export const getPredictions = async (req, res) => {
   try {
     let datasetId = req.query.datasetId;
     if (!datasetId) {
-      const latest = await Dataset.findOne({ status: "validated" })
+      const latest = await Dataset.findOne({ status: "validated", providerType: "cesu" })
         .sort({ createdAt: -1 })
         .select("_id")
         .lean();

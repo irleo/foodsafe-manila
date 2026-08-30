@@ -10,6 +10,9 @@ function validDate(value) {
 }
 
 function providerStreamKey(dataset) {
+  if (String(dataset?.providerType || "").trim().toLowerCase() === "cesu") {
+    return "cesu";
+  }
   return [
     String(dataset?.providerType || "").trim().toLowerCase(),
     String(dataset?.providerName || "").trim().toLowerCase(),
@@ -155,14 +158,15 @@ function dateWithinIntervals(date, intervals = []) {
 }
 
 /**
- * Resolves all official upload snapshots available when the selected upload was
- * created. Snapshots are grouped by reporting agency; agencies remain additive.
+ * Resolves all CESU upload snapshots available when the selected upload was
+ * created. New periods accumulate; newer overlapping coverage takes precedence.
  */
 export async function resolveCumulativeDatasetContext(datasetId) {
   let resolvedDatasetId = datasetId;
   if (!resolvedDatasetId) {
     const latest = await Dataset.findOne({
       status: "validated",
+      providerType: "cesu",
       dataMode: { $ne: "development" },
     })
       .sort({ createdAt: -1, _id: -1 })
@@ -186,9 +190,15 @@ export async function resolveCumulativeDatasetContext(datasetId) {
     error.status = 400;
     throw error;
   }
+  if (String(anchor.providerType || "").trim().toLowerCase() !== "cesu") {
+    const error = new Error("Official analytics require a validated CESU dataset");
+    error.status = 400;
+    throw error;
+  }
 
   const datasets = await Dataset.find({
     status: "validated",
+    providerType: "cesu",
     dataMode: anchor.dataMode === "development"
       ? "development"
       : { $ne: "development" },
@@ -208,7 +218,6 @@ export async function resolveCumulativeDatasetContext(datasetId) {
     verifiedOnly: true,
   });
   const observedBounds = coverageBounds(observedCoverageByDistrict);
-  const providerCount = new Set(datasets.map(providerStreamKey)).size;
   const relevantDatasets = authoritativeDatasets(datasets);
 
   return {
@@ -239,13 +248,11 @@ export async function resolveCumulativeDatasetContext(datasetId) {
     coverageStart: observedBounds.start,
     coverageEnd: observedBounds.end,
     uploadCount: datasets.length,
-    providerCount,
   };
 }
 
 /**
- * Keeps the newest authoritative value within each agency's covered period.
- * Rows from different agencies are deliberately retained and remain additive.
+ * Keeps the newest authoritative CESU value within each covered period.
  */
 export function selectAuthoritativeOfficialRows(rows, datasets) {
   const rowsByDataset = new Map();

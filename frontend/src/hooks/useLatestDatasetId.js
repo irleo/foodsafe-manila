@@ -25,6 +25,7 @@ export function useLatestDatasetId(token) {
         const { items } = await fetchDatasets({
           token,
           status: "validated",
+          providerType: "cesu",
           page: 1,
           limit: 1,
         });

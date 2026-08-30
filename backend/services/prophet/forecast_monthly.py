@@ -74,7 +74,7 @@ def _fit_predict(train_df: pd.DataFrame, periods: int) -> pd.DataFrame:
     return model.predict(future)
 
 
-def run_forecast(series: list, horizon_months: int) -> dict:
+def run_forecast(series: list, horizon_months: int, backtest_months: int) -> dict:
     rows = []
     for r in series or []:
         y = int(r.get("year"))
@@ -93,6 +93,8 @@ def run_forecast(series: list, horizon_months: int) -> dict:
         raise ValueError(f"need_at_least_{MIN_TRAINING_MONTHS}_months")
     if horizon_months < 1 or horizon_months > 36:
         raise ValueError("invalid_horizonMonths")
+    if backtest_months < 1 or backtest_months > 120:
+        raise ValueError("invalid_backtestMonths")
 
     train_df = pd.DataFrame(
         {
@@ -102,7 +104,7 @@ def run_forecast(series: list, horizon_months: int) -> dict:
     )
 
     backtest = []
-    backtest_start = max(MIN_TRAINING_MONTHS, len(rows) - 12)
+    backtest_start = max(MIN_TRAINING_MONTHS, len(rows) - backtest_months)
     for i in range(backtest_start, len(rows)):
         rolling_train_df = pd.DataFrame(
             {
@@ -150,7 +152,8 @@ def main() -> None:
         payload = json.loads(raw) if raw.strip() else {}
         series = payload.get("series") or []
         horizon = int(payload.get("horizonMonths") or 1)
-        out = run_forecast(series, horizon)
+        backtest_months = int(payload.get("backtestMonths") or 19)
+        out = run_forecast(series, horizon, backtest_months)
         print(json.dumps(out), flush=True)
     except Exception as e:
         print(

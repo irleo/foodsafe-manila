@@ -121,10 +121,15 @@ The backend is the source of truth. Both the React frontend and Flutter app call
 
 ### Predictions
 
-- Monthly district comparison pipeline for Prophet and Seasonal Naïve.
+- Prophet is the sole operational monthly district forecasting method. If Prophet cannot produce a valid target forecast, that district remains unavailable; no alternate model is substituted.
+- Seasonal Naïve (the same calendar month one year earlier) is retained only as a historical benchmark and never supplies an operational forecast.
 - Monthly preprocessing generates every district-month inside the verified dataset coverage period; a covered month without a confirmed record is stored as zero for modeling, while months outside coverage remain missing.
 - Prophet and Seasonal Naïve use the same completed confirmed-case series and comparable rolling-origin backtest targets.
-- Prediction runs stored in MongoDB with model, granularity, dataset scope, basis period, forecast target period, trigger, status, and payload.
+- Prophet requires at least 24 complete training months. Up to 19 recent rolling-origin one-step forecasts are retained for operational error charts, benchmark comparison, and aggregate-interval calibration.
+- District-level 95% prediction intervals come from Prophet's posterior-predictive lower and upper quantiles. A zero lower endpoint means the interval is bounded by zero cases, not that uncertainty is zero.
+- The Whole-Manila point forecast is coherent and bottom-up: it is the sum of all six district Prophet point forecasts. Whole-Manila output is unavailable unless all six districts have valid Prophet target forecasts.
+- Whole-Manila district bounds are never added. When at least 19 common rolling-origin aggregate errors are available, the 95% interval uses the corrected empirical 95th percentile of absolute errors from the same bottom-up Prophet pipeline: `max(0, pointForecast - radius)` to `pointForecast + radius`. Otherwise, the interval is explicitly stored and displayed as not calculated.
+- Prediction runs use schema version 9 and are stored in MongoDB with model, granularity, dataset scope, basis period, forecast target period, trigger, status, payload methodology, calibration status, and coverage metadata.
 - Manual admin refresh endpoint.
 - Automatic refresh after official upload.
 - Prediction retrieval endpoint with optional district filtering.
@@ -401,7 +406,7 @@ Missing or unclear:
 - `backend/models/EmailOtp.js`: OTP storage schema for email verification flows.
 - `backend/models/Notification.js`: Notification schema.
 - `backend/models/OfficialCase.js`: Monthly official case schema with district, barangay, disease, classification, and cases.
-- `backend/models/PredictionRun.js`: Stored monthly comparison run containing Prophet, Seasonal Naïve, rolling-origin metrics, and district model selection.
+- `backend/models/PredictionRun.js`: Stored monthly Prophet run containing operational forecasts, Seasonal Naïve benchmark metrics, rolling-origin errors, prediction intervals, and aggregate calibration metadata.
 - `backend/models/Report.js`: Citizen suspected illness report schema.
 - `backend/models/WebUser.js`: Web/admin account schema stored in `web_users`.
 
@@ -469,7 +474,7 @@ Missing or unclear:
 - `frontend/src/pages/ForgotPasswordPage.jsx`: Web forgot-password OTP request flow.
 - `frontend/src/pages/HeatmapPage.jsx`: Heatmap dashboard.
 - `frontend/src/pages/LoginPage.jsx`: Web login screen.
-- `frontend/src/pages/PredictionsPage.jsx`: Page-wide Best Model / Prophet / Seasonal Naïve forecast dashboard and comparison refresh.
+- `frontend/src/pages/PredictionsPage.jsx`: Prophet-only operational forecast dashboard with Seasonal Naïve benchmark evaluation, coherent Whole-Manila totals, calibrated aggregate intervals, and comparison refresh.
 - `frontend/src/pages/RequestAccessPage.jsx`: Web access-request and OTP flow.
 - `frontend/src/pages/ResetPasswordPage.jsx`: Web password reset completion.
 - `frontend/src/pages/UserManagementPage.jsx`: Admin user approval/rejection/deletion page.

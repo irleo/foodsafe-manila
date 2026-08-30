@@ -9,12 +9,6 @@ import { delay } from "../../utils/delay.js";
 import { notify } from "../../utils/toast.js";
 
 const MANILA_DISTRICTS = Array.from({ length: 6 }, (_, index) => `District ${index + 1}`);
-const PROVIDER_DEFAULT_NAMES = {
-  hospital: "Hospital",
-  health_center: "Health Center",
-  cesu: "CESU",
-  doh: "DOH",
-};
 
 export default function OfficialDatasetsTab() {
   const fileInputRef = useRef(null);
@@ -25,8 +19,6 @@ export default function OfficialDatasetsTab() {
   const [file, setFile] = useState(null);
 
   const [datasetName, setDatasetName] = useState("");
-  const [providerType, setProviderType] = useState("cesu");
-  const [providerName, setProviderName] = useState("CESU");
   const [reportingFrequency, setReportingFrequency] = useState("weekly");
   const [coverageVerified, setCoverageVerified] = useState(false);
 
@@ -52,10 +44,9 @@ export default function OfficialDatasetsTab() {
   const canValidate = useMemo(() => {
     if (!file) return false;
     if (!datasetName.trim()) return false;
-    if (!providerType || !providerName.trim()) return false;
     if (!coverageVerified) return false;
     return true;
-  }, [file, datasetName, coverageVerified, providerType, providerName]);
+  }, [file, datasetName, coverageVerified]);
 
   const resetMessages = () => {
     setErrorMsg("");
@@ -110,9 +101,6 @@ export default function OfficialDatasetsTab() {
         upload({
           file,
           name: datasetName.trim(),
-          dataSource: providerName.trim(),
-          providerType,
-          providerName: providerName.trim(),
           reportingFrequency,
           districtCoverage: MANILA_DISTRICTS.map((district) => ({
             district,
@@ -246,31 +234,14 @@ export default function OfficialDatasetsTab() {
 
             <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-4">
               <p className="text-sm font-semibold text-blue-950">Source and reporting details</p>
-              <p className="mt-1 text-xs text-blue-700">These fields identify where the health data came from, independently of the uploaded file type.</p>
+              <p className="mt-1 text-xs text-blue-700">CESU is the authoritative source for every official dataset uploaded to FoodSafe.</p>
               <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-                <label className="text-sm text-gray-700">
-                  Source type
-                  <select
-                    value={providerType}
-                    onChange={(event) => {
-                      const nextType = event.target.value;
-                      setProviderType(nextType);
-                      if (!providerName.trim() || Object.values(PROVIDER_DEFAULT_NAMES).includes(providerName)) {
-                        setProviderName(PROVIDER_DEFAULT_NAMES[nextType] || "");
-                      }
-                    }}
-                    className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm"
-                  >
-                    <option value="hospital">Hospital</option>
-                    <option value="health_center">Health Center</option>
-                    <option value="cesu">CESU</option>
-                    <option value="doh">DOH</option>
-                  </select>
-                </label>
-                <label className="text-sm text-gray-700">
-                  Provider or facility name
-                  <input required value={providerName} onChange={(event) => setProviderName(event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm" placeholder="e.g. Tondo Health Center" />
-                </label>
+                <div className="text-sm text-gray-700">
+                  Official source
+                  <div className="mt-1 w-max flex min-h-11 items-center rounded-md border border-blue-200 bg-white px-3 py-2.5 font-medium text-blue-950">
+                    City Epidemiology and Surveillance Unit (CESU)
+                  </div>
+                </div>
                 <label className="text-sm text-gray-700 md:col-span-2">
                   Reporting frequency
                   <select value={reportingFrequency} onChange={(event) => setReportingFrequency(event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm">

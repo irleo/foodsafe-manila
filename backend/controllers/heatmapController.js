@@ -48,6 +48,7 @@ export const getDistrictHeatmap = async (req, res) => {
       year: selectedYear,
       month: selectedMonth,
       disease: disease ? String(disease).trim() : undefined,
+      includeReports: false,
     });
 
     const barangayTotals = new Map();
@@ -107,6 +108,7 @@ export const getDistrictHeatmap = async (req, res) => {
     const optionRows = await getAnalyticalCaseRows({
       datasetId,
       statuses: [...ALLOWED_STATUSES],
+      includeReports: false,
     });
 
     return res.json({
@@ -117,7 +119,7 @@ export const getDistrictHeatmap = async (req, res) => {
         .sort((a, b) => b.cases - a.cases),
       skippedBarangays,
       selectedCaseStatus: selectedStatus,
-      caseDefinition: `${selectedStatus.replace("_", " ")} cases only; statuses are kept separate. Confirmed results combine uploaded official cases and confirmed surveillance reports at query time without copying records.`,
+      caseDefinition: `${selectedStatus.replace("_", " ")} cases from authoritative CESU uploads only; statuses are kept separate.`,
       metricDefinition: "Map color and ordering represent case concentration, not an official risk classification.",
       filterOptions: {
         years: [...new Set(optionRows.map((row) => row.year).filter(Number.isFinite))],

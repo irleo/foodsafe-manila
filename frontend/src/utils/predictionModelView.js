@@ -1,9 +1,3 @@
-export const FORECAST_MODEL_OPTIONS = [
-  { value: "best", label: "Best-performing method" },
-  { value: "prophet", label: "Trend-based method (Prophet)" },
-  { value: "seasonal_naive", label: "Same month last year" },
-];
-
 export function modelLabel(model) {
   if (model === "prophet") return "Trend-based method (Prophet)";
   if (model === "seasonal_naive") return "Same month last year";
@@ -131,6 +125,9 @@ function buildLegacyWholeManila(districts, mode = "prophet") {
 
 export function getWholeManilaScope(payload, mode) {
   const whole = payload?.wholeManila;
+  if (whole?.forecast && whole?.operationalModel === "prophet") {
+    return { ...whole, resolvedModel: "prophet" };
+  }
   if (whole?.forecast && mode === "best") {
     return { ...whole, resolvedModel: "mixed" };
   }

@@ -2,15 +2,17 @@ import DashboardSummary from "../models/DashboardSummary.js";
 import { getAnalyticalCaseRows, groupCaseRowsByStatus } from "./analyticalCaseService.js";
 
 const GLOBAL_SCOPE = "global";
+const OFFICIAL_TOTAL_DEFINITION = "Confirmed cases from authoritative CESU uploads only";
 
 export async function refreshDashboardSummary(year = new Date().getFullYear()) {
   const [currentRows, previousRows, statusRows] = await Promise.all([
-    getAnalyticalCaseRows({ year, statuses: ["confirmed"] }),
-    getAnalyticalCaseRows({ year: year - 1, statuses: ["confirmed"] }),
+    getAnalyticalCaseRows({ year, statuses: ["confirmed"], includeReports: false }),
+    getAnalyticalCaseRows({ year: year - 1, statuses: ["confirmed"], includeReports: false }),
     getAnalyticalCaseRows({
       year,
       statuses: ["reported", "suspected", "probable", "confirmed", "not_validated"],
       includeOfficial: false,
+      includeReports: true,
     }),
   ]);
   const currentYearTotal = currentRows.reduce(
@@ -56,8 +58,7 @@ export async function refreshDashboardSummary(year = new Date().getFullYear()) {
     probableCases: counts.probable,
     confirmedCases: currentYearTotal,
     notValidatedCases: counts.notValidated,
-    totalDefinition:
-      "Confirmed official cases and confirmed surveillance reports",
+    totalDefinition: OFFICIAL_TOTAL_DEFINITION,
     topDistrict: mostConcentratedDistrict || null,
     topDisease: mostFrequentCondition || null,
     generatedAt: new Date(),
@@ -76,7 +77,9 @@ export async function getDashboardSummary(year = new Date().getFullYear()) {
       "year totalCases currentYearTotal previousYearTotal reportedCases suspectedCases probableCases confirmedCases notValidatedCases totalDefinition topDistrict topDisease generatedAt",
     )
     .lean();
-  return existing && Number.isFinite(Number(existing.probableCases))
+  return existing
+    && Number.isFinite(Number(existing.probableCases))
+    && existing.totalDefinition === OFFICIAL_TOTAL_DEFINITION
     ? existing
     : refreshDashboardSummary(year);
 }

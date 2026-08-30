@@ -157,11 +157,25 @@ export async function calculateSurveillanceThreshold({ datasetId, disease: reque
   const standardDeviation = populationStandardDeviation(values, mean);
   const alertThreshold = mean + standardDeviation;
   const epidemicThreshold = mean + (2 * standardDeviation);
-  return { ...base, baselineMean: Number(mean.toFixed(2)), standardDeviation: Number(standardDeviation.toFixed(2)), alertThreshold: Number(alertThreshold.toFixed(2)), epidemicThreshold: Number(epidemicThreshold.toFixed(2)), evaluationThresholds: { alert: alertThreshold, epidemic: epidemicThreshold }, outcome: evaluationMode === "forecast" ? "threshold_available" : classifyThresholdValue(observedCases, alertThreshold, epidemicThreshold), insufficiencyReason: null };
+  return {
+    ...base,
+    baselineMean: mean,
+    standardDeviation,
+    alertThreshold,
+    epidemicThreshold,
+    evaluationThresholds: {
+      alert: alertThreshold,
+      epidemic: epidemicThreshold,
+    },
+    outcome: evaluationMode === "forecast"
+      ? "threshold_available"
+      : classifyThresholdValue(observedCases, alertThreshold, epidemicThreshold),
+    insufficiencyReason: null,
+  };
 }
 
 export async function calculateLatestSurveillanceThreshold({ disease, district } = {}) {
-  const dataset = await Dataset.findOne({ status: "validated" }).sort({ createdAt: -1 }).select("_id").lean();
+  const dataset = await Dataset.findOne({ status: "validated", providerType: "cesu" }).sort({ createdAt: -1 }).select("_id").lean();
   if (!dataset) return null;
   const settings = await SurveillanceThresholdConfig.findOne({ isActive: true }).sort({ updatedAt: -1 }).select("excludedPeriods").lean();
   return calculateSurveillanceThreshold({ datasetId: dataset._id, disease, district, excludedPeriods: settings?.excludedPeriods || [] });

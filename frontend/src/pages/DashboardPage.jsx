@@ -26,6 +26,7 @@ import { formatStatusLabel } from "../utils/formatStatusLabel";
 import DataCoverageNotice from "../components/DataCoverageNotice";
 import { formatCoverageRange } from "../utils/dataCoverage";
 import { SURVEILLANCE_DISEASES } from "../constants/surveillanceMethodology.js";
+import { formatThresholdValue } from "../utils/formatThresholdValue.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const MANILA_DISTRICTS = Array.from(
@@ -252,9 +253,9 @@ export default function Dashboard() {
                   <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
                     {[
                       ["Observed eligible cases", thresholdResult.observedCases],
-                      ["Historical mean", thresholdResult.baselineMean ?? "Insufficient data"],
-                      ["Alert threshold", thresholdResult.alertThreshold ?? "—"],
-                      ["Epidemic threshold", thresholdResult.epidemicThreshold ?? "—"],
+                      ["Historical mean", formatThresholdValue(thresholdResult.baselineMean, "Insufficient data")],
+                      ["Alert threshold", formatThresholdValue(thresholdResult.alertThreshold)],
+                      ["Epidemic threshold", formatThresholdValue(thresholdResult.epidemicThreshold)],
                     ].map(([label, value]) => (
                       <div key={label} className="rounded-lg bg-white/60 px-3 py-2">
                         <p className="text-[11px] opacity-70">{label}</p>

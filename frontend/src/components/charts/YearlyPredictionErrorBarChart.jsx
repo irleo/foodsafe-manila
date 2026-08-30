@@ -67,6 +67,7 @@ export default function YearlyPredictionErrorBarChart({
   mode = "signed",
   defaultRangeMonths = 6,
   controls = null,
+  description = null,
 }) {
   const [rangeMonths, setRangeMonths] = useState(defaultRangeMonths);
 
@@ -118,7 +119,10 @@ export default function YearlyPredictionErrorBarChart({
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="font-semibold text-lg">{title}</h2>
+        <div>
+          <h2 className="font-semibold text-lg">{title}</h2>
+          {description && <p className="mt-1 max-w-3xl text-xs leading-5 text-gray-500">{description}</p>}
+        </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {controls}

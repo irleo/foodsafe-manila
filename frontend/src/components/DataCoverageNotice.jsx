@@ -7,7 +7,6 @@ export default function DataCoverageNotice({ dataset, fallbackText }) {
   const frequency = dataset?.reportingFrequency === "weekly" ? "Weekly" : "Monthly historical";
   const isDevelopment = dataset?.dataMode === "development";
   const uploads = Number(dataset?.cumulativeUploadCount || 0);
-  const agencies = Number(dataset?.contributingAgencyCount || 0);
 
   if (isDevelopment) {
     return (
@@ -33,7 +32,7 @@ export default function DataCoverageNotice({ dataset, fallbackText }) {
           {range ? `Cumulative surveillance history: ${range}` : "No surveillance coverage dates are available"}
         </p>
         <p className="mt-0.5 text-xs text-blue-700">
-          {fallbackText || `${provider} · ${frequency} reporting${uploads ? ` · ${uploads} validated upload${uploads === 1 ? "" : "s"}` : ""}${agencies ? ` · ${agencies} reporting agenc${agencies === 1 ? "y" : "ies"}` : ""}. Newer cumulative files replace only the same agency's overlapping periods; different agencies remain additive.`}
+          {fallbackText || `${provider} · ${frequency} reporting${uploads ? ` · ${uploads} validated upload${uploads === 1 ? "" : "s"}` : ""}. Newly reported periods accumulate, while a newer CESU upload takes precedence over an older upload wherever their district and reporting-period coverage overlaps.`}
         </p>
       </div>
     </div>

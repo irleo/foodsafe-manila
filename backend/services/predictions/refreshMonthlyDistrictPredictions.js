@@ -14,7 +14,10 @@ import { runSerializedForecast } from "./forecastExecution.js";
 
 const MIN_TRAINING_MONTHS = 24;
 const MIN_COMPARABLE_OBSERVATIONS = 3;
-const FORECAST_SCHEMA_VERSION = 8;
+const BACKTEST_MONTHS = 19;
+const AGGREGATE_INTERVAL_COVERAGE = 0.95;
+const MIN_AGGREGATE_INTERVAL_OBSERVATIONS = 19;
+const FORECAST_SCHEMA_VERSION = 9;
 const GRANULARITY = "monthly_disease_district_cases";
 const DISTRICTS = Object.freeze(Array.from({ length: 6 }, (_, index) => `District ${index + 1}`));
 
@@ -88,7 +91,7 @@ function metrics(rows = []) {
 function seasonalNaiveModel(series, horizonMonths) {
   const byPeriod = new Map(series.map((point) => [periodKey(point.year, point.month), Number(point.y)]));
   const backtestSeries = [];
-  for (let index = Math.max(12, series.length - 12); index < series.length; index += 1) {
+  for (let index = Math.max(12, series.length - BACKTEST_MONTHS); index < series.length; index += 1) {
     const target = series[index];
     const prior = byPeriod.get(periodKey(target.year - 1, target.month));
     if (!Number.isFinite(prior)) continue;
@@ -107,7 +110,10 @@ function seasonalNaiveModel(series, horizonMonths) {
 async function prophetModel(series, horizonMonths) {
   if (series.length < MIN_TRAINING_MONTHS) return { model: "prophet", status: "insufficient_data", message: `At least ${MIN_TRAINING_MONTHS} complete months are required.`, backtestSeries: [], forecast: [], metrics: null };
   try {
-    const output = await runProphetMonthlyForecast(series, { horizonMonths });
+    const output = await runProphetMonthlyForecast(series, {
+      horizonMonths,
+      backtestMonths: BACKTEST_MONTHS,
+    });
     const backtestSeries = (output.backtest || []).map(withErrors).filter(Boolean);
     return { model: "prophet", status: "success", message: null, backtestSeries, forecast: output.forecast || [], metrics: metrics(backtestSeries) };
   } catch (error) {
@@ -122,15 +128,28 @@ function compareModels(prophet, seasonalNaive) {
   const prophetMetrics = metrics(keys.map((key) => prophetBy.get(key)));
   const seasonalNaiveMetrics = metrics(keys.map((key) => naiveBy.get(key)));
   const sufficient = keys.length >= MIN_COMPARABLE_OBSERVATIONS;
-  const selectedModel = sufficient
+  const bestHistoricalModel = sufficient
     ? Number(prophetMetrics?.mae) < Number(seasonalNaiveMetrics?.mae) ? "prophet" : "seasonal_naive"
-    : seasonalNaive.status === "success" ? "seasonal_naive" : prophet.status === "success" ? "prophet" : null;
-  const selected = selectedModel === "prophet" ? prophet : seasonalNaive;
-  const fallbackModel = selectedModel === "prophet" ? "seasonal_naive" : "prophet";
-  const fallback = fallbackModel === "prophet" ? prophet : seasonalNaive;
-  const operationalModel = selected?.status === "success" && primaryForecast(selected)
-    ? selectedModel : fallback?.status === "success" && primaryForecast(fallback) ? fallbackModel : null;
-  return { sufficient, comparableObservationCount: keys.length, minimumRequiredObservations: MIN_COMPARABLE_OBSERVATIONS, selectedModel, operationalModel, prophetMetrics, seasonalNaiveMetrics, selectedModelReason: sufficient ? `${selectedModel === "prophet" ? "Prophet" : "Seasonal Naive"} had the smaller average error in recent checks.` : "There is not enough shared history for a full comparison, so the available model is used." };
+    : null;
+  const operationalModel = prophet.status === "success" && primaryForecast(prophet)
+    ? "prophet"
+    : null;
+  return {
+    sufficient,
+    comparableObservationCount: keys.length,
+    minimumRequiredObservations: MIN_COMPARABLE_OBSERVATIONS,
+    selectedModel: bestHistoricalModel,
+    bestHistoricalModel,
+    operationalModel,
+    prophetMetrics,
+    seasonalNaiveMetrics,
+    selectedModelReason: sufficient
+      ? `${bestHistoricalModel === "prophet" ? "Prophet" : "Seasonal Naive"} had the smaller average error in recent checks.`
+      : "There is not enough shared history for a stable benchmark comparison.",
+    operationalModelReason: operationalModel
+      ? "Prophet is the sole operational forecasting method; Seasonal Naive is retained only as a benchmark."
+      : "Prophet could not produce an operational forecast for this district.",
+  };
 }
 async function attachThreshold({ point, datasetId, disease, district, excludedPeriods }) {
   if (!point) return null;
@@ -142,8 +161,49 @@ async function attachThreshold({ point, datasetId, disease, district, excludedPe
     : Number(point.predictedCases);
   return { ...point, threshold: { alert: threshold.alertThreshold, epidemic: threshold.epidemicThreshold, baselineYears: threshold.baselinePeriods?.length || 0, requiredBaselineYears: 5, status: threshold.outcome, message: threshold.insufficiencyReason }, expectedStatus: !Number.isFinite(alert) ? threshold.outcome : classifyThresholdValue(thresholdComparisonValue, alert, epidemic, { expected: true }) };
 }
+function conformalAggregateInterval(backtestSeries, predictedCases) {
+  const absoluteErrors = backtestSeries
+    .map((row) => Math.abs(Number(row.actualCases) - Number(row.predictedCases)))
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+  const calibrationObservations = absoluteErrors.length;
+  const quantileRank = Math.ceil(
+    (calibrationObservations + 1) * AGGREGATE_INTERVAL_COVERAGE,
+  );
+  const metadata = {
+    method: "rolling_origin_absolute_error_conformal",
+    coverage: AGGREGATE_INTERVAL_COVERAGE,
+    calibrationObservations,
+    minimumRequiredObservations: MIN_AGGREGATE_INTERVAL_OBSERVATIONS,
+  };
+
+  if (
+    calibrationObservations < MIN_AGGREGATE_INTERVAL_OBSERVATIONS
+    || quantileRank > calibrationObservations
+  ) {
+    return {
+      ...metadata,
+      status: "insufficient_calibration_history",
+      lowerBound: null,
+      upperBound: null,
+      calibrationRadius: null,
+    };
+  }
+
+  const calibrationRadius = absoluteErrors[quantileRank - 1];
+  return {
+    ...metadata,
+    status: "calculated",
+    lowerBound: Math.max(0, Math.floor(predictedCases - calibrationRadius)),
+    upperBound: Math.ceil(predictedCases + calibrationRadius),
+    calibrationRadius,
+  };
+}
+
 function aggregateWholeManila(districts) {
-  const usable = districts.map((district) => ({ district, model: district.operationalModel === "prophet" ? district.models.prophet : district.models.seasonalNaive })).filter(({ model }) => model?.status === "success" && primaryForecast(model));
+  const usable = districts
+    .map((district) => ({ district, model: district.models?.prophet }))
+    .filter(({ model }) => model?.status === "success" && primaryForecast(model));
   const historical = new Map();
   const backtest = new Map();
   for (const { district, model } of usable) {
@@ -160,9 +220,12 @@ function aggregateWholeManila(districts) {
   }
   const historicalSeries = [...historical.values()].filter((row) => row.districtCount === DISTRICTS.length).map(({ districtCount, ...row }) => row);
   const backtestSeries = [...backtest.values()].filter((row) => row.districtCount === DISTRICTS.length).map(({ districtCount, ...row }) => withErrors(row));
-  if (usable.length !== DISTRICTS.length) return { status: "incomplete_coverage", historicalSeries, backtestSeries, forecast: [], coverage: { totalDistricts: DISTRICTS.length, successfulDistricts: usable.length, completeCityForecast: false } };
+  if (usable.length !== DISTRICTS.length) return { status: "incomplete_coverage", operationalModel: "prophet", historicalSeries, backtestSeries, forecast: [], coverage: { totalDistricts: DISTRICTS.length, successfulDistricts: usable.length, completeCityForecast: false }, intervalAggregation: { method: "rolling_origin_absolute_error_conformal", coverage: AGGREGATE_INTERVAL_COVERAGE, status: "unavailable_incomplete_district_forecast", calibrationObservations: backtestSeries.length, minimumRequiredObservations: MIN_AGGREGATE_INTERVAL_OBSERVATIONS } };
   const first = primaryForecast(usable[0].model);
-  return { status: "success", historicalSeries, backtestSeries, metrics: metrics(backtestSeries), forecast: [{ year: first.year, month: first.month, date: first.date, predictedCases: usable.reduce((sum, item) => sum + Number(primaryForecast(item.model).predictedCases || 0), 0), rawPredictedCases: usable.reduce((sum, item) => sum + Number(primaryForecast(item.model).rawPredictedCases ?? primaryForecast(item.model).predictedCases ?? 0), 0), lowerBound: null, upperBound: null, isPrimaryTarget: true }], coverage: { totalDistricts: DISTRICTS.length, successfulDistricts: usable.length, completeCityForecast: true }, intervalAggregation: "not_calculated" };
+  const predictedCases = usable.reduce((sum, item) => sum + Number(primaryForecast(item.model).predictedCases || 0), 0);
+  const rawPredictedCases = usable.reduce((sum, item) => sum + Number(primaryForecast(item.model).rawPredictedCases ?? primaryForecast(item.model).predictedCases ?? 0), 0);
+  const intervalAggregation = conformalAggregateInterval(backtestSeries, predictedCases);
+  return { status: "success", operationalModel: "prophet", historicalSeries, backtestSeries, metrics: metrics(backtestSeries), forecast: [{ year: first.year, month: first.month, date: first.date, predictedCases, rawPredictedCases, lowerBound: intervalAggregation.lowerBound, upperBound: intervalAggregation.upperBound, isPrimaryTarget: true }], coverage: { totalDistricts: DISTRICTS.length, successfulDistricts: usable.length, completeCityForecast: true }, intervalAggregation };
 }
 function pooledEvaluation(districts) {
   const prophetRows = []; const naiveRows = [];
@@ -179,7 +242,7 @@ function fingerprint(value) { return createHash("sha256").update(JSON.stringify(
 async function refreshMonthlyDistrictPredictionsImpl({ trigger = "manual", datasetId, horizonMonths = 1, force = true } = {}) {
   const dataset = datasetId
     ? await Dataset.findById(datasetId).select("_id status districtCoverage filePath formatType providerType providerName").lean()
-    : await Dataset.findOne({ status: "validated" }).sort({ createdAt: -1 }).select("_id status districtCoverage filePath formatType providerType providerName").lean();
+    : await Dataset.findOne({ status: "validated", providerType: "cesu" }).sort({ createdAt: -1 }).select("_id status districtCoverage filePath formatType providerType providerName").lean();
   if (!dataset?._id || dataset.status !== "validated") throw new Error("A validated dataset is required for forecasting.");
   const context = await resolveCumulativeDatasetContext(dataset._id);
   const explicitCoverage = DISTRICTS.every((district) => context?.verifiedCoverageByDistrict?.get(district)?.length > 0);
@@ -205,10 +268,9 @@ async function refreshMonthlyDistrictPredictionsImpl({ trigger = "manual", datas
       const seasonalNaive = seasonalNaiveModel(series, horizonMonths);
       const prophet = await prophetModel(series, horizonMonths);
       const comparison = compareModels(prophet, seasonalNaive);
-      const selected = comparison.operationalModel === "prophet" ? prophet : comparison.operationalModel === "seasonal_naive" ? seasonalNaive : null;
-      const nextForecast = await attachThreshold({ point: primaryForecast(selected), datasetId: dataset._id, disease, district, excludedPeriods });
-      if (nextForecast) selected.forecast = selected.forecast.map((point) => point.isPrimaryTarget ? nextForecast : point);
-      districts.push({ district, districtKey: normalizeDistrictKey(district), disease, historicalSeries: series.map(({ y, ...point }) => ({ ...point, cases: y })), models: { prophet, seasonalNaive }, modelComparison: comparison, selectedModel: comparison.selectedModel, operationalModel: comparison.operationalModel, status: nextForecast ? "success" : "insufficient_data", message: selected?.message || "No forecast is available for the next month.", nextForecast });
+      const nextForecast = await attachThreshold({ point: primaryForecast(prophet), datasetId: dataset._id, disease, district, excludedPeriods });
+      if (nextForecast) prophet.forecast = prophet.forecast.map((point) => point.isPrimaryTarget ? nextForecast : point);
+      districts.push({ district, districtKey: normalizeDistrictKey(district), disease, historicalSeries: series.map(({ y, ...point }) => ({ ...point, cases: y })), models: { prophet, seasonalNaive }, modelComparison: comparison, selectedModel: comparison.bestHistoricalModel, operationalModel: comparison.operationalModel, operationalPolicy: "prophet_only", status: nextForecast ? "success" : "insufficient_data", message: prophet.message || "Prophet could not produce a forecast for the next month.", nextForecast });
     }
     const wholeManila = aggregateWholeManila(districts);
     const cityForecast = await attachThreshold({ point: primaryForecast(wholeManila), datasetId: dataset._id, disease, district: undefined, excludedPeriods });
@@ -229,7 +291,7 @@ async function refreshMonthlyDistrictPredictionsImpl({ trigger = "manual", datas
     && Number(existing?.forecastHorizonMonths) === Number(horizonMonths);
   if (canReuse) return { ...existing, alreadyUpToDate: true };
   const now = new Date();
-  const payload = { schemaVersion: FORECAST_SCHEMA_VERSION, generatedAt: now.toISOString(), model: "prophet_seasonal_naive_comparison", granularity: GRANULARITY, datasetScope: String(datasetScope), basisYear: basis?.year || null, basisMonth: basis?.month || null, forecastTargetYear: target?.year || null, forecastTargetMonth: target?.month || null, forecastHorizonMonths: horizonMonths, diseases: diseaseOutputs, methodology: { sourceProcessing: "Authoritative official surveillance uploads only; citizen reports remain separate early-warning and audit records.", comparisonPeriod: "Calendar-month totals", baseline: "The same calendar month from the previous five eligible years", zeroHandling: "A complete covered month with no eligible official case row is counted as zero.", missingHandling: "Partial months and periods outside verified district coverage remain missing.", forecastScope: "One run includes every supported disease and all six districts." } };
+  const payload = { schemaVersion: FORECAST_SCHEMA_VERSION, generatedAt: now.toISOString(), model: "prophet_with_seasonal_naive_benchmark", granularity: GRANULARITY, datasetScope: String(datasetScope), basisYear: basis?.year || null, basisMonth: basis?.month || null, forecastTargetYear: target?.year || null, forecastTargetMonth: target?.month || null, forecastHorizonMonths: horizonMonths, diseases: diseaseOutputs, methodology: { sourceProcessing: "Authoritative official surveillance uploads only; citizen reports remain separate early-warning and audit records.", comparisonPeriod: "Calendar-month totals", operationalModel: "Prophet is the sole operational district forecasting method. A district is reported as unavailable when Prophet cannot produce a forecast; no fallback model is substituted.", benchmark: "Seasonal Naive (the same calendar month one year earlier) is retained only as a historical performance benchmark and never supplies an operational forecast.", districtPredictionIntervals: "District-level 95% prediction intervals are Prophet posterior-predictive intervals.", wholeManilaPointForecast: "The Whole-Manila point forecast is the coherent bottom-up sum of all six district Prophet point forecasts.", wholeManilaPredictionInterval: `When at least ${MIN_AGGREGATE_INTERVAL_OBSERVATIONS} common rolling-origin aggregate errors are available, the Whole-Manila 95% prediction interval is calibrated from the corrected empirical quantile of absolute errors from the same bottom-up Prophet pipeline. Bounds are not calculated when calibration history is insufficient.`, zeroHandling: "A complete covered month with no eligible official case row is counted as zero.", missingHandling: "Partial months and periods outside verified district coverage remain missing.", forecastScope: "One run includes every supported disease and all six districts." } };
   return PredictionRun.findOneAndUpdate(
     { model: "prophet", granularity: GRANULARITY, datasetScope },
     { $set: { trigger, status: "success", startedAt: now, finishedAt: new Date(), generatedAt: now, errorMessage: null, payload, basisDatasetId: dataset._id, basisYear: basis?.year || null, basisMonth: basis?.month || null, basisWeek: null, forecastTargetYear: target?.year || null, forecastTargetMonth: target?.month || null, forecastTargetWeek: null, forecastHorizonMonths: horizonMonths, forecastHorizonWeeks: null, inputFingerprint } },

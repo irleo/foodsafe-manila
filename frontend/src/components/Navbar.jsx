@@ -179,7 +179,7 @@ export default function Navbar({ isSidebarOpen, toggleSidebar }) {
   if (loading) return <Spinner />;
 
   return (
-    <header className="no-print bg-blue-600 border-b border-blue-800 sticky top-0 z-30 text-white">
+    <header className="bg-blue-600 border-b border-blue-800 sticky top-0 z-30 text-white">
       <nav className="px-4 sm:px-6 lg:px-8 shadow-sm z-50 relative">
         <div className="flex h-16 min-w-0 items-center justify-between gap-2">
 
