@@ -1,11 +1,9 @@
 import { useMemo, useState } from "react";
 import {
-  LineChart,
   Line,
-  BarChart,
   Bar,
-  AreaChart,
   Area,
+  ComposedChart,
   XAxis,
   YAxis,
   Tooltip,
@@ -72,6 +70,12 @@ const STATUS_SERIES = {
     stroke: "#f59e0b",
     fill: "#fbbf24",
   },
+  probable: {
+    dataKey: "probableCases",
+    label: "Probable Cases",
+    stroke: "#8b5cf6",
+    fill: "#a78bfa",
+  },
   confirmed: {
     dataKey: "confirmedCases",
     label: "Confirmed Cases",
@@ -84,16 +88,37 @@ export default function SwitchableYearlyChart({
   data = [],
   title = "Cases Over Time",
   height = 380,
+  movingAverageStatus = "confirmed",
 }) {
   const [chartType, setChartType] = useState("line");
   const [rangeMonths, setRangeMonths] = useState(6);
+  const [showMovingAverage3, setShowMovingAverage3] = useState(false);
+  const [showMovingAverage6, setShowMovingAverage6] = useState(false);
 
+  const movingAverageSeries = movingAverageStatus === "all"
+    ? { dataKey: "totalCases", label: "All Included Records" }
+    : STATUS_SERIES[movingAverageStatus] || STATUS_SERIES.confirmed;
   const chartData = useMemo(() => {
-    const safeData = Array.isArray(data) ? data : [];
-    return filterByMonthRange(safeData, rangeMonths).sort((a, b) =>
-      a.date > b.date ? 1 : -1,
-    );
-  }, [data, rangeMonths]);
+    const safeData = Array.isArray(data) ? [...data] : [];
+    const sorted = safeData.sort((a, b) => (a.date > b.date ? 1 : -1));
+    const withMovingAverages = sorted.map((row, index) => {
+      const averageFor = (windowSize) => {
+        if (index + 1 < windowSize) return null;
+        const window = sorted.slice(index + 1 - windowSize, index + 1);
+        const total = window.reduce(
+          (sum, item) => sum + Number(item?.[movingAverageSeries.dataKey] || 0),
+          0,
+        );
+        return Number((total / windowSize).toFixed(2));
+      };
+      return {
+        ...row,
+        selectedStatusMovingAverage3: averageFor(3),
+        selectedStatusMovingAverage6: averageFor(6),
+      };
+    });
+    return filterByMonthRange(withMovingAverages, rangeMonths);
+  }, [data, movingAverageSeries.dataKey, rangeMonths]);
 
   const commonTooltip = {
     labelFormatter: (label) => String(formatMonthLabel(label)),
@@ -101,7 +126,10 @@ export default function SwitchableYearlyChart({
       const labels = {
         reportedCases: "Reported Cases",
         suspectedCases: "Suspected Cases",
+        probableCases: "Probable Cases",
         confirmedCases: "Confirmed Cases",
+        selectedStatusMovingAverage3: `${movingAverageSeries.label} — 3-Month Average`,
+        selectedStatusMovingAverage6: `${movingAverageSeries.label} — 6-Month Average`,
       };
       return [Number(value || 0), labels[name] || name];
     },
@@ -143,6 +171,35 @@ export default function SwitchableYearlyChart({
               </button>
             ))}
           </div>
+          <div
+            className="inline-flex rounded-lg border border-gray-300 bg-gray-50 p-1 self-start"
+            aria-label="Moving average visibility"
+          >
+            <button
+              type="button"
+              aria-pressed={showMovingAverage3}
+              onClick={() => setShowMovingAverage3((visible) => !visible)}
+              className={`min-h-9 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                showMovingAverage3
+                  ? "bg-gray-900 text-white shadow-sm"
+                  : "text-gray-600 hover:bg-white"
+              }`}
+            >
+              3M MA
+            </button>
+            <button
+              type="button"
+              aria-pressed={showMovingAverage6}
+              onClick={() => setShowMovingAverage6((visible) => !visible)}
+              className={`min-h-9 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                showMovingAverage6
+                  ? "bg-gray-600 text-white shadow-sm"
+                  : "text-gray-600 hover:bg-white"
+              }`}
+            >
+              6M MA
+            </button>
+          </div>
         </div>
       </div>
 
@@ -151,14 +208,32 @@ export default function SwitchableYearlyChart({
       ) : (
         <div className="w-full" style={{ height }}>
           <ResponsiveContainer width="100%" height="100%">
-            {chartType === "line" && (
-              <LineChart data={chartData}>
+            <ComposedChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" tickFormatter={formatMonthLabel} />
                 <YAxis allowDecimals={false} />
                 <Tooltip {...commonTooltip} />
                 <Legend />
-                {Object.values(STATUS_SERIES).map((series) => (
+                {chartType === "bar" && Object.values(STATUS_SERIES).map((series) => (
+                  <Bar
+                    key={series.dataKey}
+                    dataKey={series.dataKey}
+                    fill={series.fill}
+                    name={series.label}
+                  />
+                ))}
+                {chartType === "area" && Object.values(STATUS_SERIES).map((series) => (
+                  <Area
+                    key={series.dataKey}
+                    type="monotone"
+                    dataKey={series.dataKey}
+                    stroke={series.stroke}
+                    fill={series.fill}
+                    fillOpacity={0.25}
+                    name={series.label}
+                  />
+                ))}
+                {chartType === "line" && Object.values(STATUS_SERIES).map((series) => (
                   <Line
                     key={series.dataKey}
                     type="monotone"
@@ -170,47 +245,31 @@ export default function SwitchableYearlyChart({
                     name={series.label}
                   />
                 ))}
-              </LineChart>
-            )}
-
-            {chartType === "bar" && (
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tickFormatter={formatMonthLabel} />
-                <YAxis allowDecimals={false} />
-                <Tooltip {...commonTooltip} />
-                <Legend />
-                {Object.values(STATUS_SERIES).map((series) => (
-                  <Bar
-                    key={series.dataKey}
-                    dataKey={series.dataKey}
-                    fill={series.fill}
-                    name={series.label}
-                  />
-                ))}
-              </BarChart>
-            )}
-
-            {chartType === "area" && (
-              <AreaChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tickFormatter={formatMonthLabel} />
-                <YAxis allowDecimals={false} />
-                <Tooltip {...commonTooltip} />
-                <Legend />
-                {Object.values(STATUS_SERIES).map((series) => (
-                  <Area
-                    key={series.dataKey}
+                {showMovingAverage3 && (
+                  <Line
                     type="monotone"
-                    dataKey={series.dataKey}
-                    stroke={series.stroke}
-                    fill={series.fill}
-                    fillOpacity={0.25}
-                    name={series.label}
+                    dataKey="selectedStatusMovingAverage3"
+                    stroke="#111827"
+                    strokeWidth={2}
+                    strokeDasharray="6 4"
+                    dot={false}
+                    connectNulls={false}
+                    name={`${movingAverageSeries.label} — 3-Month Average`}
                   />
-                ))}
-              </AreaChart>
-            )}
+                )}
+                {showMovingAverage6 && (
+                  <Line
+                    type="monotone"
+                    dataKey="selectedStatusMovingAverage6"
+                    stroke="#6b7280"
+                    strokeWidth={2}
+                    strokeDasharray="2 4"
+                    dot={false}
+                    connectNulls={false}
+                    name={`${movingAverageSeries.label} — 6-Month Average`}
+                  />
+                )}
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       )}

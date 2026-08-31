@@ -70,12 +70,18 @@ function getLabel(row) {
   return "";
 }
 
-function monthIndex(row) {
-  if (row?.year == null || row?.month == null) return null;
+function periodIndex(row) {
+  if (row?.year == null) return null;
   const year = Number(row.year);
-  const month = Number(row.month);
-  if (!Number.isFinite(year) || !Number.isFinite(month)) return null;
-  return year * 12 + month - 1;
+  const period = Number(row.week ?? row.month);
+  if (!Number.isFinite(year) || !Number.isFinite(period)) return null;
+  return year * 12 + period - 1;
+}
+
+function finiteNumber(value) {
+  if (value == null || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 export default function YearlyActualVsPredictedLineChart({
@@ -84,6 +90,7 @@ export default function YearlyActualVsPredictedLineChart({
   height = 350,
   defaultRangeMonths = 6,
   controls = null,
+  description = null,
 }) {
   const [rangeMonths, setRangeMonths] = useState(defaultRangeMonths);
 
@@ -92,29 +99,32 @@ export default function YearlyActualVsPredictedLineChart({
 
     const rows = safe
       .map((row, index) => {
-        const actual = Number(row?.actual);
-        const predicted = Number(row?.predicted);
-
-        const lowerBound = Number(row?.lowerBound ?? row?.lower);
-        const upperBound = Number(row?.upperBound ?? row?.upper);
+        const actual = finiteNumber(row?.actual);
+        const predicted = finiteNumber(row?.predicted);
+        const lowerBound = finiteNumber(row?.lowerBound ?? row?.lower);
+        const upperBound = finiteNumber(row?.upperBound ?? row?.upper);
+        const confidenceBand = lowerBound != null && upperBound != null
+          ? [lowerBound, upperBound]
+          : null;
 
         const isForecast = Boolean(row?.isForecast || row?.isPrimaryTarget);
-        const periodIndex = monthIndex(row);
+        const rowPeriodIndex = periodIndex(row);
 
         return {
           id: index,
           label: getLabel(row),
-          periodIndex,
-          actual: Number.isFinite(actual) ? actual : null,
-          predicted: Number.isFinite(predicted) ? predicted : null,
-          lowerBound: Number.isFinite(lowerBound) ? lowerBound : null,
-          upperBound: Number.isFinite(upperBound) ? upperBound : null,
+          periodIndex: rowPeriodIndex,
+          actual,
+          predicted,
+          lowerBound,
+          upperBound,
+          confidenceBand,
           isForecast,
 
-          actualLine: !isForecast && Number.isFinite(actual) ? actual : null,
+          actualLine: !isForecast ? actual : null,
 
           // Show predicted values for backtest rows and forecast rows.
-          predictedLine: Number.isFinite(predicted) ? predicted : null,
+          predictedLine: predicted,
         };
       })
       .filter((row) => row.label);
@@ -138,13 +148,16 @@ export default function YearlyActualVsPredictedLineChart({
   }, [data, rangeMonths]);
 
   const hasBounds = chartData.some(
-    (row) => row.lowerBound != null && row.upperBound != null,
+    (row) => row.confidenceBand != null,
   );
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="font-semibold text-lg">{title}</h2>
+        <div>
+          <h2 className="font-semibold text-lg">{title}</h2>
+          {description && <p className="mt-1 max-w-3xl text-xs leading-5 text-gray-500">{description}</p>}
+        </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {controls}
@@ -185,11 +198,13 @@ export default function YearlyActualVsPredictedLineChart({
 
               <Tooltip
                 formatter={(value, name) => {
+                  if (name === "confidenceBand" && Array.isArray(value)) {
+                    return [`${value[0]}–${value[1]} cases`, "95% prediction interval"];
+                  }
+
                   const labels = {
-                    actualLine: "Historical confirmed",
+                    actualLine: "Historical eligible cases",
                     predictedLine: "Predicted (not actual)",
-                    lowerBound: "Lower Bound",
-                    upperBound: "Upper Bound",
                   };
 
                   return [value, labels[name] || name];
@@ -199,9 +214,9 @@ export default function YearlyActualVsPredictedLineChart({
               <Legend
                 formatter={(value) => {
                   const labels = {
-                    actualLine: "Historical confirmed",
+                    actualLine: "Historical eligible cases",
                     predictedLine: "Predicted (not actual)",
-                    confidenceBand: "Prediction Range",
+                    confidenceBand: "95% prediction interval",
                   };
 
                   return labels[value] || value;
@@ -209,28 +224,17 @@ export default function YearlyActualVsPredictedLineChart({
               />
 
               {hasBounds && (
-                <>
-                  <Area
-                    type="monotone"
-                    dataKey="upperBound"
-                    stroke="none"
-                    fill="transparent"
-                    activeDot={false}
-                    legendType="none"
-                  />
-
-                  <Area
-                    type="monotone"
-                    dataKey="lowerBound"
-                    stroke="none"
-                    fill="#2563eb"
-                    fillOpacity={0.12}
-                    activeDot={false}
-                    name="confidenceBand"
-                    legendType="rect"
-                    baseLine={(x) => x.upperBound}
-                  />
-                </>
+                <Area
+                  type="monotone"
+                  dataKey="confidenceBand"
+                  stroke="none"
+                  fill="#2563eb"
+                  fillOpacity={0.12}
+                  activeDot={false}
+                  name="confidenceBand"
+                  legendType="rect"
+                  connectNulls={false}
+                />
               )}
 
               <Line

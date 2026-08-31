@@ -1,19 +1,26 @@
 import { normalizeDistrictKey } from "../constants/manilaDistrictCoords";
 
 function finiteNumber(value) {
+  if (value == null || value === "") return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
 
 export function getPrimaryDistrictForecast(district) {
-  const forecasts = Array.isArray(district?.forecast) ? district.forecast : [];
+  const prophet = district?.models?.prophet;
+  const forecasts = Array.isArray(prophet?.forecast)
+    ? prophet.forecast
+    : Array.isArray(district?.forecast)
+      ? district.forecast
+      : [];
   const target = forecasts.find((point) => point.isPrimaryTarget)
-    || district?.nextForecast
+    || (district?.operationalModel === "prophet" ? district?.nextForecast : null)
     || forecasts[0]
     || null;
 
   const predictedCases = finiteNumber(target?.predictedCases ?? target?.predicted);
-  if (district?.status !== "success" || predictedCases == null) return null;
+  const status = prophet?.status || district?.status;
+  if (status !== "success" || predictedCases == null) return null;
 
   return {
     year: finiteNumber(target?.year),
@@ -21,7 +28,9 @@ export function getPrimaryDistrictForecast(district) {
     predictedCases: Math.max(0, predictedCases),
     lowerBound: finiteNumber(target?.lowerBound ?? target?.lower),
     upperBound: finiteNumber(target?.upperBound ?? target?.upper),
-    model: district?.selectedModel || district?.operationalModel || "prophet",
+    expectedStatus: target?.expectedStatus || target?.threshold?.classification || null,
+    threshold: target?.threshold || null,
+    model: "prophet",
   };
 }
 

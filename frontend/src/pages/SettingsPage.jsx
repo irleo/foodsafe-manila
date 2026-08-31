@@ -3,16 +3,23 @@ import { InformationCircleIcon, PlusIcon, TrashIcon } from "@heroicons/react/24/
 import { fetchThresholdSettings, updateThresholdSettings } from "../api/thresholds";
 import { useAuth } from "../context/AuthContext";
 import { notify } from "../utils/toast";
+import { SURVEILLANCE_DISEASES } from "../constants/surveillanceMethodology.js";
 
 const emptyPeriod = {
   startYear: "",
   startMonth: "",
   endYear: "",
   endMonth: "",
+  disease: "",
+  district: "",
   reason: "",
 };
 
 const inputClass = "mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm";
+const MONTHS = Array.from({ length: 12 }, (_, index) => ({
+  value: index + 1,
+  label: new Date(Date.UTC(2026, index, 1)).toLocaleString("en-PH", { month: "long", timeZone: "UTC" }),
+}));
 
 export default function SettingsPage() {
   const { auth } = useAuth();
@@ -52,6 +59,8 @@ export default function SettingsPage() {
           startMonth: Number(period.startMonth),
           endYear: Number(period.endYear),
           endMonth: Number(period.endMonth),
+          disease: period.disease || null,
+          district: period.district || null,
         })),
       };
       const data = await updateThresholdSettings(token, payload);
@@ -86,26 +95,26 @@ export default function SettingsPage() {
         <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
             <p className="text-xs font-medium uppercase tracking-wide text-blue-700">Baseline</p>
-            <p className="mt-1 font-semibold text-blue-950">5 eligible years</p>
+            <p className="mt-1 font-semibold text-blue-950">Exactly 5 eligible years</p>
           </div>
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
             <p className="text-xs font-medium uppercase tracking-wide text-amber-700">Alert threshold</p>
-            <p className="mt-1 font-semibold text-amber-950">Mean + 1 standard deviation</p>
+            <p className="mt-1 font-semibold text-amber-950">Average + 1 measure of variation</p>
           </div>
           <div className="rounded-lg border border-red-200 bg-red-50 p-3">
             <p className="text-xs font-medium uppercase tracking-wide text-red-700">Epidemic threshold</p>
-            <p className="mt-1 font-semibold text-red-950">Mean + 2 standard deviations</p>
+            <p className="mt-1 font-semibold text-red-950">Average + 2 measures of variation</p>
           </div>
         </div>
 
         <p className="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
-          Weekly datasets compare the latest epidemiological week with the same week in five eligible prior years. Legacy monthly datasets remain monthly and are labeled accordingly.
+          The latest complete calendar month is compared with the same month from the previous five eligible years. If all five are not available, no threshold is shown.
         </p>
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="font-semibold text-gray-900">Excluded baseline periods</h3>
-            <p className="mt-1 text-sm text-gray-600">Exclude documented pandemic or outbreak periods so they do not distort the baseline.</p>
+            <p className="mt-1 text-sm text-gray-600">Exclude documented months such as outbreaks or disrupted reporting so they do not distort the five-year comparison. Disease and district are optional.</p>
           </div>
           <button
             type="button"
@@ -121,11 +130,13 @@ export default function SettingsPage() {
             <p className="rounded-lg border border-dashed border-gray-300 px-4 py-5 text-center text-sm text-gray-500">No periods are currently excluded.</p>
           )}
           {excludedPeriods.map((period, index) => (
-            <div key={`${index}-${period.startYear}-${period.startMonth}`} className="grid grid-cols-2 gap-3 rounded-lg border border-gray-200 p-3 md:grid-cols-6">
+            <div key={`${index}-${period.startYear}-${period.startMonth}`} className="grid grid-cols-2 gap-3 rounded-lg border border-gray-200 p-3 md:grid-cols-4">
               <label className="text-xs font-medium text-gray-700">Start year<input required type="number" min="1900" max="2200" className={inputClass} value={period.startYear} onChange={(event) => updatePeriod(index, "startYear", event.target.value)} /></label>
-              <label className="text-xs font-medium text-gray-700">Start month<input required type="number" min="1" max="12" className={inputClass} value={period.startMonth} onChange={(event) => updatePeriod(index, "startMonth", event.target.value)} /></label>
+              <label className="text-xs font-medium text-gray-700">Start month<select required className={inputClass} value={period.startMonth || ""} onChange={(event) => updatePeriod(index, "startMonth", event.target.value)}><option value="">Select month</option>{MONTHS.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select></label>
               <label className="text-xs font-medium text-gray-700">End year<input required type="number" min="1900" max="2200" className={inputClass} value={period.endYear} onChange={(event) => updatePeriod(index, "endYear", event.target.value)} /></label>
-              <label className="text-xs font-medium text-gray-700">End month<input required type="number" min="1" max="12" className={inputClass} value={period.endMonth} onChange={(event) => updatePeriod(index, "endMonth", event.target.value)} /></label>
+              <label className="text-xs font-medium text-gray-700">End month<select required className={inputClass} value={period.endMonth || ""} onChange={(event) => updatePeriod(index, "endMonth", event.target.value)}><option value="">Select month</option>{MONTHS.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select></label>
+              <label className="text-xs font-medium text-gray-700">Disease<select className={inputClass} value={period.disease || ""} onChange={(event) => updatePeriod(index, "disease", event.target.value)}><option value="">All diseases</option>{SURVEILLANCE_DISEASES.map((disease) => <option key={disease} value={disease}>{disease}</option>)}</select></label>
+              <label className="text-xs font-medium text-gray-700">District<select className={inputClass} value={period.district || ""} onChange={(event) => updatePeriod(index, "district", event.target.value)}><option value="">All districts</option>{Array.from({ length: 6 }, (_, districtIndex) => `District ${districtIndex + 1}`).map((district) => <option key={district} value={district}>{district}</option>)}</select></label>
               <label className="col-span-2 text-xs font-medium text-gray-700 md:col-span-1">Reason<input required maxLength="300" className={inputClass} value={period.reason} onChange={(event) => updatePeriod(index, "reason", event.target.value)} /></label>
               <button type="button" aria-label="Remove excluded period" onClick={() => setExcludedPeriods((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="self-end rounded-lg p-2.5 text-red-600 hover:bg-red-50">
                 <TrashIcon className="h-5 w-5" />

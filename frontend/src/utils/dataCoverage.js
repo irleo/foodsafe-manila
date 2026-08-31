@@ -6,7 +6,11 @@ export function formatCoverageDate(value) {
 }
 
 export function formatCoverageRange(dataset) {
-  const start = formatCoverageDate(dataset?.coverageStart);
-  const end = formatCoverageDate(dataset?.coverageEnd);
+  const start = formatCoverageDate(
+    dataset?.analyticalCoverageStart || dataset?.coverageStart,
+  );
+  const end = formatCoverageDate(
+    dataset?.analyticalCoverageEnd || dataset?.coverageEnd,
+  );
   return start && end ? `${start}–${end}` : null;
 }

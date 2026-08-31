@@ -7,6 +7,14 @@ const STATUS_LABEL_OVERRIDES = {
   not_validated: "Not Confirmed",
   case_not_validated: "Case Not Confirmed",
   not_suspected: "Ruled Out",
+  insufficient_baseline: "Not enough five-year history",
+  expected_within_level: "Forecast is below the alert threshold",
+  expected_alert: "Forecast is above the alert threshold",
+  expected_epidemic: "Forecast is above the epidemic threshold",
+  within_expected_level: "Below the alert threshold",
+  alert_threshold_exceeded: "Above the alert threshold",
+  epidemic_threshold_exceeded: "Above the epidemic threshold",
+  no_data: "No complete data",
 };
 
 export function formatStatusLabel(value, fallback = "—") {

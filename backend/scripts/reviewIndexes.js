@@ -60,13 +60,13 @@ try {
 
   results.push(
     await explain(
-      "official_cases: barangay_no + year + month",
+      "officialCases: barangayNo + year + month",
       OfficialCase.find({ barangayNo, year, month }).select(
         "district barangay barangayNo disease cases",
       ),
     ),
     await explain(
-      "official_cases: district + year + month",
+      "officialCases: district + year + month",
       OfficialCase.find({ district, year, month }).select("district disease cases"),
     ),
   );
@@ -94,12 +94,12 @@ try {
   );
   const predictionQuery = predictionSample || {
     model: "prophet",
-    granularity: "monthly_district_cases",
+    granularity: "monthly_disease_district_cases",
     datasetScope: "all",
   };
   results.push(
     await explain(
-      "prediction_runs: newest successful run by dataset scope",
+      "predictionRuns: newest successful run by dataset scope",
       PredictionRun.find({
         model: predictionQuery.model,
         granularity: predictionQuery.granularity,
@@ -130,9 +130,9 @@ try {
   );
 
   const indexes = {
-    official_cases: await OfficialCase.collection.indexes(),
+    officialCases: await OfficialCase.collection.indexes(),
     reports: await Report.collection.indexes(),
-    prediction_runs: await PredictionRun.collection.indexes(),
+    predictionRuns: await PredictionRun.collection.indexes(),
     notifications: await Notification.collection.indexes(),
   };
   console.log(JSON.stringify({ results, indexes }, null, 2));

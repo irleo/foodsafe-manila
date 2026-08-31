@@ -2,15 +2,17 @@ import DashboardSummary from "../models/DashboardSummary.js";
 import { getAnalyticalCaseRows, groupCaseRowsByStatus } from "./analyticalCaseService.js";
 
 const GLOBAL_SCOPE = "global";
+const OFFICIAL_TOTAL_DEFINITION = "Confirmed cases from authoritative CESU uploads only";
 
 export async function refreshDashboardSummary(year = new Date().getFullYear()) {
   const [currentRows, previousRows, statusRows] = await Promise.all([
-    getAnalyticalCaseRows({ year, statuses: ["confirmed"] }),
-    getAnalyticalCaseRows({ year: year - 1, statuses: ["confirmed"] }),
+    getAnalyticalCaseRows({ year, statuses: ["confirmed"], includeReports: false }),
+    getAnalyticalCaseRows({ year: year - 1, statuses: ["confirmed"], includeReports: false }),
     getAnalyticalCaseRows({
       year,
-      statuses: ["reported", "suspected", "confirmed", "not_validated"],
+      statuses: ["reported", "suspected", "probable", "confirmed", "not_validated"],
       includeOfficial: false,
+      includeReports: true,
     }),
   ]);
   const currentYearTotal = currentRows.reduce(
@@ -53,10 +55,10 @@ export async function refreshDashboardSummary(year = new Date().getFullYear()) {
     suspectedReports: counts.suspected,
     reportedCases: counts.reported,
     suspectedCases: counts.suspected,
+    probableCases: counts.probable,
     confirmedCases: currentYearTotal,
     notValidatedCases: counts.notValidated,
-    totalDefinition:
-      "Confirmed official cases and confirmed surveillance reports",
+    totalDefinition: OFFICIAL_TOTAL_DEFINITION,
     topDistrict: mostConcentratedDistrict || null,
     topDisease: mostFrequentCondition || null,
     generatedAt: new Date(),
@@ -72,10 +74,14 @@ export async function refreshDashboardSummary(year = new Date().getFullYear()) {
 export async function getDashboardSummary(year = new Date().getFullYear()) {
   const existing = await DashboardSummary.findOne({ scope: GLOBAL_SCOPE, year })
     .select(
-      "year totalCases currentYearTotal previousYearTotal reportedCases suspectedCases confirmedCases notValidatedCases totalDefinition topDistrict topDisease generatedAt",
+      "year totalCases currentYearTotal previousYearTotal reportedCases suspectedCases probableCases confirmedCases notValidatedCases totalDefinition topDistrict topDisease generatedAt",
     )
     .lean();
-  return existing || refreshDashboardSummary(year);
+  return existing
+    && Number.isFinite(Number(existing.probableCases))
+    && existing.totalDefinition === OFFICIAL_TOTAL_DEFINITION
+    ? existing
+    : refreshDashboardSummary(year);
 }
 
 export async function refreshDashboardSummaryAfterWrite() {

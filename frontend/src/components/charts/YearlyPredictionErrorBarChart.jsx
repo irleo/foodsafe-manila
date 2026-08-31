@@ -52,12 +52,12 @@ function getLabel(row) {
   return "";
 }
 
-function monthIndex(row) {
-  if (row?.year == null || row?.month == null) return null;
+function periodIndex(row) {
+  if (row?.year == null) return null;
   const year = Number(row.year);
-  const month = Number(row.month);
-  if (!Number.isFinite(year) || !Number.isFinite(month)) return null;
-  return year * 12 + month - 1;
+  const period = Number(row.week ?? row.month);
+  if (!Number.isFinite(year) || !Number.isFinite(period)) return null;
+  return year * 12 + period - 1;
 }
 
 export default function YearlyPredictionErrorBarChart({
@@ -67,6 +67,7 @@ export default function YearlyPredictionErrorBarChart({
   mode = "signed",
   defaultRangeMonths = 6,
   controls = null,
+  description = null,
 }) {
   const [rangeMonths, setRangeMonths] = useState(defaultRangeMonths);
 
@@ -78,7 +79,7 @@ export default function YearlyPredictionErrorBarChart({
         const predicted = Number(row?.predicted);
         const actual = Number(row?.actual);
         const label = getLabel(row);
-        const periodIndex = monthIndex(row);
+        const rowPeriodIndex = periodIndex(row);
 
         if (!label) return null;
         if (!Number.isFinite(predicted) || !Number.isFinite(actual)) return null;
@@ -88,7 +89,7 @@ export default function YearlyPredictionErrorBarChart({
         return {
           id: index,
           label,
-          periodIndex,
+          periodIndex: rowPeriodIndex,
           predicted,
           actual,
           error,
@@ -118,7 +119,10 @@ export default function YearlyPredictionErrorBarChart({
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="font-semibold text-lg">{title}</h2>
+        <div>
+          <h2 className="font-semibold text-lg">{title}</h2>
+          {description && <p className="mt-1 max-w-3xl text-xs leading-5 text-gray-500">{description}</p>}
+        </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {controls}

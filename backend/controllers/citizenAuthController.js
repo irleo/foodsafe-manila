@@ -24,7 +24,7 @@ export const registerCitizen = async (req, res) => {
 
   try {
     const normalizedPhone = normalizePhone(phone);
-    const existing = await MobileUser.findOne({ phone_number: normalizedPhone });
+    const existing = await MobileUser.findOne({ phoneNumber: normalizedPhone });
 
     if (existing) {
       return res.status(409).json({ message: "Phone number already registered" });
@@ -45,7 +45,7 @@ export const registerCitizen = async (req, res) => {
 
     const mobileUser = await MobileUser.create({
       username: String(username).trim(),
-      phone_number: normalizedPhone,
+      phoneNumber: normalizedPhone,
       password: hashedPassword,
       email: email ? String(email).trim() : "",
     });
@@ -70,7 +70,7 @@ export const loginCitizen = async (req, res) => {
 
   try {
     const normalizedPhone = normalizePhone(phone);
-    const mobileUser = await MobileUser.findOne({ phone_number: normalizedPhone });
+    const mobileUser = await MobileUser.findOne({ phoneNumber: normalizedPhone });
 
     if (!mobileUser) {
       return res.status(401).json({ message: "Invalid credentials" });
@@ -103,7 +103,7 @@ export const checkPhoneExists = async (req, res) => {
 
   try {
     const normalizedPhone = normalizePhone(phone);
-    const exists = await MobileUser.exists({ phone_number: normalizedPhone });
+    const exists = await MobileUser.exists({ phoneNumber: normalizedPhone });
     return res.json({ exists: Boolean(exists) });
   } catch (error) {
     console.error("Phone exists check error:", error);
@@ -126,7 +126,7 @@ export const resetCitizenPassword = async (req, res) => {
 
   try {
     const normalizedPhone = normalizePhone(phone);
-    const mobileUser = await MobileUser.findOne({ phone_number: normalizedPhone });
+    const mobileUser = await MobileUser.findOne({ phoneNumber: normalizedPhone });
 
     if (!mobileUser) {
       return res.status(404).json({ message: "User not found" });

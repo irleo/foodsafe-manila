@@ -7,53 +7,53 @@ const predictionRunSchema = new mongoose.Schema(
       enum: ["prophet"],
       default: "prophet",
       required: true,
-      index: true,
+      index: { name: "predictionRunsModel" },
     },
 
     granularity: {
       type: String,
-      enum: ["yearly_total_cases", "monthly_district_cases"],
+      enum: ["yearly_total_cases", "monthly_district_cases", "weekly_disease_district_cases", "monthly_disease_district_cases"],
       required: true,
-      index: true,
+      index: { name: "predictionRunsGranularity" },
     },
 
     datasetScope: {
       type: mongoose.Schema.Types.Mixed,
       required: true,
       default: "all",
-      index: true,
+      index: { name: "predictionRunsDatasetScope" },
       // Can be "all" or a Dataset ObjectId
     },
 
     trigger: {
       type: String,
-      enum: ["official_upload", "report_confirmation", "monthly_fallback", "manual"],
+      enum: ["official_upload", "report_confirmation", "monthly_fallback", "weekly_fallback", "manual"],
       required: true,
-      index: true,
+      index: { name: "predictionRunsTrigger" },
     },
 
     startedAt: {
       type: Date,
       default: null,
-      index: true,
+      index: { name: "predictionRunsStartedAt" },
     },
 
     finishedAt: {
       type: Date,
       default: null,
-      index: true,
+      index: { name: "predictionRunsFinishedAt" },
     },
 
     generatedAt: {
       type: Date,
       default: Date.now,
-      index: true,
+      index: { name: "predictionRunsGeneratedAt" },
     },
 
     payload: {
       type: mongoose.Schema.Types.Mixed,
       default: null,
-      // API payload: model, totals, districts, plus basisYear / basisMonth / forecastStartYear / forecastEndYear.
+      // Active payload contains monthly forecasts for every supported disease and district.
     },
 
     status: {
@@ -61,7 +61,7 @@ const predictionRunSchema = new mongoose.Schema(
       enum: ["success", "failed", "running"],
       default: "running",
       required: true,
-      index: true,
+      index: { name: "predictionRunsStatus" },
     },
 
     errorMessage: {
@@ -73,7 +73,7 @@ const predictionRunSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Dataset",
       default: null,
-      index: true,
+      index: { name: "predictionRunsBasisDatasetId" },
     },
 
     // Latest calendar year present in official case rows used for this run (max `year` in aggregated series).
@@ -82,7 +82,7 @@ const predictionRunSchema = new mongoose.Schema(
       default: null,
       min: 2015,
       max: 2100,
-      index: true,
+      index: { name: "predictionRunsBasisYear" },
     },
 
     // When scope is a single dataset: month (1–12) from that dataset's `coverageEnd` (upload metadata).
@@ -93,6 +93,12 @@ const predictionRunSchema = new mongoose.Schema(
       min: 1,
       max: 12,
     },
+    basisWeek: {
+      type: Number,
+      default: null,
+      min: 1,
+      max: 53,
+    },
 
     // Calendar years covered by the forward-looking forecast (inclusive). Yearly Prophet currently emits one horizon year.
     forecastStartYear: {
@@ -100,7 +106,7 @@ const predictionRunSchema = new mongoose.Schema(
       default: null,
       min: 2015,
       max: 2100,
-      index: true,
+      index: { name: "predictionRunsForecastStartYear" },
     },
 
     forecastEndYear: {
@@ -108,7 +114,7 @@ const predictionRunSchema = new mongoose.Schema(
       default: null,
       min: 2015,
       max: 2100,
-      index: true,
+      index: { name: "predictionRunsForecastEndYear" },
     },
 
     // Monthly forecast targets (used when granularity = monthly_district_cases)
@@ -117,20 +123,33 @@ const predictionRunSchema = new mongoose.Schema(
       default: null,
       min: 2015,
       max: 2100,
-      index: true,
+      index: { name: "predictionRunsForecastTargetYear" },
     },
     forecastTargetMonth: {
       type: Number,
       default: null,
       min: 1,
       max: 12,
-      index: true,
+      index: { name: "predictionRunsForecastTargetMonth" },
+    },
+    forecastTargetWeek: {
+      type: Number,
+      default: null,
+      min: 1,
+      max: 53,
+      index: { name: "predictionRunsForecastTargetWeek" },
     },
     forecastHorizonMonths: {
       type: Number,
       default: null,
       min: 1,
       max: 36,
+    },
+    forecastHorizonWeeks: {
+      type: Number,
+      default: null,
+      min: 1,
+      max: 12,
     },
     inputFingerprint: {
       type: String,
@@ -140,13 +159,14 @@ const predictionRunSchema = new mongoose.Schema(
       maxlength: 64,
     },
   },
-  { timestamps: true, collection: "prediction_runs" }
+  { timestamps: true, collection: "predictionRuns" }
 );
 
 // Ensure single run per (model+granularity+scope). This prevents recompute storms
 // and guarantees "only one forecast exists per dataset upload".
 predictionRunSchema.index(
-  { model: 1, granularity: 1, datasetScope: 1, generatedAt: -1 }
+  { model: 1, granularity: 1, datasetScope: 1, generatedAt: -1 },
+  { name: "predictionRunsModelGranularityScopeGeneratedAt" },
 );
 
 // Checking latest forecast basis
@@ -154,7 +174,7 @@ predictionRunSchema.index({
   basisDatasetId: 1,
   basisYear: 1,
   generatedAt: -1,
-});
+}, { name: "predictionRunsBasisDatasetYearGeneratedAt" });
 
 const PredictionRun =
   mongoose.models.PredictionRun ||

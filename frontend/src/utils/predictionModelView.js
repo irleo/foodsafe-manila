@@ -1,13 +1,7 @@
-export const FORECAST_MODEL_OPTIONS = [
-  { value: "best", label: "Best Model" },
-  { value: "prophet", label: "Prophet" },
-  { value: "seasonal_naive", label: "Seasonal Naïve" },
-];
-
 export function modelLabel(model) {
-  if (model === "prophet") return "Prophet";
-  if (model === "seasonal_naive") return "Seasonal Naïve";
-  if (model === "mixed") return "Prophet + Seasonal Naïve";
+  if (model === "prophet") return "Trend-based method (Prophet)";
+  if (model === "seasonal_naive") return "Same month last year";
+  if (model === "mixed") return "Best method for each district";
   return "Unavailable";
 }
 
@@ -22,17 +16,21 @@ export function normalizeForecastPoint(point) {
   return {
     year: point.year ?? point.targetYear,
     month: point.month ?? point.targetMonth,
+    week: point.week ?? point.targetWeek,
+    date: point.date ?? null,
     predicted: finiteNumber(point.predictedCases ?? point.predicted),
     lower: finiteNumber(point.lowerBound ?? point.lower),
     upper: finiteNumber(point.upperBound ?? point.upper),
     isPrimaryTarget: Boolean(point.isPrimaryTarget),
+    expectedStatus: point.expectedStatus || null,
+    threshold: point.threshold || null,
   };
 }
 
 function districtModelKey(district, mode) {
   if (mode === "prophet") return "prophet";
   if (mode === "seasonal_naive") return "seasonal_naive";
-  return district?.selectedModel || district?.operationalModel || null;
+  return district?.operationalModel || district?.selectedModel || null;
 }
 
 export function getDistrictScope(district, mode) {
@@ -66,10 +64,12 @@ export function getDistrictScope(district, mode) {
   };
 }
 
-function addToPeriod(map, year, month, fields) {
-  if (year == null || month == null) return;
-  const key = `${year}-${month}`;
-  const entry = map.get(key) || { year, month };
+function addToPeriod(map, row, fields) {
+  const year = row?.year;
+  const period = row?.week ?? row?.month;
+  if (year == null || period == null) return;
+  const key = `${year}-${period}`;
+  const entry = map.get(key) || { year, month: row?.month, week: row?.week, date: row?.date };
   for (const [name, value] of Object.entries(fields)) {
     const number = finiteNumber(value);
     if (number != null) entry[name] = (entry[name] || 0) + number;
@@ -77,7 +77,7 @@ function addToPeriod(map, year, month, fields) {
   map.set(key, entry);
 }
 
-function buildLegacyWholeManila(districts) {
+function buildLegacyWholeManila(districts, mode = "prophet") {
   const safeDistricts = Array.isArray(districts) ? districts : [];
   const historical = new Map();
   const backtest = new Map();
@@ -85,23 +85,24 @@ function buildLegacyWholeManila(districts) {
   let successfulDistricts = 0;
 
   for (const district of safeDistricts) {
+    const scope = getDistrictScope(district, mode);
     for (const row of district.historicalSeries || []) {
-      addToPeriod(historical, row.year, row.month, { cases: row.cases });
+      addToPeriod(historical, row, { cases: row.cases });
     }
-    for (const row of district.backtestSeries || []) {
-      addToPeriod(backtest, row.year, row.month, {
+    for (const row of scope?.backtestSeries || []) {
+      addToPeriod(backtest, row, {
         actualCases: row.actualCases,
         predictedCases: row.predictedCases,
         districtCount: 1,
       });
     }
-    const primary = district.forecast?.find((point) => point.isPrimaryTarget);
-    if (district.status === "success" && primary) {
+    const primary = scope?.forecast?.find((point) => point.isPrimaryTarget);
+    if (scope?.status === "success" && primary) {
       successfulDistricts += 1;
-      addToPeriod(forecast, primary.year, primary.month, {
+      addToPeriod(forecast, primary, {
         predictedCases: primary.predictedCases,
       });
-      const key = `${primary.year}-${primary.month}`;
+      const key = `${primary.year}-${primary.week ?? primary.month}`;
       forecast.set(key, { ...forecast.get(key), isPrimaryTarget: true });
     }
   }
@@ -113,7 +114,7 @@ function buildLegacyWholeManila(districts) {
       ? [...backtest.values()].filter((row) => row.districtCount === safeDistricts.length)
       : [],
     forecast: complete ? [...forecast.values()] : [],
-    resolvedModel: "prophet",
+    resolvedModel: mode,
     coverage: {
       totalDistricts: safeDistricts.length,
       successfulDistricts,
@@ -124,6 +125,12 @@ function buildLegacyWholeManila(districts) {
 
 export function getWholeManilaScope(payload, mode) {
   const whole = payload?.wholeManila;
+  if (whole?.forecast && whole?.operationalModel === "prophet") {
+    return { ...whole, resolvedModel: "prophet" };
+  }
+  if (whole?.forecast && mode === "best") {
+    return { ...whole, resolvedModel: "mixed" };
+  }
   const scope = mode === "prophet"
     ? whole?.prophet
     : mode === "seasonal_naive"
@@ -132,7 +139,7 @@ export function getWholeManilaScope(payload, mode) {
   if (scope) {
     const bestModels = new Set(
       (payload?.districts || [])
-        .map((district) => district.selectedModel || district.operationalModel)
+        .map((district) => district.operationalModel || district.selectedModel)
         .filter(Boolean),
     );
     return {
@@ -142,8 +149,7 @@ export function getWholeManilaScope(payload, mode) {
         : mode,
     };
   }
-  if (mode === "seasonal_naive") return null;
-  return buildLegacyWholeManila(payload?.districts || []);
+  return buildLegacyWholeManila(payload?.districts || [], mode);
 }
 
 export function getPredictionScope(payload, districtKey, mode) {
@@ -157,18 +163,22 @@ export function getPredictionScope(payload, districtKey, mode) {
 export function buildPredictionRows(scope) {
   const byPeriod = new Map();
   for (const row of scope?.historicalSeries || []) {
-    const key = `${row.year}-${row.month}`;
+    const period = row.week ?? row.month;
+    const key = `${row.year}-${period}`;
     byPeriod.set(key, {
       year: row.year,
       month: row.month,
+      week: row.week,
+      date: row.date,
       actual: finiteNumber(row.cases ?? row.actualCases ?? row.actual),
       isForecast: false,
     });
   }
   for (const row of scope?.backtestSeries || []) {
-    const key = `${row.year}-${row.month}`;
+    const period = row.week ?? row.month;
+    const key = `${row.year}-${period}`;
     byPeriod.set(key, {
-      ...(byPeriod.get(key) || { year: row.year, month: row.month }),
+      ...(byPeriod.get(key) || { year: row.year, month: row.month, week: row.week, date: row.date }),
       actual: finiteNumber(row.actualCases ?? row.actual),
       predicted: finiteNumber(row.predictedCases ?? row.predicted),
       lower: finiteNumber(row.lowerBound ?? row.lower),
@@ -185,9 +195,10 @@ export function buildPredictionRows(scope) {
       || scope?.nextForecast,
   );
   if (target?.predicted != null) {
-    const key = `${target.year}-${target.month}`;
+    const period = target.week ?? target.month;
+    const key = `${target.year}-${period}`;
     byPeriod.set(key, {
-      ...(byPeriod.get(key) || { year: target.year, month: target.month }),
+      ...(byPeriod.get(key) || { year: target.year, month: target.month, week: target.week, date: target.date }),
       actual: null,
       predicted: target.predicted,
       lower: target.lower,
@@ -198,7 +209,7 @@ export function buildPredictionRows(scope) {
     });
   }
   return [...byPeriod.values()].sort(
-    (a, b) => a.year * 100 + a.month - (b.year * 100 + b.month),
+    (a, b) => a.year * 100 + (a.week ?? a.month) - (b.year * 100 + (b.week ?? b.month)),
   );
 }
 

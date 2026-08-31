@@ -2,12 +2,22 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 async function parseError(res) {
   const j = await res.json().catch(() => ({}));
-  return j?.message || j?.reason || `Request failed (${res.status})`;
+  const summary = j?.message || j?.reason || `Request failed (${res.status})`;
+  const firstIssue = Array.isArray(j?.validationErrors)
+    ? j.validationErrors.find((issue) => issue?.message)
+    : null;
+  if (!firstIssue?.message || summary.includes(firstIssue.message)) return summary;
+  const location = [
+    firstIssue.sheet,
+    firstIssue.row ? `row ${firstIssue.row}` : null,
+  ].filter(Boolean).join(", ");
+  return `${summary} ${location ? `${location}: ` : ""}${firstIssue.message}`;
 }
 
-export async function fetchDatasets({ token, status, page = 1, limit = 20 } = {}) {
+export async function fetchDatasets({ token, status, providerType, page = 1, limit = 20 } = {}) {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (status) params.set("status", status);
+  if (providerType) params.set("providerType", providerType);
   const res = await fetch(`${API_BASE}/api/datasets?${params.toString()}`, {
     headers: { Authorization: token ? `Bearer ${token}` : "" },
   });
@@ -22,23 +32,17 @@ export async function fetchDatasets({ token, status, page = 1, limit = 20 } = {}
 export async function uploadDataset({
   file,
   name,
-  coverageStart,
-  coverageEnd,
-  dataSource,
-  providerType,
-  providerName,
   reportingFrequency,
+  districtCoverage,
   token,
 }) {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("name", name);
-  if (coverageStart) formData.append("coverageStart", coverageStart);
-  if (coverageEnd) formData.append("coverageEnd", coverageEnd);
-  formData.append("dataSource", dataSource);
-  formData.append("providerType", providerType);
-  formData.append("providerName", providerName);
   formData.append("reportingFrequency", reportingFrequency);
+  if (Array.isArray(districtCoverage)) {
+    formData.append("districtCoverage", JSON.stringify(districtCoverage));
+  }
 
   const res = await fetch(`${API_BASE}/api/datasets/upload`, {
     method: "POST",
@@ -58,9 +62,10 @@ export async function downloadOfficialCaseTemplate({ token }) {
   });
   if (!res.ok) throw new Error(await parseError(res));
   const blob = await res.blob();
+  if (!blob.size) throw new Error("Template response was empty.");
   const cd = res.headers.get("content-disposition");
   const match = cd?.match(/filename="(.+)"/);
-  const filename = match?.[1] || "official_cases_template.xlsx";
+  const filename = match?.[1] || "FoodSafe_Template.xlsx";
   return { blob, filename };
 }
 
@@ -74,6 +79,7 @@ export async function downloadDatasetFile({ datasetId, token }) {
   if (!res.ok) throw new Error(await parseError(res));
 
   const blob = await res.blob();
+  if (!blob.size) throw new Error("Dataset response was empty.");
   const cd = res.headers.get("content-disposition");
   const match = cd?.match(/filename="(.+)"/);
   const filename = match?.[1] || "dataset.xlsx";

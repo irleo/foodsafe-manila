@@ -10,19 +10,23 @@ const dashboardSummarySchema = new mongoose.Schema(
     suspectedReports: { type: Number, required: true, default: 0 },
     reportedCases: { type: Number, required: true, default: 0 },
     suspectedCases: { type: Number, required: true, default: 0 },
+    probableCases: { type: Number, required: true, default: 0 },
     confirmedCases: { type: Number, required: true, default: 0 },
     notValidatedCases: { type: Number, required: true, default: 0 },
     totalDefinition: {
       type: String,
-      default: "Confirmed official cases and confirmed surveillance reports",
+      default: "Confirmed cases from authoritative CESU uploads only",
     },
     topDistrict: { type: String, default: null },
     topDisease: { type: String, default: null },
     generatedAt: { type: Date, required: true, default: Date.now },
   },
-  { timestamps: true, collection: "dashboard_summaries" },
+  { timestamps: true, collection: "dashboardSummaries" },
 );
 
-dashboardSummarySchema.index({ scope: 1, year: 1 }, { unique: true });
+dashboardSummarySchema.index(
+  { scope: 1, year: 1 },
+  { unique: true, name: "dashboardSummariesScopeYearUnique" },
+);
 
 export default mongoose.model("DashboardSummary", dashboardSummarySchema);

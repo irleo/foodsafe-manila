@@ -7,10 +7,12 @@ export const notify = {
   loading: (msg) => toast.loading(msg),
 
   // For async actions (upload, generate predictions, save, etc.)
-  promise: (promise, { loading, success, error }) =>
+  promise: (promise, { loading, success, error }) => {
     toast.promise(promise, {
       loading,
       success,
       error,
-    }),
+    });
+    return promise;
+  },
 };

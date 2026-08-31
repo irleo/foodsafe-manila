@@ -3,9 +3,17 @@ import mongoose from "mongoose";
 const ExcludedPeriodSchema = new mongoose.Schema(
   {
     startYear: { type: Number, required: true, min: 1900, max: 2200 },
-    startMonth: { type: Number, required: true, min: 1, max: 12 },
+    startWeek: { type: Number, min: 1, max: 53 },
+    startMonth: { type: Number, min: 1, max: 12 },
     endYear: { type: Number, required: true, min: 1900, max: 2200 },
-    endMonth: { type: Number, required: true, min: 1, max: 12 },
+    endWeek: { type: Number, min: 1, max: 53 },
+    endMonth: { type: Number, min: 1, max: 12 },
+    disease: { type: String, default: null, trim: true, maxlength: 120 },
+    district: {
+      type: String,
+      enum: [null, "District 1", "District 2", "District 3", "District 4", "District 5", "District 6"],
+      default: null,
+    },
     reason: { type: String, required: true, trim: true, maxlength: 300 },
   },
   { _id: false },
@@ -20,7 +28,8 @@ const SurveillanceThresholdConfigSchema = new mongoose.Schema(
       enum: ["city", "district"],
       default: "city",
     },
-    baselineYears: { type: Number, min: 3, max: 10, default: 5 },
+    baselineYears: { type: Number, min: 5, max: 5, default: 5 },
+    minimumBaselineYears: { type: Number, min: 5, max: 5, default: 5 },
     alertSdMultiplier: { type: Number, min: 0, max: 10, default: 1 },
     epidemicSdMultiplier: { type: Number, min: 0, max: 10, default: 2 },
     excludedPeriods: { type: [ExcludedPeriodSchema], default: [] },
@@ -39,7 +48,10 @@ const SurveillanceThresholdConfigSchema = new mongoose.Schema(
   { timestamps: true, collection: "surveillanceThresholdConfigs" },
 );
 
-SurveillanceThresholdConfigSchema.index({ isActive: 1, geographicLevel: 1, condition: 1 });
+SurveillanceThresholdConfigSchema.index(
+  { isActive: 1, geographicLevel: 1, condition: 1 },
+  { name: "surveillanceThresholdConfigsActiveGeographyCondition" },
+);
 
 export default mongoose.model(
   "SurveillanceThresholdConfig",

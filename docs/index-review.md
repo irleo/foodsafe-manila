@@ -16,11 +16,11 @@ execution time. It does not create or remove indexes.
 The configured database was reachable, but the prioritized collections did not
 contain representative rows. Existing index metadata confirmed:
 
-- `official_cases` already has `barangayNo + year + month` and
+- `officialCases` already has `barangayNo + year + month` and
   `district + year + month` compound indexes.
 - `reports` already has `exposureBarangayNo + reportedAt + isCounted`; the
   counted/date query selected the `reportedAt` index in the empty database.
-- `prediction_runs` already has
+- `predictionRuns` already has
   `model + granularity + datasetScope + generatedAt` and
   `basisDatasetId + basisYear + generatedAt` indexes. The newest-run queries
   now sort by `generatedAt` alone so the existing compound index covers the

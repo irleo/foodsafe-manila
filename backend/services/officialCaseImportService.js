@@ -12,12 +12,10 @@ import {
 } from "./officialCaseNormalizer.js";
 
 const TEMPLATE_REQUIRED = [
-  "city",
   "district",
   "barangay",
   "disease",
-  "year",
-  "month",
+  "date_of_onset",
   "case_classification",
   "cases",
 ];
@@ -145,11 +143,65 @@ function minMaxYearMonth(records) {
   return { coverageStart, coverageEnd };
 }
 
-function validateCesuCoverage(records, providerType) {
-  if (providerType !== "cesu") return null;
-  return records.some((record) => Number(record.year) < 2022)
-    ? "CESU surveillance data in this project begins in 2022. Records before 2022 cannot be labeled as CESU data."
-    : null;
+export function districtCoverageFromRecords(records, suppliedCoverage = []) {
+  const normalizedSupplied = new Map(
+    (Array.isArray(suppliedCoverage) ? suppliedCoverage : []).map((entry) => [
+      String(entry?.district || "").trim(),
+      entry,
+    ]),
+  );
+  const recordsByDistrict = new Map();
+  for (const record of records) {
+    const district = String(record?.district || "").trim();
+    if (!district) continue;
+    if (!recordsByDistrict.has(district)) recordsByDistrict.set(district, []);
+    recordsByDistrict.get(district).push(record);
+  }
+  const fileCoverage = minMaxYearMonth(records);
+  const coveredDistricts = new Set([
+    ...recordsByDistrict.keys(),
+    ...normalizedSupplied.keys(),
+  ]);
+
+  return [...coveredDistricts].map((district) => {
+    const districtRecords = recordsByDistrict.get(district) || [];
+    const supplied = normalizedSupplied.get(district);
+    const derived = minMaxYearMonth(districtRecords);
+    const suppliedStart = supplied?.coverageStart ? new Date(supplied.coverageStart) : null;
+    const suppliedEnd = supplied?.coverageEnd ? new Date(supplied.coverageEnd) : null;
+    const suppliedValid = suppliedStart
+      && suppliedEnd
+      && !Number.isNaN(suppliedStart.getTime())
+      && !Number.isNaN(suppliedEnd.getTime())
+      && suppliedStart <= suppliedEnd;
+    if (suppliedValid && supplied?.verifiedComplete === true) {
+      return {
+        district,
+        coverageStart: suppliedStart,
+        coverageEnd: suppliedEnd,
+        verifiedComplete: true,
+        verificationSource: "uploader_confirmation",
+      };
+    }
+
+    if (supplied?.verifiedComplete === true) {
+      return {
+        district,
+        coverageStart: fileCoverage.coverageStart,
+        coverageEnd: fileCoverage.coverageEnd,
+        verifiedComplete: true,
+        verificationSource: "uploader_confirmation_file_range",
+      };
+    }
+
+    return {
+      district,
+      coverageStart: derived.coverageStart,
+      coverageEnd: derived.coverageEnd,
+      verifiedComplete: false,
+      verificationSource: "derived_from_records",
+    };
+  });
 }
 
 function normalizeTemplateRowKeys(row = {}) {
@@ -172,6 +224,7 @@ function aggregateRecords(records) {
       record.epidemiologicalWeek,
       record.caseClassification,
       record.source,
+      record.surveillanceDateBasis,
     ].join("|");
     const previous = byKey.get(key);
     byKey.set(key, {
@@ -218,7 +271,13 @@ async function persistOfficialCaseImport({
   }
 
   if (!dataset) throw new Error("Dataset import transaction did not complete.");
-  await refreshDashboardSummaryAfterWrite();
+  try {
+    await refreshDashboardSummaryAfterWrite();
+  } catch (error) {
+    // Dataset and case rows are already committed at this point. A derived
+    // dashboard refresh must not turn a durable import into a failed upload.
+    console.error("Dashboard summary refresh failed after dataset import:", error?.message || error);
+  }
   return { dataset, insertedRows };
 }
 
@@ -228,7 +287,8 @@ async function persistOfficialCaseImport({
  * @returns {Promise<{success:boolean, formatType?:string, datasetId?:string, insertedRows?:number, skippedRows?:number, coverageStart?:string, coverageEnd?:string, diseases?:string[], districts?:string[], validationErrors?:any, reason?:string }>}
  */
 export async function importOfficialCasesXlsx({
-  filePath,
+  fileBuffer,
+  datasetId,
   name,
   originalFileName,
   storedFileName,
@@ -238,12 +298,17 @@ export async function importOfficialCasesXlsx({
   providerName = "CESU",
   reportingFrequency = "weekly",
   contentHash,
+  storageProvider = "r2",
+  storageKey,
+  fileSize = 0,
+  districtCoverage = [],
+  beforePersist,
 } = {}) {
-  if (!filePath) throw new Error("filePath is required");
+  if (!Buffer.isBuffer(fileBuffer)) throw new Error("fileBuffer is required");
 
   let wb;
   try {
-    wb = XLSX.readFile(filePath);
+    wb = XLSX.read(fileBuffer, { type: "buffer", cellDates: true });
   } catch (error) {
     return {
       success: false,
@@ -281,6 +346,7 @@ export async function importOfficialCasesXlsx({
     let invalidRowCount = 0;
     const diseases = new Set();
     const districts = new Set();
+    const seenRows = new Set();
 
     for (const sn of wb.SheetNames || []) {
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: "" });
@@ -288,7 +354,6 @@ export async function importOfficialCasesXlsx({
       const headers = Object.keys(rows[0] || {});
       if (!hasAllHeaders(headers, RAW_REQUIRED)) continue;
 
-      diseases.add(String(sn).trim());
       for (let i = 0; i < rows.length; i++) {
         const rowNum = i + 2;
         const row = rows[i];
@@ -306,7 +371,29 @@ export async function importOfficialCasesXlsx({
           }
           continue;
         }
+        diseases.add(n.value.disease);
         districts.add(n.value.district);
+        const duplicateKey = [
+          n.value.district,
+          n.value.barangayNo,
+          n.value.disease,
+          n.value.surveillanceDate?.toISOString?.() || "",
+          n.value.caseClassification,
+          n.value.cases,
+        ].join("|");
+        if (seenRows.has(duplicateKey)) {
+          invalidRowCount += 1;
+          if (validationErrors.length < MAX_STORED_VALIDATION_ERRORS) {
+            validationErrors.push({
+              sheet: sn,
+              row: rowNum,
+              field: "row",
+              message: "Duplicate row.",
+            });
+          }
+          continue;
+        }
+        seenRows.add(duplicateKey);
         normalized.push(n.value);
       }
     }
@@ -321,24 +408,21 @@ export async function importOfficialCasesXlsx({
       };
     }
 
-    const cesuCoverageError = validateCesuCoverage(normalized, providerType);
-    if (cesuCoverageError) {
-      return {
-        success: false,
-        formatType,
-        reason: cesuCoverageError,
-        validationErrors,
-        validationErrorCount: invalidRowCount,
-      };
-    }
     const { coverageStart, coverageEnd } = minMaxYearMonth(normalized);
+    const resolvedDistrictCoverage = districtCoverageFromRecords(
+      normalized,
+      districtCoverage,
+    );
+
+    if (typeof beforePersist === "function") await beforePersist();
 
     const { dataset, insertedRows } = await persistOfficialCaseImport({
       datasetPayload: {
+        _id: datasetId,
         name:
           name?.trim() ||
           path.basename(
-            originalFileName || storedFileName || "official_cases.xlsx",
+            originalFileName || storedFileName || "officialCases.xlsx",
           ),
         dataSource: providerName,
         providerType,
@@ -347,9 +431,13 @@ export async function importOfficialCasesXlsx({
         ingestionMethod: "excel",
         coverageStart,
         coverageEnd,
-        originalFileName: originalFileName || "official_cases.xlsx",
-        storedFileName: storedFileName || path.basename(filePath),
-        filePath,
+        districtCoverage: resolvedDistrictCoverage,
+        originalFileName: originalFileName || "officialCases.xlsx",
+        storedFileName: "",
+        filePath: "",
+        storageProvider,
+        storageKey,
+        fileSize,
         mimeType:
           mimeType ||
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -358,7 +446,10 @@ export async function importOfficialCasesXlsx({
         contentHash,
         formatType,
         diseases: Array.from(diseases),
-        districts: Array.from(districts),
+        districts: Array.from(new Set([
+          ...districts,
+          ...resolvedDistrictCoverage.map((entry) => entry.district),
+        ])),
         totalRows: v.totalRows,
         insertedRows: 0,
         skippedRows: invalidRowCount,
@@ -405,6 +496,7 @@ export async function importOfficialCasesXlsx({
     let invalidRowCount = 0;
     const diseases = new Set();
     const districts = new Set();
+    const seenRows = new Set();
 
     for (let i = 0; i < rows.length; i++) {
       const rowNum = i + 2;
@@ -427,6 +519,28 @@ export async function importOfficialCasesXlsx({
       }
       diseases.add(n.value.disease);
       districts.add(n.value.district);
+      const duplicateKey = [
+        n.value.district,
+        n.value.barangayNo,
+        n.value.disease,
+        n.value.dateOfOnset?.toISOString?.() || "",
+        n.value.dateReported?.toISOString?.() || "",
+        n.value.caseClassification,
+        n.value.cases,
+      ].join("|");
+      if (seenRows.has(duplicateKey)) {
+        invalidRowCount += 1;
+        if (validationErrors.length < MAX_STORED_VALIDATION_ERRORS) {
+          validationErrors.push({
+            sheet: v.sheetName,
+            row: rowNum,
+            field: "row",
+            message: "Duplicate row.",
+          });
+        }
+        continue;
+      }
+      seenRows.add(duplicateKey);
       normalized.push(n.value);
     }
 
@@ -440,37 +554,21 @@ export async function importOfficialCasesXlsx({
       };
     }
 
-    const cesuCoverageError = validateCesuCoverage(normalized, providerType);
-    if (cesuCoverageError) {
-      return {
-        success: false,
-        formatType,
-        reason: cesuCoverageError,
-        validationErrors,
-        validationErrorCount: invalidRowCount,
-      };
-    }
     const { coverageStart, coverageEnd } = minMaxYearMonth(normalized);
+    const resolvedDistrictCoverage = districtCoverageFromRecords(
+      normalized,
+      districtCoverage,
+    );
 
-    if (
-      reportingFrequency === "weekly" &&
-      normalized.some((row) => !row.epidemiologicalWeek)
-    ) {
-      return {
-        success: false,
-        formatType,
-        reason: "Weekly datasets require epidemiological_week for every valid row.",
-        validationErrors,
-        validationErrorCount: invalidRowCount,
-      };
-    }
+    if (typeof beforePersist === "function") await beforePersist();
 
     const { dataset, insertedRows } = await persistOfficialCaseImport({
       datasetPayload: {
+        _id: datasetId,
         name:
           name?.trim() ||
           path.basename(
-            originalFileName || storedFileName || "cleaned_official_cases.xlsx",
+            originalFileName || storedFileName || "cleanedOfficialCases.xlsx",
           ),
         dataSource: providerName,
         providerType,
@@ -479,9 +577,13 @@ export async function importOfficialCasesXlsx({
         ingestionMethod: "excel",
         coverageStart,
         coverageEnd,
-        originalFileName: originalFileName || "cleaned_official_cases.xlsx",
-        storedFileName: storedFileName || path.basename(filePath),
-        filePath,
+        districtCoverage: resolvedDistrictCoverage,
+        originalFileName: originalFileName || "cleanedOfficialCases.xlsx",
+        storedFileName: "",
+        filePath: "",
+        storageProvider,
+        storageKey,
+        fileSize,
         mimeType:
           mimeType ||
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -490,7 +592,10 @@ export async function importOfficialCasesXlsx({
         contentHash,
         formatType,
         diseases: Array.from(diseases),
-        districts: Array.from(districts),
+        districts: Array.from(new Set([
+          ...districts,
+          ...resolvedDistrictCoverage.map((entry) => entry.district),
+        ])),
         totalRows: rows.length,
         insertedRows: 0,
         skippedRows: invalidRowCount,

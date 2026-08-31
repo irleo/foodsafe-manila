@@ -17,13 +17,15 @@ function cleanExcludedPeriods(periods) {
     startMonth: Number(period.startMonth),
     endYear: Number(period.endYear),
     endMonth: Number(period.endMonth),
+    disease: period.disease ? String(period.disease).trim() : null,
+    district: period.district ? String(period.district).trim() : null,
     reason: String(period.reason || "").trim(),
   }));
 }
 
 function invalidPeriod(period) {
-  const start = period.startYear * 12 + period.startMonth;
-  const end = period.endYear * 12 + period.endMonth;
+  const start = period.startYear * 100 + period.startMonth;
+  const end = period.endYear * 100 + period.endMonth;
   return !Number.isInteger(period.startYear)
     || !Number.isInteger(period.startMonth)
     || !Number.isInteger(period.endYear)
@@ -49,9 +51,9 @@ function settingsResponse(stored) {
     baselineYears: FIXED_THRESHOLD_SETTINGS.baselineYears,
     alertSdMultiplier: FIXED_THRESHOLD_SETTINGS.alertSdMultiplier,
     epidemicSdMultiplier: FIXED_THRESHOLD_SETTINGS.epidemicSdMultiplier,
-    periodType: "automatic_by_dataset_frequency",
+    periodType: "calendar_month",
     excludedPeriods: stored?.excludedPeriods || [],
-    methodologyNotes: stored?.methodologyNotes || "Provisional DOH surveillance formula pending confirmation with CESU.",
+    methodologyNotes: stored?.methodologyNotes || "Validated post-interview monthly comparison methodology; source records retain DOH morbidity weeks.",
     updatedAt: stored?.updatedAt || null,
     updatedBy: stored?.updatedBy || stored?.validatedBy || stored?.createdBy || null,
   };
@@ -77,10 +79,15 @@ export async function updateThresholdSettings(req, res) {
 
     const existing = await SurveillanceThresholdConfig.findOne({ isActive: true });
     const values = {
-      name: "Automatic five-year surveillance baseline",
-      ...FIXED_THRESHOLD_SETTINGS,
+      name: "Monthly disease surveillance baseline",
+      baselineYears: FIXED_THRESHOLD_SETTINGS.baselineYears,
+      minimumBaselineYears: FIXED_THRESHOLD_SETTINGS.baselineYears,
+      alertSdMultiplier: FIXED_THRESHOLD_SETTINGS.alertSdMultiplier,
+      epidemicSdMultiplier: FIXED_THRESHOLD_SETTINGS.epidemicSdMultiplier,
+      condition: "disease_specific",
+      geographicLevel: "city",
       excludedPeriods,
-      methodologyStatus: "draft",
+      methodologyStatus: "validated",
       methodologyNotes: String(req.body.methodologyNotes || "").trim(),
       isActive: true,
       updatedBy: userId(req),
@@ -112,7 +119,10 @@ export async function getCurrentThreshold(req, res) {
     const stored = await loadStoredSettings();
     const result = await calculateSurveillanceThreshold({
       datasetId: req.query.datasetId,
+      disease: req.query.disease,
       district: req.query.district ? String(req.query.district).trim() : undefined,
+      targetYear: req.query.targetYear,
+      targetMonth: req.query.targetMonth,
       excludedPeriods: stored?.excludedPeriods || [],
     });
     return res.json({

@@ -8,6 +8,8 @@ import Spinner from "../Spinner.jsx";
 import { delay } from "../../utils/delay.js";
 import { notify } from "../../utils/toast.js";
 
+const MANILA_DISTRICTS = Array.from({ length: 6 }, (_, index) => `District ${index + 1}`);
+
 export default function OfficialDatasetsTab() {
   const fileInputRef = useRef(null);
   const { auth } = useAuth();
@@ -17,11 +19,8 @@ export default function OfficialDatasetsTab() {
   const [file, setFile] = useState(null);
 
   const [datasetName, setDatasetName] = useState("");
-  const [coverageStart, setCoverageStart] = useState("");
-  const [coverageEnd, setCoverageEnd] = useState("");
-  const [providerType, setProviderType] = useState("cesu");
-  const [providerName, setProviderName] = useState("CESU");
   const [reportingFrequency, setReportingFrequency] = useState("weekly");
+  const [coverageVerified, setCoverageVerified] = useState(false);
 
   const [validating, setValidating] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -45,12 +44,9 @@ export default function OfficialDatasetsTab() {
   const canValidate = useMemo(() => {
     if (!file) return false;
     if (!datasetName.trim()) return false;
-    if (!providerType || !providerName.trim()) return false;
-    // Coverage dates are optional for XLSX (backend derives coverage). Keep optional for better UX.
-    if (coverageStart && coverageEnd && new Date(coverageStart) > new Date(coverageEnd))
-      return false;
+    if (!coverageVerified) return false;
     return true;
-  }, [file, datasetName, coverageStart, coverageEnd, providerType, providerName]);
+  }, [file, datasetName, coverageVerified]);
 
   const resetMessages = () => {
     setErrorMsg("");
@@ -105,12 +101,11 @@ export default function OfficialDatasetsTab() {
         upload({
           file,
           name: datasetName.trim(),
-          coverageStart,
-          coverageEnd,
-          dataSource: providerName.trim(),
-          providerType,
-          providerName: providerName.trim(),
           reportingFrequency,
+          districtCoverage: MANILA_DISTRICTS.map((district) => ({
+            district,
+            verifiedComplete: true,
+          })),
         }),
         {
           success: (res) =>
@@ -121,11 +116,15 @@ export default function OfficialDatasetsTab() {
         },
       );
 
-      setStatusMsg(
-        result?.formatType
-          ? `Imported: ${result.formatType} (${result.insertedRows} rows)`
-          : `Uploaded and validated: ${result?.dataset?.name || datasetName}`,
-      );
+      if (
+        result?.success !== true ||
+        !result?.datasetId ||
+        !Number.isFinite(result?.insertedRows)
+      ) {
+        throw new Error("The server did not confirm a successful dataset import.");
+      }
+
+      setStatusMsg(`Imported: ${result.formatType} (${result.insertedRows} records)`);
       setFile(null);
       await fetchRecent();
     } catch (err) {
@@ -150,8 +149,8 @@ export default function OfficialDatasetsTab() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (err) {
-      setErrorMsg(err.message || "Download failed.");
+    } catch {
+      notify.error("Dataset is not available.");
     }
   };
 
@@ -162,13 +161,13 @@ export default function OfficialDatasetsTab() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = filename || "official_cases_template.xlsx";
+      a.download = filename || "FoodSafe_Template.xlsx";
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (e) {
-      setErrorMsg(e?.message || "Failed to download template.");
+    } catch {
+      notify.error("Template is not available.");
     }
   };
 
@@ -196,7 +195,7 @@ export default function OfficialDatasetsTab() {
                 <span className="font-medium">Raw health office XLSX</span>: multi-sheet, each sheet = disease. Needs “Report date”, “District”, “Case Classification”.
               </li>
               <li>
-                <span className="font-medium">OfficialCaseTemplate XLSX</span>: one sheet (prefer “processed data”) with standardized columns.
+                <span className="font-medium">FoodSafe template XLSX</span>: enter district, barangay, disease, date of onset, classification, cases, and optional date reported. FoodSafe calculates morbidity fields automatically.
               </li>
             </ul>
           </div>
@@ -216,6 +215,7 @@ export default function OfficialDatasetsTab() {
             <div>
               <label className="block text-sm mb-2">Dataset name</label>
               <input
+                required
                 type="text"
                 value={datasetName}
                 onChange={(e) => setDatasetName(e.target.value)}
@@ -224,61 +224,24 @@ export default function OfficialDatasetsTab() {
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Coverage start
-                </label>
-                <input
-                  type="date"
-                  value={coverageStart}
-                  onChange={(e) => setCoverageStart(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Coverage end
-                </label>
-                <input
-                  type="date"
-                  value={coverageEnd}
-                  onChange={(e) => setCoverageEnd(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {coverageStart &&
-              coverageEnd &&
-              new Date(coverageStart) > new Date(coverageEnd) && (
-                <p className="text-xs text-red-600">
-                  Coverage start date cannot be after the end date.
-                </p>
-              )}
-
+            <label className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
+              <input type="checkbox" className="mt-0.5 h-4 w-4" checked={coverageVerified} onChange={(event) => setCoverageVerified(event.target.checked)} />
+              <span>I confirm that reporting was complete for each included district throughout the period detected from the workbook. Covered weeks without a case row may therefore be encoded as zero.</span>
+            </label>
             <p className="text-xs text-gray-500">
-              Coverage dates are optional for XLSX imports (the system derives coverage from the data).
+              Each district uses its own earliest and latest valid record dates. Without this confirmation, missing rows cannot safely be interpreted as zero.
             </p>
 
             <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-4">
               <p className="text-sm font-semibold text-blue-950">Source and reporting details</p>
-              <p className="mt-1 text-xs text-blue-700">These fields identify where the health data came from, independently of the uploaded file type.</p>
+              <p className="mt-1 text-xs text-blue-700">CESU is the authoritative source for every official dataset uploaded to FoodSafe.</p>
               <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-                <label className="text-sm text-gray-700">
-                  Source type
-                  <select value={providerType} onChange={(event) => setProviderType(event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm">
-                    <option value="hospital">Hospital</option>
-                    <option value="health_center">Health Center</option>
-                    <option value="cesu">CESU</option>
-                    <option value="doh">DOH</option>
-                  </select>
-                </label>
-                <label className="text-sm text-gray-700">
-                  Provider or facility name
-                  <input required value={providerName} onChange={(event) => setProviderName(event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm" placeholder="e.g. Tondo Health Center" />
-                </label>
+                <div className="text-sm text-gray-700">
+                  Official source
+                  <div className="mt-1 w-max flex min-h-11 items-center rounded-md border border-blue-200 bg-white px-3 py-2.5 font-medium text-blue-950">
+                    City Epidemiology and Surveillance Unit (CESU)
+                  </div>
+                </div>
                 <label className="text-sm text-gray-700 md:col-span-2">
                   Reporting frequency
                   <select value={reportingFrequency} onChange={(event) => setReportingFrequency(event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm">

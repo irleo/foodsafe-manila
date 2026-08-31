@@ -23,15 +23,15 @@ export const updateMobileProfile = async (req, res) => {
 
     if (phone) {
       const normalizedPhone = normalizePhone(phone);
-      if (normalizedPhone !== mobileUser.phone_number) {
+      if (normalizedPhone !== mobileUser.phoneNumber) {
         const taken = await MobileUser.exists({
-          phone_number: normalizedPhone,
+          phoneNumber: normalizedPhone,
           _id: { $ne: mobileUser._id },
         });
         if (taken) {
           return res.status(409).json({ message: "Phone number already in use" });
         }
-        mobileUser.phone_number = normalizedPhone;
+        mobileUser.phoneNumber = normalizedPhone;
       }
     }
 

@@ -4,7 +4,7 @@ import {
   DocumentIcon,
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
-import { RefreshCw } from "lucide-react";
+import { FlaskConical, RefreshCw } from "lucide-react";
 import { formatDate } from "../../utils/formatDate";
 import { formatStatusLabel } from "../../utils/formatStatusLabel";
 
@@ -67,7 +67,15 @@ export default function RecentDatasetsList({
                   <div className="flex items-start gap-3">
                     <DocumentIcon className="w-8 h-6 text-gray-700" />
                     <div>
-                      <p className="font-medium">{d.name || d.originalFileName || d.storedFileName || "Unnamed file"}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium">{d.name || d.originalFileName || d.storedFileName || "Unnamed file"}</p>
+                        {d.dataMode === "development" && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-800">
+                            <FlaskConical className="h-3 w-3" />
+                            Development sample
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-gray-600 mt-1">
                         {d.recordsCount?.toLocaleString?.() ??
                           d.recordsCount ??

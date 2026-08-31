@@ -14,6 +14,8 @@ const activityLogSchema = new mongoose.Schema(
         "dataset_uploaded",
         "dataset_validated",
         "dataset_failed",
+        "dataset_processed",
+        "dataset_downloaded",
         "user_approved",
         "user_rejected",
         "user_suspended",
@@ -43,8 +45,10 @@ const activityLogSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    collection: "activity_logs",
+    collection: "activityLogs",
   },
 );
+
+activityLogSchema.index({ createdAt: -1 }, { name: "activityLogsCreatedAt" });
 
 export default mongoose.model("ActivityLog", activityLogSchema);

@@ -1,15 +1,46 @@
 import mongoose from "mongoose";
 
+const DistrictCoverageSchema = new mongoose.Schema(
+  {
+    district: {
+      type: String,
+      enum: ["District 1", "District 2", "District 3", "District 4", "District 5", "District 6"],
+      required: true,
+    },
+    coverageStart: { type: Date, required: true },
+    coverageEnd: { type: Date, required: true },
+    verifiedComplete: { type: Boolean, default: false },
+    verificationSource: {
+      type: String,
+      enum: [
+        "uploader_confirmation",
+        "uploader_confirmation_file_range",
+        "uploader_confirmation_derived_range",
+        "derived_from_records",
+        "legacy_unverified",
+      ],
+      default: "derived_from_records",
+    },
+  },
+  { _id: false },
+);
+
 const DatasetSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     dataSource: { type: String, default: "" },
+    dataMode: {
+      type: String,
+      enum: ["official", "development"],
+      required: true,
+      default: "official",
+    },
     providerType: {
       type: String,
       enum: ["hospital", "health_center", "cesu", "doh", "citizen_patient_report"],
       required: true,
       default: "cesu",
-      index: true,
+      index: { name: "datasetsProviderType" },
     },
     providerName: { type: String, required: true, trim: true, maxlength: 200, default: "CESU" },
     reportingFrequency: {
@@ -26,11 +57,20 @@ const DatasetSchema = new mongoose.Schema(
     },
     coverageStart: { type: Date, required: true },
     coverageEnd: { type: Date, required: true },
+    districtCoverage: { type: [DistrictCoverageSchema], default: [] },
 
     originalFileName: { type: String, required: true },
-    storedFileName: { type: String, required: true },
-    filePath: { type: String, required: true },
+    // Legacy local-file fields remain optional so historical records are readable.
+    storedFileName: { type: String, default: "" },
+    filePath: { type: String, default: "" },
+    storageProvider: {
+      type: String,
+      enum: ["r2", "local", "none"],
+      default: "r2",
+    },
+    storageKey: { type: String, trim: true },
     mimeType: { type: String, default: "" },
+    fileSize: { type: Number, min: 0, default: 0 },
     contentHash: {
       type: String,
       trim: true,
@@ -51,7 +91,7 @@ const DatasetSchema = new mongoose.Schema(
         "csv_generic",
       ],
       default: "unrecognized_excel",
-      index: true,
+      index: { name: "datasetsFormatType" },
     },
     diseases: { type: [String], default: [] },
     districts: { type: [String], default: [] },
@@ -73,6 +113,7 @@ const DatasetSchema = new mongoose.Schema(
       ref: "WebUser",
       required: false, // depends on JWT payload
     },
+    uploadedAt: { type: Date, default: Date.now },
 
     errorMessage: { type: String, default: "" },
   },
@@ -81,7 +122,7 @@ const DatasetSchema = new mongoose.Schema(
 
 DatasetSchema.index(
   { contentHash: 1 },
-  { unique: true, sparse: true, name: "dataset_content_hash_unique" },
+  { unique: true, sparse: true, name: "datasetsContentHashUnique" },
 );
 
 export default mongoose.model("Dataset", DatasetSchema);

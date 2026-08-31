@@ -29,7 +29,7 @@ export const requestMobileOtp = async (req, res) => {
 
   try {
     const existingUser = await MobileUser.exists({
-      phone_number: request.phone,
+      phoneNumber: request.phone,
     });
 
     if (request.purpose === "registration" && existingUser) {

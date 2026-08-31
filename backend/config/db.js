@@ -23,9 +23,16 @@ export const connectDB = async () => {
       minPoolSize,
       serverSelectionTimeoutMS,
     });
+
+    const registeredModels = Object.values(mongoose.models);
+    await Promise.all(registeredModels.map((model) => model.init()));
+
     console.log(`MongoDB Connected: ${conn.connection.host}`);
     console.log(
       `MongoDB pool configured: min=${minPoolSize}, max=${maxPoolSize}`,
+    );
+    console.log(
+      `MongoDB collections and indexes initialized for ${registeredModels.length} models.`,
     );
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);

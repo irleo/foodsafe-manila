@@ -7,13 +7,11 @@ const emailOtpSchema = new mongoose.Schema(
       required: true,
       lowercase: true,
       trim: true,
-      index: true,
     },
     purpose: {
       type: String,
       required: true,
       enum: ["request_access"],
-      index: true,
     },
     otpHash: {
       type: String,
@@ -35,10 +33,16 @@ const emailOtpSchema = new mongoose.Schema(
       select: false,
     },
   },
-  { timestamps: true, collection: "email_otps" },
+  { timestamps: true, collection: "emailOtps" },
 );
 
-emailOtpSchema.index({ email: 1, purpose: 1 }, { unique: true });
-emailOtpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+emailOtpSchema.index(
+  { email: 1, purpose: 1 },
+  { unique: true, name: "emailOtpsEmailPurposeUnique" },
+);
+emailOtpSchema.index(
+  { expiresAt: 1 },
+  { expireAfterSeconds: 0, name: "emailOtpsExpiresAtTtl" },
+);
 
 export default mongoose.model("EmailOtp", emailOtpSchema);

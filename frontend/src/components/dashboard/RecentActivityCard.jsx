@@ -23,8 +23,12 @@ const typeDotClass = (type) => {
   if (type === "user_approved") return "bg-green-500";
   if (type === "user_rejected") return "bg-red-500";
   if (type === "password_reset") return "bg-green-500";
-  if (type === "report_reviewed") return "bg-yellow-500";
-  if (type === "alert_acknowledged") return "bg-orange-500";
+  if (type === "report_submitted") return "bg-yellow-500";
+  if (type === "investigation_recorded") return "bg-blue-500";
+  if (type === "marked_suspected") return "bg-amber-500";
+  if (type === "report_ruled_out" || type === "case_not_validated") return "bg-gray-500";
+  if (type === "case_confirmed") return "bg-green-500";
+  if (type === "case_marked_probable") return "bg-cyan-500";
   if (type === "analytics_exported") return "bg-indigo-500";
   return "bg-gray-400";
 };
@@ -36,29 +40,32 @@ export default function RecentActivityCard({
   const visibleItems = items.slice(0, 4);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <h2 className="mb-4 font-semibold">{title}</h2>
+    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="mb-3">
+        <h2 className="font-semibold">{title}</h2>
+      </div>
 
       {visibleItems.length === 0 ? (
         <div className="flex min-h-85 flex-col items-center justify-center px-6 py-10 text-center">
           <p className="text-xs font-medium text-gray-700">No recent activity</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div>
           {visibleItems.map((item) => (
             <div
               key={item.id}
-              className="flex items-start gap-3 pb-4 border-b border-gray-100 last:border-0"
+              className="flex items-start gap-3 border-b border-gray-100 py-3 first:pt-1 last:border-0 last:pb-0"
             >
-              <div className={`w-2 h-2 rounded-full mt-2 ${typeDotClass(item.type)}`} />
+              <div className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${typeDotClass(item.type)}`} />
               <div className="flex-1 min-w-0">
-                <p className="text-sm">{item.title}</p>
+                <p className="text-sm font-medium text-gray-900">{item.title}</p>
 
                 {item.subtitle && (
-                  <p className="text-xs text-gray-600 mt-1">{item.subtitle}</p>
+                  <p className="mt-0.5 truncate text-xs text-gray-600" title={item.subtitle}>{item.subtitle}</p>
                 )}
 
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="mt-0.5 text-xs text-gray-400">
+                  {item.actor?.username ? `${item.actor.username} · ` : ""}
                   {timeAgo(item.createdAt)}
                 </p>
               </div>

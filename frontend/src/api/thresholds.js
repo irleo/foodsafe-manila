@@ -14,9 +14,12 @@ async function thresholdRequest(token, path, options = {}) {
   return data;
 }
 
-export const fetchCurrentThreshold = (token, datasetId, district) => {
+export const fetchCurrentThreshold = (token, datasetId, { disease, district, targetYear, targetMonth } = {}) => {
   const params = new URLSearchParams({ datasetId });
+  if (disease) params.set("disease", disease);
   if (district) params.set("district", district);
+  if (targetYear) params.set("targetYear", String(targetYear));
+  if (targetMonth) params.set("targetMonth", String(targetMonth));
   return thresholdRequest(token, `/current?${params.toString()}`);
 };
 

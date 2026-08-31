@@ -64,7 +64,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
     if (user != null) {
       _nameCtrl.text = user!['username'] ?? '';
       _phoneCtrl.text = toPhilippineMobileInput(
-        user!['phone_number']?.toString() ?? '',
+        user!['phoneNumber']?.toString() ?? '',
       );
       _emailCtrl.text = user!['email'] ?? '';
     }
@@ -278,7 +278,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
         if (!mounted) return;
         _nameCtrl.text = updatedUser['username'] ?? '';
         _phoneCtrl.text = toPhilippineMobileInput(
-          updatedUser['phone_number']?.toString() ?? '',
+          updatedUser['phoneNumber']?.toString() ?? '',
         );
         _emailCtrl.text = updatedUser['email'] ?? '';
         _updated = true;

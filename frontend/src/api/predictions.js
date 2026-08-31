@@ -45,5 +45,16 @@ export async function refreshPredictions(
   if (!res.ok) {
     throw new Error(j.message || "Prediction refresh failed");
   }
-  return j;
+  if (!j.accepted) return j;
+
+  const timeoutAt = Date.now() + (15 * 60 * 1000);
+  while (Date.now() < timeoutAt) {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    const latest = await fetchLatestPredictions(token, { datasetId });
+    if (latest?.refreshJob?.status === "failed") {
+      throw new Error(latest.refreshJob.errorMessage || "Global forecast refresh failed");
+    }
+    if (latest?.refreshJob?.status === "succeeded") return latest;
+  }
+  throw new Error("The global forecast is still processing. You can leave this page and return later.");
 }

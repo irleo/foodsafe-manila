@@ -150,7 +150,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
                               ),
                             ),
                             Text(
-                              formatPhone(user?['phone_number']),
+                              formatPhone(user?['phoneNumber']),
                               style: GoogleFonts.inter(
                                 fontSize: 14,
                                 color: Colors.white,

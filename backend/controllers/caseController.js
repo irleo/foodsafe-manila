@@ -40,6 +40,7 @@ export const listCasesByDataset = async (req, res) => {
     const allowedStatuses = new Set([
       "reported",
       "suspected",
+      "probable",
       "confirmed",
       "not_validated",
     ]);
@@ -72,16 +73,8 @@ export const listCasesByDataset = async (req, res) => {
       items,
       caseDefinition: {
         selectedStatuses: [...new Set(selectedStatuses)],
-        includes: [
-          "official_upload",
-          ...(selectedStatuses.some((status) => status !== "confirmed")
-            ? ["surveillance_report"]
-            : []),
-          ...(selectedStatuses.includes("confirmed")
-            ? ["confirmed_surveillance_report"]
-            : []),
-        ],
-        unionStrategy: "query_time_no_copy",
+        includes: ["official_upload"],
+        sourcePolicy: "authoritative_cesu_uploads_only",
       },
     });
   } catch (err) {
