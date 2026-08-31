@@ -19,7 +19,7 @@ export function sanitizeMobileUser(mobileUser) {
     _id: id,
     id,
     username: obj.username,
-    phone_number: obj.phone_number,
+    phoneNumber: obj.phoneNumber,
     email: obj.email || "",
     role: "citizen",
     accountType: "citizen",

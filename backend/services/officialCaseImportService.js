@@ -422,7 +422,7 @@ export async function importOfficialCasesXlsx({
         name:
           name?.trim() ||
           path.basename(
-            originalFileName || storedFileName || "official_cases.xlsx",
+            originalFileName || storedFileName || "officialCases.xlsx",
           ),
         dataSource: providerName,
         providerType,
@@ -432,7 +432,7 @@ export async function importOfficialCasesXlsx({
         coverageStart,
         coverageEnd,
         districtCoverage: resolvedDistrictCoverage,
-        originalFileName: originalFileName || "official_cases.xlsx",
+        originalFileName: originalFileName || "officialCases.xlsx",
         storedFileName: "",
         filePath: "",
         storageProvider,
@@ -568,7 +568,7 @@ export async function importOfficialCasesXlsx({
         name:
           name?.trim() ||
           path.basename(
-            originalFileName || storedFileName || "cleaned_official_cases.xlsx",
+            originalFileName || storedFileName || "cleanedOfficialCases.xlsx",
           ),
         dataSource: providerName,
         providerType,
@@ -578,7 +578,7 @@ export async function importOfficialCasesXlsx({
         coverageStart,
         coverageEnd,
         districtCoverage: resolvedDistrictCoverage,
-        originalFileName: originalFileName || "cleaned_official_cases.xlsx",
+        originalFileName: originalFileName || "cleanedOfficialCases.xlsx",
         storedFileName: "",
         filePath: "",
         storageProvider,

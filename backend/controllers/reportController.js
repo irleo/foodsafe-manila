@@ -574,7 +574,7 @@ export const getReports = async (req, res) => {
       { path: "validation.validatedBy", select: "username" },
     ];
     if (canAccessPatientIdentity) {
-      populatePaths.push({ path: "reportedBy", select: "username email phone_number" });
+      populatePaths.push({ path: "reportedBy", select: "username email phoneNumber" });
     }
     const reports = await Report.populate(rawReports, populatePaths);
 

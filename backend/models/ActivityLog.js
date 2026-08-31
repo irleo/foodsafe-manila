@@ -45,8 +45,10 @@ const activityLogSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    collection: "activity_logs",
+    collection: "activityLogs",
   },
 );
+
+activityLogSchema.index({ createdAt: -1 }, { name: "activityLogsCreatedAt" });
 
 export default mongoose.model("ActivityLog", activityLogSchema);

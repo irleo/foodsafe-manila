@@ -17,7 +17,10 @@ const NotificationReadReceiptSchema = new mongoose.Schema(
   { timestamps: true, collection: "notificationReadReceipts" },
 );
 
-NotificationReadReceiptSchema.index({ userId: 1, notificationId: 1 });
+NotificationReadReceiptSchema.index(
+  { userId: 1, notificationId: 1 },
+  { unique: true, name: "notificationReadReceiptsUserNotificationUnique" },
+);
 
 export default mongoose.model(
   "NotificationReadReceipt",

@@ -96,7 +96,7 @@ function activityPipeline({ canViewReportWorkflow, skip, limit }) {
   if (canViewReportWorkflow) {
     pipeline.push({
       $unionWith: {
-        coll: "report_audit_logs",
+        coll: "reportAuditLogs",
         pipeline: [
           {
             $lookup: {

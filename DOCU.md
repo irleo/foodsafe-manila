@@ -1,6 +1,6 @@
 # FoodSafe Manila Project Status
 
-Updated on: 2026-08-03
+Updated on: 2026-08-31
 
 ## Overall Project Purpose
 
@@ -16,8 +16,8 @@ The backend is the source of truth. Both the React frontend and Flutter app call
 
 ### User Models and MongoDB Collections
 
-- Web accounts now use `backend/models/WebUser.js`, the Mongoose model name `WebUser`, and the explicit MongoDB collection `web_users`.
-- Mobile accounts now use `backend/models/MobileUser.js`, the schema variable `mobileUserSchema`, the Mongoose model name `MobileUser`, and the explicit MongoDB collection `mobile_users`.
+- Web accounts use `backend/models/WebUser.js`, the Mongoose model name `WebUser`, and the explicit MongoDB collection `webUsers`.
+- Mobile accounts use `backend/models/MobileUser.js`, the schema variable `mobileUserSchema`, the Mongoose model name `MobileUser`, and the explicit MongoDB collection `mobileUsers`.
 - References were updated accordingly: web approval/audit references use `WebUser`, while citizen reports reference `MobileUser`.
 - The active database remains selected through `MONGO_URI` (with `MONGODB_URI` as a fallback), so test and production databases can be changed without code edits.
 
@@ -52,7 +52,7 @@ The backend is the source of truth. Both the React frontend and Flutter app call
 ### Backend Core
 
 - Express API server with JSON parsing, CORS allowlist, cookie parsing, API rate limiting, auth-specific rate limits, root health response, 404 handling, and global error handling.
-- MongoDB connection setup through Mongoose with configurable bounded connection-pool defaults for the Render Starter tier.
+- MongoDB connection setup through Mongoose with configurable bounded connection-pool defaults and fail-fast initialization of every registered model's collections and indexes before the API starts listening.
 - Slow-request timing and periodic process-memory instrumentation that omit query strings and sensitive request data.
 - JWT bearer-token middleware and role-based admin guard.
 - Central route registration for auth, users, reports, datasets, analytics, cases, heatmap, activity, notifications, health, predictions, and mobile-facing endpoints.
@@ -84,13 +84,13 @@ The backend is the source of truth. Both the React frontend and Flutter app call
 
 ### Official Dataset Uploads
 
-- XLSX upload flow for official case data.
-- Detection of raw health office workbook format and processed template format.
-- Template download endpoint for official case uploads.
-- Normalization into weekly or explicitly legacy-monthly `OfficialCase` rows with institutional provider, ingestion method, epidemiological year/week, calendar month, classification, and case count.
-- Dataset metadata persistence, including coverage dates, format type, diseases, districts, row counts, validation errors, and status.
-- Dataset list and dataset file download endpoints.
-- Upload success/failure notifications and activity log entries.
+- XLSX upload flow for raw health-office workbooks and the simplified processed template.
+- The processed sheet accepts `district`, `barangay`, `disease`, `date_of_onset`, `case_classification`, `cases`, and optional `date_reported`; city, calendar fields, DOH morbidity year/week, Sunday week start, and source are derived server-side from onset.
+- Strict supported-disease, district/barangay, date, positive-whole-number, exact-row duplicate, and file-hash duplicate validation.
+- Private Cloudflare R2 storage for `templates/FoodSafe_Template.xlsx` and validated originals under `datasets/<dataset-id>/`; MongoDB stores object metadata and normalized records.
+- Authenticated template and original-dataset streaming downloads with client-side failure toasts.
+- Upload, validation, processing, failure, and original-download activity events.
+- Fresh deployments create the weekly-aware official-case unique index directly from the Mongoose model definitions.
 - Automatic non-blocking monthly prediction refresh after successful official XLSX upload.
 
 ### Citizen Reports
@@ -137,7 +137,7 @@ The backend is the source of truth. Both the React frontend and Flutter app call
 - Prediction generated notifications.
 - A process-wide forecast queue that coalesces duplicate jobs and allows only one forecast refresh at a time.
 - Sequential district Prophet execution so the backend runs no more than one Python forecast child process at a time.
-- Forecast queue-wait and execution-duration logging for Starter-tier monitoring.
+- Forecast queue-wait and execution-duration logging for Render monitoring.
 
 ### Notifications and Activity
 
@@ -169,9 +169,9 @@ The backend is the source of truth. Both the React frontend and Flutter app call
 - Shared Philippine mobile-number prefix, formatting, length limiting, and validation components for authentication screens.
 - Registration and password-reset OTP screens backed by the backend's Semaphore SMS flow.
 
-## Render Starter Performance Controls
+## Render Performance Controls
 
-The backend is configured for the Render Starter instance in `render.yaml`. The frontend remains a Render Static Site. The following controls reduce CPU, memory, database, and outbound-request pressure on the 512 MB backend instance.
+The backend is configured for Render compute plan `1c-2g` (1 CPU, 2 GB RAM) in `render.yaml`. The frontend remains a Render Static Site. The following controls reduce CPU, memory, database, and outbound-request pressure.
 
 ### Risk and Dashboard Caches
 
@@ -179,7 +179,7 @@ The backend is configured for the Render Starter instance in `render.yaml`. The 
 - `GET /api/risk/nearby` selects and caches the requested barangay from the shared citywide snapshot and reuses its high-risk alerts.
 - `GET /api/dashboard` reuses a cached annual dashboard summary.
 - Identical requests arriving while a cache value is being calculated share the same in-flight promise instead of starting duplicate MongoDB aggregations.
-- Caches are in-process and intentionally short-lived. They are suitable for the single-instance Starter deployment. A future multi-instance deployment requires a shared cache or precomputed MongoDB snapshot.
+- Caches are in-process and intentionally short-lived. They are suitable for the current single-instance deployment. A future multi-instance deployment requires a shared cache or precomputed MongoDB snapshot.
 
 Default cache settings:
 
@@ -196,7 +196,7 @@ DASHBOARD_CACHE_TTL_MS=120000
 - District forecasts run sequentially instead of through `Promise.all`.
 - The queue logs wait time and total refresh duration.
 
-This protects the Express API from multiple simultaneous Python/Prophet processes. The lock is process-local and matches the current single-instance Starter architecture. If the backend is horizontally scaled later, replace it with a MongoDB-backed distributed job lock or a separate worker.
+This protects the Express API from multiple simultaneous Python/Prophet processes. The lock is process-local and matches the current single-instance architecture. If the backend is horizontally scaled later, replace it with a MongoDB-backed distributed job lock or a separate worker.
 
 ### MongoDB Pool Defaults
 
@@ -342,7 +342,7 @@ Missing or unclear:
 - There are no root-level scripts for starting the full backend/frontend/mobile stack together.
 - Root `package.json` is an empty object, so monorepo orchestration is not currently implemented.
 - Raw spreadsheet files are ignored in `.gitignore`, but existing workbook files are present in the workspace.
-- Uploaded files are stored in a local `uploads` folder. There is no retention, cleanup, or object-storage strategy documented.
+- New validated uploads are retained in private Cloudflare R2. Historical dataset records with local paths remain downloadable only while those files still exist.
 - Backend routes depend on environment secrets (`ACCESS_TOKEN_SECRET`, `REFRESH_TOKEN_SECRET`, SMTP values, Mongo URI), but production deployment guidance is minimal.
 
 ## File Inventory
@@ -401,14 +401,14 @@ Missing or unclear:
 
 - `backend/models/ActivityLog.js`: Activity log schema.
 - `backend/models/MobileOtp.js`: Hashed mobile OTP, verification-token, cooldown, attempt, and expiry state.
-- `backend/models/MobileUser.js`: Mobile account schema stored in `mobile_users`.
+- `backend/models/MobileUser.js`: Mobile account schema stored in `mobileUsers`.
 - `backend/models/Dataset.js`: Uploaded dataset metadata schema.
 - `backend/models/EmailOtp.js`: OTP storage schema for email verification flows.
 - `backend/models/Notification.js`: Notification schema.
 - `backend/models/OfficialCase.js`: Monthly official case schema with district, barangay, disease, classification, and cases.
 - `backend/models/PredictionRun.js`: Stored monthly Prophet run containing operational forecasts, Seasonal Naïve benchmark metrics, rolling-origin errors, prediction intervals, and aggregate calibration metadata.
 - `backend/models/Report.js`: Citizen suspected illness report schema.
-- `backend/models/WebUser.js`: Web/admin account schema stored in `web_users`.
+- `backend/models/WebUser.js`: Web/admin account schema stored in `webUsers`.
 
 ### Backend SMS and OTP Services
 
@@ -436,7 +436,8 @@ Missing or unclear:
 - `backend/services/emailService.js`: SMTP email sending for OTP flows.
 - `backend/services/notificationService.js`: Notification creation helpers.
 - `backend/services/officialCaseImportService.js`: Official XLSX detection, validation, import, aggregation, and dataset persistence.
-- `backend/services/officialCaseNormalizer.js`: Raw/template official case row normalization.
+- `backend/services/officialCaseNormalizer.js`: Raw/template normalization, including onset-based calendar and morbidity derivation.
+- `backend/services/r2StorageService.js`: Private R2 object upload, download, and orphan cleanup.
 - `backend/services/statisticsCaseBuilders.js`: Analytics/statistics builders from official cases.
 - `backend/services/validateDatasetFile.js`: Generic dataset file validation helper.
 - `backend/services/predictions/refreshMonthlyDistrictPredictions.js`: Monthly district Prophet refresh and prediction-run persistence.
@@ -517,7 +518,7 @@ Missing or unclear:
 - `frontend/src/data/manila-legislative-districts.json`: District geometry data.
 - `frontend/src/data/mockOfficialCases.js`: Mock official case fixture data.
 - `frontend/src/data/mockReports.js`: Mock report fixture data.
-- `frontend/public/templates/official_cases_template.xlsx`: Downloadable official cases template.
+- The official template is not bundled with the frontend; the authenticated backend streams `templates/FoodSafe_Template.xlsx` from private R2.
 - `frontend/public/vite.svg`: Default Vite asset.
 - `frontend/src/assets/react.svg`: Default React asset.
 

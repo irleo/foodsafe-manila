@@ -7,19 +7,24 @@ const reportSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Dataset",
       default: null,
-      index: true,
+      index: { name: "reportsDatasetId" },
     },
 
     // Where the citizen was when they submitted the report (GPS)
     location: {
       name: { type: String, required: true, trim: true },
-      district: { type: String, required: true, trim: true, index: true },
+      district: {
+        type: String,
+        required: true,
+        trim: true,
+        index: { name: "reportsLocationDistrict" },
+      },
 
       barangay: {
         type: String,
         default: null,
         trim: true,
-        index: true,
+        index: { name: "reportsLocationBarangay" },
       },
 
       barangayNo: {
@@ -27,7 +32,7 @@ const reportSchema = new mongoose.Schema(
         default: null,
         min: 1,
         max: 999,
-        index: true,
+        index: { name: "reportsLocationBarangayNo" },
       },
 
       coordinates: {
@@ -41,14 +46,14 @@ const reportSchema = new mongoose.Schema(
       type: String,
       default: null,
       trim: true,
-      index: true,
+      index: { name: "reportsExposureDistrict" },
     },
 
     exposureBarangay: {
       type: String,
       default: null,
       trim: true,
-      index: true,
+      index: { name: "reportsExposureBarangay" },
     },
 
     exposureBarangayNo: {
@@ -56,7 +61,7 @@ const reportSchema = new mongoose.Schema(
       default: null,
       min: 1,
       max: 999,
-      index: true,
+      index: { name: "reportsExposureBarangayNo" },
     },
 
     symptoms: {
@@ -66,15 +71,23 @@ const reportSchema = new mongoose.Schema(
         validator: (arr) => Array.isArray(arr) && arr.length > 0,
         message: "At least one symptom is required.",
       },
-      index: true,
+      index: { name: "reportsSymptoms" },
     },
 
     caseCount: { type: Number, default: 1, min: 1 },
 
     foodSource: { type: String, default: null, trim: true },
 
-    reportedAt: { type: Date, required: true, index: true },
-    surveillanceDate: { type: Date, default: null, index: true },
+    reportedAt: {
+      type: Date,
+      required: true,
+      index: { name: "reportsReportedAt" },
+    },
+    surveillanceDate: {
+      type: Date,
+      default: null,
+      index: { name: "reportsSurveillanceDate" },
+    },
     surveillanceDateBasis: {
       type: String,
       enum: ["report_date", "symptom_onset", "legacy_unknown"],
@@ -83,20 +96,25 @@ const reportSchema = new mongoose.Schema(
     epidemiologicalYear: { type: Number, default: null, min: 2015, max: 2100 },
     epidemiologicalWeek: { type: Number, default: null, min: 1, max: 53 },
     weekStartDate: { type: Date, default: null },
-    disease: { type: String, enum: SURVEILLANCE_DISEASES, default: null, index: true },
+    disease: {
+      type: String,
+      enum: SURVEILLANCE_DISEASES,
+      default: null,
+      index: { name: "reportsDisease" },
+    },
 
     reportedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "MobileUser",
       required: true,
-      index: true,
+      index: { name: "reportsReportedBy" },
     },
 
     source: {
       type: String,
       enum: ["citizen_app", "health_official"],
       default: "citizen_app",
-      index: true,
+      index: { name: "reportsSource" },
     },
 
     caseClassification: {
@@ -111,7 +129,7 @@ const reportSchema = new mongoose.Schema(
       ],
       default: "reported",
       required: true,
-      index: true,
+      index: { name: "reportsCaseClassification" },
     },
 
     currentStatus: {
@@ -189,7 +207,11 @@ const reportSchema = new mongoose.Schema(
     },
     remarks: { type: String, default: null, trim: true, maxlength: 4000 },
 
-    isCounted: { type: Boolean, default: true, index: true },
+    isCounted: {
+      type: Boolean,
+      default: true,
+      index: { name: "reportsIsCounted" },
+    },
     excludeReason: { type: String, default: null, trim: true },
   },
   { timestamps: true, collection: "reports" },
@@ -200,19 +222,19 @@ reportSchema.index({
   "location.barangayNo": 1,
   reportedAt: -1,
   isCounted: 1,
-});
+}, { name: "reportsLocationBarangayReportedCounted" });
 
 reportSchema.index({
   exposureBarangayNo: 1,
   reportedAt: -1,
   isCounted: 1,
-});
+}, { name: "reportsExposureBarangayReportedCounted" });
 
 reportSchema.index({
   exposureDistrict: 1,
   exposureBarangayNo: 1,
   reportedAt: -1,
   isCounted: 1,
-});
+}, { name: "reportsExposureDistrictBarangayReportedCounted" });
 
 export default mongoose.model("Report", reportSchema);

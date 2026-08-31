@@ -21,9 +21,12 @@ const dashboardSummarySchema = new mongoose.Schema(
     topDisease: { type: String, default: null },
     generatedAt: { type: Date, required: true, default: Date.now },
   },
-  { timestamps: true, collection: "dashboard_summaries" },
+  { timestamps: true, collection: "dashboardSummaries" },
 );
 
-dashboardSummarySchema.index({ scope: 1, year: 1 }, { unique: true });
+dashboardSummarySchema.index(
+  { scope: 1, year: 1 },
+  { unique: true, name: "dashboardSummariesScopeYearUnique" },
+);
 
 export default mongoose.model("DashboardSummary", dashboardSummarySchema);

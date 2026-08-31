@@ -14,18 +14,22 @@ const notificationSchema = new mongoose.Schema(
         "prediction_generated",
       ],
       required: true,
-      index: true,
+      index: { name: "notificationsType" },
     },
     title: { type: String, required: true, trim: true },
     message: { type: String, required: true, trim: true },
     dotColor: { type: String, default: "blue" },
-    unread: { type: Boolean, default: true, index: true },
+    unread: {
+      type: Boolean,
+      default: true,
+      index: { name: "notificationsUnread" },
+    },
     targetMonth: { type: String, default: null, trim: true }, // YYYY-MM
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   { timestamps: true, collection: "notifications" },
 );
 
-notificationSchema.index({ createdAt: -1 });
+notificationSchema.index({ createdAt: -1 }, { name: "notificationsCreatedAt" });
 
 export default mongoose.model("Notification", notificationSchema);

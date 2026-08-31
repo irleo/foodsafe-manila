@@ -6,7 +6,7 @@ const officialCaseSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Dataset",
       required: true,
-      index: true,
+      index: { name: "officialCasesDatasetId" },
     },
 
     city: { type: String, default: "Manila" },
@@ -23,14 +23,14 @@ const officialCaseSchema = new mongoose.Schema(
       ],
       required: true,
       trim: true,
-      index: true,
+      index: { name: "officialCasesDistrict" },
     },
 
     barangay: {
       type: String,
       default: null,
       trim: true,
-      index: true,
+      index: { name: "officialCasesBarangay" },
     },
 
     barangayNo: {
@@ -38,7 +38,7 @@ const officialCaseSchema = new mongoose.Schema(
       default: null,
       min: 1,
       max: 999,
-      index: true,
+      index: { name: "officialCasesBarangayNo" },
     },
 
     disease: { type: String, required: true, trim: true },
@@ -77,7 +77,7 @@ const officialCaseSchema = new mongoose.Schema(
       enum: ["confirmed", "suspected", "probable"],
       required: true,
       trim: true,
-      index: true,
+      index: { name: "officialCasesCaseClassification" },
     },
 
     cases: { type: Number, required: true, min: 1 },
@@ -88,15 +88,30 @@ const officialCaseSchema = new mongoose.Schema(
       default: "official",
     },
   },
-  { timestamps: true, collection: "official_cases" }
+  { timestamps: true, collection: "officialCases" }
 );
 
-officialCaseSchema.index({ year: 1, month: 1 });
-officialCaseSchema.index({ epidemiologicalYear: 1, epidemiologicalWeek: 1, caseClassification: 1 });
-officialCaseSchema.index({ district: 1, year: 1, month: 1 });
-officialCaseSchema.index({ barangayNo: 1, year: 1, month: 1 });
-officialCaseSchema.index({ disease: 1, year: 1, month: 1 });
-officialCaseSchema.index({ caseClassification: 1, year: 1, month: 1 });
+officialCaseSchema.index({ year: 1, month: 1 }, { name: "officialCasesYearMonth" });
+officialCaseSchema.index(
+  { epidemiologicalYear: 1, epidemiologicalWeek: 1, caseClassification: 1 },
+  { name: "officialCasesEpidemiologicalPeriodClassification" },
+);
+officialCaseSchema.index(
+  { district: 1, year: 1, month: 1 },
+  { name: "officialCasesDistrictPeriod" },
+);
+officialCaseSchema.index(
+  { barangayNo: 1, year: 1, month: 1 },
+  { name: "officialCasesBarangayPeriod" },
+);
+officialCaseSchema.index(
+  { disease: 1, year: 1, month: 1 },
+  { name: "officialCasesDiseasePeriod" },
+);
+officialCaseSchema.index(
+  { caseClassification: 1, year: 1, month: 1 },
+  { name: "officialCasesClassificationPeriod" },
+);
 
 officialCaseSchema.index(
   {
@@ -112,7 +127,7 @@ officialCaseSchema.index(
     caseClassification: 1,
     source: 1,
   },
-  { unique: true, name: "official_case_period_unique" }
+  { unique: true, name: "officialCasesPeriodUnique" }
 );
 
 export default mongoose.model("OfficialCase", officialCaseSchema);

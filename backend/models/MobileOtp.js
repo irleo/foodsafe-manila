@@ -18,11 +18,17 @@ const mobileOtpSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    collection: "mobile_otps",
+    collection: "mobileOtps",
   },
 );
 
-mobileOtpSchema.index({ phone: 1, purpose: 1 }, { unique: true });
-mobileOtpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+mobileOtpSchema.index(
+  { phone: 1, purpose: 1 },
+  { unique: true, name: "mobileOtpsPhonePurposeUnique" },
+);
+mobileOtpSchema.index(
+  { expiresAt: 1 },
+  { expireAfterSeconds: 0, name: "mobileOtpsExpiresAtTtl" },
+);
 
 export default mongoose.model("MobileOtp", mobileOtpSchema);

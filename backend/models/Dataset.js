@@ -40,7 +40,7 @@ const DatasetSchema = new mongoose.Schema(
       enum: ["hospital", "health_center", "cesu", "doh", "citizen_patient_report"],
       required: true,
       default: "cesu",
-      index: true,
+      index: { name: "datasetsProviderType" },
     },
     providerName: { type: String, required: true, trim: true, maxlength: 200, default: "CESU" },
     reportingFrequency: {
@@ -91,7 +91,7 @@ const DatasetSchema = new mongoose.Schema(
         "csv_generic",
       ],
       default: "unrecognized_excel",
-      index: true,
+      index: { name: "datasetsFormatType" },
     },
     diseases: { type: [String], default: [] },
     districts: { type: [String], default: [] },
@@ -122,7 +122,7 @@ const DatasetSchema = new mongoose.Schema(
 
 DatasetSchema.index(
   { contentHash: 1 },
-  { unique: true, sparse: true, name: "dataset_content_hash_unique" },
+  { unique: true, sparse: true, name: "datasetsContentHashUnique" },
 );
 
 export default mongoose.model("Dataset", DatasetSchema);

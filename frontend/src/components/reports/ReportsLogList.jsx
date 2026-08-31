@@ -471,7 +471,7 @@ function formatSubmittedBy(reportedBy, canAccessPatientIdentity) {
   if (!canAccessPatientIdentity) return "Restricted";
   if (!reportedBy) return "Citizen User";
   if (typeof reportedBy === "string") return "Citizen User";
-  return [reportedBy.username, reportedBy.email, reportedBy.phone_number]
+  return [reportedBy.username, reportedBy.email, reportedBy.phoneNumber]
     .filter(Boolean)
     .join(" · ") || reportedBy._id || "Citizen User";
 }

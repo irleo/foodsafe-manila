@@ -7,7 +7,7 @@ const ReportAuditLogSchema = new mongoose.Schema(
       ref: "Report",
       required: true,
       immutable: true,
-      index: true,
+      index: { name: "reportAuditLogsReportId" },
     },
     actorId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -41,10 +41,13 @@ const ReportAuditLogSchema = new mongoose.Schema(
   },
   {
     timestamps: { createdAt: true, updatedAt: false },
-    collection: "report_audit_logs",
+    collection: "reportAuditLogs",
   },
 );
 
-ReportAuditLogSchema.index({ reportId: 1, createdAt: 1 });
+ReportAuditLogSchema.index(
+  { reportId: 1, createdAt: 1 },
+  { name: "reportAuditLogsReportCreatedAt" },
+);
 
 export default mongoose.model("ReportAuditLog", ReportAuditLogSchema);

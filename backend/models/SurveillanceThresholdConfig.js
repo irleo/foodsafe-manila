@@ -48,7 +48,10 @@ const SurveillanceThresholdConfigSchema = new mongoose.Schema(
   { timestamps: true, collection: "surveillanceThresholdConfigs" },
 );
 
-SurveillanceThresholdConfigSchema.index({ isActive: 1, geographicLevel: 1, condition: 1 });
+SurveillanceThresholdConfigSchema.index(
+  { isActive: 1, geographicLevel: 1, condition: 1 },
+  { name: "surveillanceThresholdConfigsActiveGeographyCondition" },
+);
 
 export default mongoose.model(
   "SurveillanceThresholdConfig",

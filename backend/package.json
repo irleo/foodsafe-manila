@@ -6,8 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "indexes:explain": "node scripts/reviewIndexes.js",
-    "migrate:official-case-weekly-index": "node scripts/migrateOfficialCaseWeeklyIndex.js"
+    "indexes:explain": "node scripts/reviewIndexes.js"
   },
   "keywords": [],
   "author": "",
