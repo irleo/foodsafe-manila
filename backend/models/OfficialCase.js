@@ -50,10 +50,12 @@ const officialCaseSchema = new mongoose.Schema(
     epidemiologicalYear: { type: Number, default: null, min: 2015, max: 2100 },
     epidemiologicalWeek: { type: Number, default: null, min: 1, max: 53 },
     weekStartDate: { type: Date, default: null },
+    dateOfOnset: { type: Date, default: null },
+    dateReported: { type: Date, default: null },
     surveillanceDate: { type: Date, default: null },
     surveillanceDateBasis: {
       type: String,
-      enum: ["report_date", "provided_week_start", "provided_period", "legacy_unknown"],
+      enum: ["onset_date", "report_date", "provided_week_start", "provided_period", "legacy_unknown"],
       default: "legacy_unknown",
     },
     reportingFrequency: {
@@ -78,7 +80,7 @@ const officialCaseSchema = new mongoose.Schema(
       index: true,
     },
 
-    cases: { type: Number, required: true, min: 0 },
+    cases: { type: Number, required: true, min: 1 },
 
     source: {
       type: String,

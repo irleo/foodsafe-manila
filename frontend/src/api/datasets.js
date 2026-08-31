@@ -62,9 +62,10 @@ export async function downloadOfficialCaseTemplate({ token }) {
   });
   if (!res.ok) throw new Error(await parseError(res));
   const blob = await res.blob();
+  if (!blob.size) throw new Error("Template response was empty.");
   const cd = res.headers.get("content-disposition");
   const match = cd?.match(/filename="(.+)"/);
-  const filename = match?.[1] || "official_cases_template.xlsx";
+  const filename = match?.[1] || "FoodSafe_Template.xlsx";
   return { blob, filename };
 }
 
@@ -78,6 +79,7 @@ export async function downloadDatasetFile({ datasetId, token }) {
   if (!res.ok) throw new Error(await parseError(res));
 
   const blob = await res.blob();
+  if (!blob.size) throw new Error("Dataset response was empty.");
   const cd = res.headers.get("content-disposition");
   const match = cd?.match(/filename="(.+)"/);
   const filename = match?.[1] || "dataset.xlsx";

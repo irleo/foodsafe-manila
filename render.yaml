@@ -47,6 +47,14 @@ services:
   envVars:
   - key: MONGO_URI
     sync: false
+  - key: R2_ACCOUNT_ID
+    sync: false
+  - key: R2_ACCESS_KEY_ID
+    sync: false
+  - key: R2_SECRET_ACCESS_KEY
+    sync: false
+  - key: R2_BUCKET_NAME
+    sync: false
   - key: BREVO_RESET_OTP_TEMPLATE_ID
     sync: false
   - key: BREVO_ACCESS_OTP_TEMPLATE_ID

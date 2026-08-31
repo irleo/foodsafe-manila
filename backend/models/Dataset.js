@@ -60,9 +60,17 @@ const DatasetSchema = new mongoose.Schema(
     districtCoverage: { type: [DistrictCoverageSchema], default: [] },
 
     originalFileName: { type: String, required: true },
-    storedFileName: { type: String, required: true },
-    filePath: { type: String, required: true },
+    // Legacy local-file fields remain optional so historical records are readable.
+    storedFileName: { type: String, default: "" },
+    filePath: { type: String, default: "" },
+    storageProvider: {
+      type: String,
+      enum: ["r2", "local", "none"],
+      default: "r2",
+    },
+    storageKey: { type: String, trim: true },
     mimeType: { type: String, default: "" },
+    fileSize: { type: Number, min: 0, default: 0 },
     contentHash: {
       type: String,
       trim: true,
@@ -105,6 +113,7 @@ const DatasetSchema = new mongoose.Schema(
       ref: "WebUser",
       required: false, // depends on JWT payload
     },
+    uploadedAt: { type: Date, default: Date.now },
 
     errorMessage: { type: String, default: "" },
   },

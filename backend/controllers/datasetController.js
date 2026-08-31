@@ -1,7 +1,8 @@
 import fs from "fs";
 import path from "path";
 import { createHash } from "crypto";
-import xlsx from "xlsx";
+import { pipeline } from "stream/promises";
+import mongoose from "mongoose";
 import Dataset from "../models/Dataset.js";
 import { paginationMeta, parsePagination } from "../utils/pagination.js";
 import { logActivity } from "../utils/logActivity.js";
@@ -9,29 +10,44 @@ import { importOfficialCasesXlsx } from "../services/officialCaseImportService.j
 import { refreshMonthlyDistrictPredictions } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
 import { createNotification } from "../services/notificationService.js";
 import { resolveCumulativeDatasetContext } from "../services/cumulativeOfficialCaseService.js";
+import {
+  deleteDatasetObject,
+  getDatasetObject,
+  uploadDatasetObject,
+} from "../services/r2StorageService.js";
 
-const uploadsDir = path.join(process.cwd(), "uploads");
 const OFFICIAL_PROVIDER_TYPE = "cesu";
 const OFFICIAL_PROVIDER_NAME = "CESU";
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+const OFFICIAL_TEMPLATE_STORAGE_KEY = "templates/FoodSafe_Template.xlsx";
+const XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-function cleanupUploadedFile(req) {
-  try {
-    const p = req?.file?.path;
-    if (p && fs.existsSync(p)) fs.unlinkSync(p);
-  } catch (error) {
-    console.error("Failed to clean up uploaded file:", error?.message || error);
-  }
+function calculateFileSha256(buffer) {
+  return createHash("sha256").update(buffer).digest("hex");
 }
 
-async function calculateFileSha256(filePath) {
-  return new Promise((resolve, reject) => {
-    const hash = createHash("sha256");
-    const stream = fs.createReadStream(filePath);
-    stream.on("error", reject);
-    stream.on("data", (chunk) => hash.update(chunk));
-    stream.on("end", () => resolve(hash.digest("hex")));
-  });
+async function streamObjectDownload(res, { object, filename, fallbackMimeType }) {
+  if (!object?.Body) throw new Error("Stored object has no downloadable body.");
+  const safeAsciiName = filename
+    .replace(/[^\x20-\x7E]/g, "_")
+    .replace(/[\r\n"\\]/g, "_");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${safeAsciiName}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+  );
+  res.setHeader(
+    "Content-Type",
+    object.ContentType || fallbackMimeType || "application/octet-stream",
+  );
+  if (Number.isFinite(object.ContentLength)) {
+    res.setHeader("Content-Length", String(object.ContentLength));
+  }
+
+  if (typeof object.Body.pipe === "function") {
+    await pipeline(object.Body, res);
+    return;
+  }
+  const bytes = await object.Body.transformToByteArray();
+  res.end(Buffer.from(bytes));
 }
 
 /**
@@ -42,6 +58,7 @@ async function calculateFileSha256(filePath) {
 
 export const uploadDataset = async (req, res) => {
   let dataset = null;
+  let uploadedStorageKey = "";
 
   try {
     const { name } = req.body;
@@ -58,40 +75,34 @@ export const uploadDataset = async (req, res) => {
         ? JSON.parse(req.body.districtCoverage)
         : [];
     } catch {
-      cleanupUploadedFile(req);
       return res.status(400).json({ message: "District coverage must be valid JSON." });
     }
     if (!Array.isArray(districtCoverage)) {
-      cleanupUploadedFile(req);
       return res.status(400).json({ message: "District coverage must be a list." });
     }
     if (!req.file)
       return res.status(400).json({ message: "No file uploaded." });
     if (!name) {
-      cleanupUploadedFile(req);
       return res.status(400).json({ message: "Name is required." });
     }
     if (!["weekly", "monthly"].includes(reportingFrequency)) {
-      cleanupUploadedFile(req);
       return res.status(400).json({ message: "Reporting frequency must be weekly or monthly." });
     }
 
-    const filePath = req.file.path;
-    const ext = path.extname(filePath).toLowerCase();
+    const originalFileName = path.basename(req.file.originalname);
+    const ext = path.extname(originalFileName).toLowerCase();
 
     if (ext !== ".xlsx" && ext !== ".xls") {
-      cleanupUploadedFile(req);
       return res.status(400).json({
         message: "Unsupported file type. Upload an Excel workbook (.xlsx/.xls).",
       });
     }
 
-    const contentHash = await calculateFileSha256(filePath);
+    const contentHash = calculateFileSha256(req.file.buffer);
     const duplicate = await Dataset.findOne({ contentHash })
       .select("name originalFileName status createdAt")
       .lean();
     if (duplicate) {
-      cleanupUploadedFile(req);
       return res.status(409).json({
         message: `This exact file was already uploaded as "${duplicate.name}". Renaming the file does not create a new dataset.`,
         duplicate: {
@@ -104,18 +115,32 @@ export const uploadDataset = async (req, res) => {
       });
     }
 
+    const datasetId = new mongoose.Types.ObjectId();
+    const storageKey = `datasets/${datasetId}/original${ext}`;
     const result = await importOfficialCasesXlsx({
-      filePath,
+      fileBuffer: req.file.buffer,
+      datasetId,
       name,
-      originalFileName: req.file.originalname,
-      storedFileName: req.file.filename,
+      originalFileName,
       mimeType: req.file.mimetype,
+      fileSize: req.file.size,
       userId: req.user?._id || req.user?.id,
       providerType,
       providerName,
       reportingFrequency,
       contentHash,
+      storageProvider: "r2",
+      storageKey,
       districtCoverage,
+      beforePersist: async () => {
+        await uploadDatasetObject({
+          storageKey,
+          buffer: req.file.buffer,
+          mimeType: req.file.mimetype,
+          contentHash,
+        });
+        uploadedStorageKey = storageKey;
+      },
     });
 
     if (!result.success) {
@@ -128,10 +153,10 @@ export const uploadDataset = async (req, res) => {
         ingestionMethod: "excel",
         coverageStart: new Date(),
         coverageEnd: new Date(),
-        originalFileName: req.file.originalname,
-        storedFileName: req.file.filename,
-        filePath: req.file.path,
+        originalFileName,
+        storageProvider: "none",
         mimeType: req.file.mimetype,
+        fileSize: req.file.size,
         status: "failed",
         uploadedBy: req.user?._id || req.user?.id,
         errorMessage: result?.reason || "Validation failed.",
@@ -145,7 +170,6 @@ export const uploadDataset = async (req, res) => {
         totalRows: 0,
       });
 
-      cleanupUploadedFile(req);
       await createNotification({
         type: "dataset_failed",
         title: "Dataset Validation Failed",
@@ -158,21 +182,39 @@ export const uploadDataset = async (req, res) => {
         },
       });
       await logActivity({
-        actor: req.user?.id,
+        actor: req.user?._id || req.user?.id,
         actionType: "dataset_failed",
         title: "Dataset validation failed",
         subtitle: `${name} failed validation.`,
         metadata: {
           datasetId: String(dataset._id),
           name,
+          filename: originalFileName,
           reason: result?.reason || "Validation failed.",
+          result: "failed",
         },
       });
-      return res.status(400).json(result);
+      return res.status(400).json({ ...result, datasetId: String(dataset._id) });
     }
+    // The database now owns the R2 object reference; later notification/audit
+    // failures must not remove a successfully persisted original workbook.
+    uploadedStorageKey = "";
 
     await logActivity({
-      actor: req.user?.id,
+      actor: req.user?._id || req.user?.id,
+      actionType: "dataset_uploaded",
+      title: "Dataset uploaded",
+      subtitle: `${originalFileName} stored in private object storage.`,
+      metadata: {
+        datasetId: result.datasetId,
+        filename: originalFileName,
+        storageProvider: "r2",
+        result: "success",
+      },
+    });
+
+    await logActivity({
+      actor: req.user?._id || req.user?.id,
       actionType: "dataset_validated",
       title: "Official cases imported",
       subtitle: `${name} imported (${result.formatType}).`,
@@ -183,6 +225,24 @@ export const uploadDataset = async (req, res) => {
         providerType,
         providerName,
         reportingFrequency,
+        filename: originalFileName,
+        insertedRows: result.insertedRows,
+        skippedRows: result.skippedRows,
+        result: "success",
+      },
+    });
+
+    await logActivity({
+      actor: req.user?._id || req.user?.id,
+      actionType: "dataset_processed",
+      title: "Dataset processed",
+      subtitle: `${name} processed into ${result.insertedRows} case records.`,
+      metadata: {
+        datasetId: result.datasetId,
+        filename: originalFileName,
+        insertedRows: result.insertedRows,
+        skippedRows: result.skippedRows,
+        result: "success",
       },
     });
 
@@ -221,7 +281,11 @@ export const uploadDataset = async (req, res) => {
 
     return res.status(201).json(result);
   } catch (error) {
-    cleanupUploadedFile(req);
+    if (uploadedStorageKey) {
+      await deleteDatasetObject(uploadedStorageKey).catch((cleanupError) => {
+        console.error("Failed to remove orphaned R2 object:", cleanupError?.message || cleanupError);
+      });
+    }
 
     if (error?.code === 11000 && error?.keyPattern?.contentHash) {
       return res.status(409).json({
@@ -243,7 +307,7 @@ export const uploadDataset = async (req, res) => {
         metadata: { datasetId: String(dataset._id), name: dataset.name },
       });
       await logActivity({
-        actor: req.user?.id,
+        actor: req.user?._id || req.user?.id,
         actionType: "dataset_failed",
         title: "Dataset upload failed",
         subtitle: `${dataset.name} upload failed.`,
@@ -265,8 +329,6 @@ export const handleDatasetUploadError = async (err, req, res, next) => {
     const name = String(req.body?.name || "").trim() || "Unnamed upload";
     const originalFileName =
       req.file?.originalname || String(req.body?.originalFileName || "unknown");
-    const storedFileName = req.file?.filename || "upload_rejected";
-    const filePath = req.file?.path || "upload_rejected";
     const mimeType = req.file?.mimetype || String(req.body?.mimeType || "");
     const reason = err?.message || "Upload rejected.";
     const failed = await Dataset.create({
@@ -275,9 +337,9 @@ export const handleDatasetUploadError = async (err, req, res, next) => {
       coverageStart: new Date(),
       coverageEnd: new Date(),
       originalFileName,
-      storedFileName,
-      filePath,
+      storageProvider: "none",
       mimeType,
+      fileSize: req.file?.size || 0,
       status: "failed",
       uploadedBy: req.user?._id || req.user?.id || null,
       errorMessage: reason,
@@ -297,14 +359,16 @@ export const handleDatasetUploadError = async (err, req, res, next) => {
     });
 
     await logActivity({
-      actor: req.user?.id,
+      actor: req.user?._id || req.user?.id,
       actionType: "dataset_failed",
       title: "Dataset upload rejected",
       subtitle: `${name} was rejected during upload.`,
       metadata: {
         datasetId: String(failed._id),
         name,
+        filename: originalFileName,
         reason,
+        result: "failed",
       },
     });
   } catch (saveErr) {
@@ -365,7 +429,7 @@ export const listDatasets = async (req, res) => {
         .skip(skip)
         .limit(limit)
         .select(
-          "name dataSource dataMode providerType providerName reportingFrequency ingestionMethod originalFileName storedFileName recordsCount status coverageStart coverageEnd districtCoverage createdAt errorMessage uploadedBy formatType totalRows insertedRows skippedRows validationErrorCount validationErrors",
+          "name dataSource dataMode providerType providerName reportingFrequency ingestionMethod originalFileName storageProvider mimeType fileSize recordsCount status coverageStart coverageEnd districtCoverage createdAt uploadedAt errorMessage uploadedBy formatType totalRows insertedRows skippedRows validationErrorCount validationErrors",
         )
         .populate("uploadedBy", "username email role")
         .lean(),
@@ -403,98 +467,72 @@ export const listDatasets = async (req, res) => {
 export const downloadDataset = async (req, res) => {
   try {
     const dataset = await Dataset.findById(req.params.id)
-      .select("name originalFileName filePath")
+      .select("name originalFileName storageProvider storageKey mimeType fileSize filePath")
       .lean();
     if (!dataset)
       return res.status(404).json({ message: "Dataset not found." });
 
-    if (!dataset.filePath || !fs.existsSync(dataset.filePath)) {
-      return res.status(404).json({ message: "File missing on server." });
+    const filename = dataset.originalFileName || `${dataset.name}.xlsx`;
+    if (dataset.storageProvider === "r2" && dataset.storageKey) {
+      const object = await getDatasetObject(dataset.storageKey);
+      await streamObjectDownload(res, {
+        object,
+        filename,
+        fallbackMimeType: dataset.mimeType,
+      });
+    } else if (dataset.filePath && fs.existsSync(dataset.filePath)) {
+      await new Promise((resolve, reject) => {
+        res.download(dataset.filePath, filename, (error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      });
+    } else {
+      return res.status(404).json({ message: "Stored dataset file is unavailable." });
     }
 
-    const filename = dataset.originalFileName || `${dataset.name}.xlsx`;
-    res.download(dataset.filePath, filename);
+    await logActivity({
+      actor: req.user?._id || req.user?.id,
+      actionType: "dataset_downloaded",
+      title: "Original dataset downloaded",
+      subtitle: `${filename} was downloaded.`,
+      metadata: {
+        datasetId: String(dataset._id),
+        filename,
+        storageProvider: dataset.storageProvider || "local",
+        result: "success",
+      },
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    const notFound = error?.name === "NoSuchKey"
+      || error?.$metadata?.httpStatusCode === 404;
+    if (!res.headersSent) {
+      return res.status(notFound ? 404 : 500).json({
+        message: notFound ? "Stored dataset file is unavailable." : error.message,
+      });
+    }
+    console.error("Dataset download failed after response started:", error?.message || error);
   }
 };
 
 export const downloadOfficialCaseTemplate = async (req, res) => {
   try {
-    const instructions = [
-      ["OfficialCaseTemplate (processed upload)"],
-      [""],
-      ["How to fill:"],
-      ["- city: Manila (or your city name)"],
-      ["- district: District 1..District 6 (or your district naming)"],
-      ["- disease: disease name (e.g. Cholera)"],
-      ["- year: 4-digit year"],
-      ["- month: 1–12"],
-      ["- epidemiological_year: ISO epidemiological year"],
-      ["- epidemiological_week: 1–53 (required for weekly datasets)"],
-      ["- week_start_date: Monday of the reporting week (YYYY-MM-DD)"],
-      ["- case_classification: confirmed | suspected | probable"],
-      ["- cases: numeric (integer)"],
-      ["- source: optional, defaults to official"],
-      [""],
-      ["Notes:"],
-      ["- Keep one row per week per district, barangay, disease, and classification for weekly data."],
-      ["- Upload this XLSX as-is when ready."],
-    ];
-
-    const header = [
-      "city",
-      "district",
-      "barangay",
-      "disease",
-      "year",
-      "month",
-      "epidemiological_year",
-      "epidemiological_week",
-      "week_start_date",
-      "case_classification",
-      "cases",
-      "source",
-    ];
-
-    const sampleRows = [
-      {
-        city: "Manila",
-        district: "District 1",
-        barangay: "District 105", 
-        disease: "Cholera",
-        year: 2026,
-        month: 1,
-        epidemiological_year: 2026,
-        epidemiological_week: 2,
-        week_start_date: "2026-01-05",
-        case_classification: "confirmed",
-        cases: 3,
-        source: "official",
-      },
-    ];
-
-    const wb = xlsx.utils.book_new();
-    const shInstructions = xlsx.utils.aoa_to_sheet(instructions);
-    xlsx.utils.book_append_sheet(wb, shInstructions, "instructions");
-
-    const shProcessed = xlsx.utils.json_to_sheet(sampleRows, {
-      header,
-      skipHeader: false,
+    const object = await getDatasetObject(OFFICIAL_TEMPLATE_STORAGE_KEY);
+    await streamObjectDownload(res, {
+      object,
+      filename: "FoodSafe_Template.xlsx",
+      fallbackMimeType: XLSX_MIME_TYPE,
     });
-    xlsx.utils.book_append_sheet(wb, shProcessed, "processed data");
-
-    const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="official_cases_template.xlsx"`
-    );
-    return res.send(buf);
   } catch (err) {
-    return res.status(500).json({ message: err?.message || "Server error" });
+    const notFound = err?.name === "NoSuchKey"
+      || err?.$metadata?.httpStatusCode === 404;
+    if (!res.headersSent) {
+      return res.status(notFound ? 404 : 500).json({
+        message: notFound
+          ? `Template not found in R2 at ${OFFICIAL_TEMPLATE_STORAGE_KEY}.`
+          : err?.message || "Server error",
+      });
+    }
+    console.error("Template download failed after response started:", err?.message || err);
   }
 };

@@ -149,8 +149,8 @@ export default function OfficialDatasetsTab() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (err) {
-      setErrorMsg(err.message || "Download failed.");
+    } catch {
+      notify.error("Dataset is not available.");
     }
   };
 
@@ -161,13 +161,13 @@ export default function OfficialDatasetsTab() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = filename || "official_cases_template.xlsx";
+      a.download = filename || "FoodSafe_Template.xlsx";
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (e) {
-      setErrorMsg(e?.message || "Failed to download template.");
+    } catch {
+      notify.error("Template is not available.");
     }
   };
 
@@ -195,7 +195,7 @@ export default function OfficialDatasetsTab() {
                 <span className="font-medium">Raw health office XLSX</span>: multi-sheet, each sheet = disease. Needs “Report date”, “District”, “Case Classification”.
               </li>
               <li>
-                <span className="font-medium">OfficialCaseTemplate XLSX</span>: one sheet (prefer “processed data”) with standardized columns.
+                <span className="font-medium">FoodSafe template XLSX</span>: enter district, barangay, disease, date of onset, classification, cases, and optional date reported. FoodSafe calculates morbidity fields automatically.
               </li>
             </ul>
           </div>

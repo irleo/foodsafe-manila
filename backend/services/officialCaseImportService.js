@@ -12,12 +12,10 @@ import {
 } from "./officialCaseNormalizer.js";
 
 const TEMPLATE_REQUIRED = [
-  "city",
   "district",
   "barangay",
   "disease",
-  "year",
-  "month",
+  "date_of_onset",
   "case_classification",
   "cases",
 ];
@@ -273,7 +271,13 @@ async function persistOfficialCaseImport({
   }
 
   if (!dataset) throw new Error("Dataset import transaction did not complete.");
-  await refreshDashboardSummaryAfterWrite();
+  try {
+    await refreshDashboardSummaryAfterWrite();
+  } catch (error) {
+    // Dataset and case rows are already committed at this point. A derived
+    // dashboard refresh must not turn a durable import into a failed upload.
+    console.error("Dashboard summary refresh failed after dataset import:", error?.message || error);
+  }
   return { dataset, insertedRows };
 }
 
@@ -283,7 +287,8 @@ async function persistOfficialCaseImport({
  * @returns {Promise<{success:boolean, formatType?:string, datasetId?:string, insertedRows?:number, skippedRows?:number, coverageStart?:string, coverageEnd?:string, diseases?:string[], districts?:string[], validationErrors?:any, reason?:string }>}
  */
 export async function importOfficialCasesXlsx({
-  filePath,
+  fileBuffer,
+  datasetId,
   name,
   originalFileName,
   storedFileName,
@@ -293,13 +298,17 @@ export async function importOfficialCasesXlsx({
   providerName = "CESU",
   reportingFrequency = "weekly",
   contentHash,
+  storageProvider = "r2",
+  storageKey,
+  fileSize = 0,
   districtCoverage = [],
+  beforePersist,
 } = {}) {
-  if (!filePath) throw new Error("filePath is required");
+  if (!Buffer.isBuffer(fileBuffer)) throw new Error("fileBuffer is required");
 
   let wb;
   try {
-    wb = XLSX.readFile(filePath);
+    wb = XLSX.read(fileBuffer, { type: "buffer", cellDates: true });
   } catch (error) {
     return {
       success: false,
@@ -337,6 +346,7 @@ export async function importOfficialCasesXlsx({
     let invalidRowCount = 0;
     const diseases = new Set();
     const districts = new Set();
+    const seenRows = new Set();
 
     for (const sn of wb.SheetNames || []) {
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: "" });
@@ -344,7 +354,6 @@ export async function importOfficialCasesXlsx({
       const headers = Object.keys(rows[0] || {});
       if (!hasAllHeaders(headers, RAW_REQUIRED)) continue;
 
-      diseases.add(String(sn).trim());
       for (let i = 0; i < rows.length; i++) {
         const rowNum = i + 2;
         const row = rows[i];
@@ -362,7 +371,29 @@ export async function importOfficialCasesXlsx({
           }
           continue;
         }
+        diseases.add(n.value.disease);
         districts.add(n.value.district);
+        const duplicateKey = [
+          n.value.district,
+          n.value.barangayNo,
+          n.value.disease,
+          n.value.surveillanceDate?.toISOString?.() || "",
+          n.value.caseClassification,
+          n.value.cases,
+        ].join("|");
+        if (seenRows.has(duplicateKey)) {
+          invalidRowCount += 1;
+          if (validationErrors.length < MAX_STORED_VALIDATION_ERRORS) {
+            validationErrors.push({
+              sheet: sn,
+              row: rowNum,
+              field: "row",
+              message: "Duplicate row.",
+            });
+          }
+          continue;
+        }
+        seenRows.add(duplicateKey);
         normalized.push(n.value);
       }
     }
@@ -383,8 +414,11 @@ export async function importOfficialCasesXlsx({
       districtCoverage,
     );
 
+    if (typeof beforePersist === "function") await beforePersist();
+
     const { dataset, insertedRows } = await persistOfficialCaseImport({
       datasetPayload: {
+        _id: datasetId,
         name:
           name?.trim() ||
           path.basename(
@@ -399,8 +433,11 @@ export async function importOfficialCasesXlsx({
         coverageEnd,
         districtCoverage: resolvedDistrictCoverage,
         originalFileName: originalFileName || "official_cases.xlsx",
-        storedFileName: storedFileName || path.basename(filePath),
-        filePath,
+        storedFileName: "",
+        filePath: "",
+        storageProvider,
+        storageKey,
+        fileSize,
         mimeType:
           mimeType ||
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -459,6 +496,7 @@ export async function importOfficialCasesXlsx({
     let invalidRowCount = 0;
     const diseases = new Set();
     const districts = new Set();
+    const seenRows = new Set();
 
     for (let i = 0; i < rows.length; i++) {
       const rowNum = i + 2;
@@ -481,6 +519,28 @@ export async function importOfficialCasesXlsx({
       }
       diseases.add(n.value.disease);
       districts.add(n.value.district);
+      const duplicateKey = [
+        n.value.district,
+        n.value.barangayNo,
+        n.value.disease,
+        n.value.dateOfOnset?.toISOString?.() || "",
+        n.value.dateReported?.toISOString?.() || "",
+        n.value.caseClassification,
+        n.value.cases,
+      ].join("|");
+      if (seenRows.has(duplicateKey)) {
+        invalidRowCount += 1;
+        if (validationErrors.length < MAX_STORED_VALIDATION_ERRORS) {
+          validationErrors.push({
+            sheet: v.sheetName,
+            row: rowNum,
+            field: "row",
+            message: "Duplicate row.",
+          });
+        }
+        continue;
+      }
+      seenRows.add(duplicateKey);
       normalized.push(n.value);
     }
 
@@ -500,21 +560,11 @@ export async function importOfficialCasesXlsx({
       districtCoverage,
     );
 
-    if (
-      reportingFrequency === "weekly" &&
-      normalized.some((row) => !row.epidemiologicalWeek)
-    ) {
-      return {
-        success: false,
-        formatType,
-        reason: "Weekly datasets require epidemiological_week for every valid row.",
-        validationErrors,
-        validationErrorCount: invalidRowCount,
-      };
-    }
+    if (typeof beforePersist === "function") await beforePersist();
 
     const { dataset, insertedRows } = await persistOfficialCaseImport({
       datasetPayload: {
+        _id: datasetId,
         name:
           name?.trim() ||
           path.basename(
@@ -529,8 +579,11 @@ export async function importOfficialCasesXlsx({
         coverageEnd,
         districtCoverage: resolvedDistrictCoverage,
         originalFileName: originalFileName || "cleaned_official_cases.xlsx",
-        storedFileName: storedFileName || path.basename(filePath),
-        filePath,
+        storedFileName: "",
+        filePath: "",
+        storageProvider,
+        storageKey,
+        fileSize,
         mimeType:
           mimeType ||
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
