@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  LineChart,
+  ComposedChart,
   Line,
   XAxis,
   YAxis,
@@ -103,10 +103,6 @@ export default function YearlyActualVsPredictedLineChart({
         const predicted = finiteNumber(row?.predicted);
         const lowerBound = finiteNumber(row?.lowerBound ?? row?.lower);
         const upperBound = finiteNumber(row?.upperBound ?? row?.upper);
-        const confidenceBand = lowerBound != null && upperBound != null
-          ? [lowerBound, upperBound]
-          : null;
-
         const isForecast = Boolean(row?.isForecast || row?.isPrimaryTarget);
         const rowPeriodIndex = periodIndex(row);
 
@@ -118,18 +114,52 @@ export default function YearlyActualVsPredictedLineChart({
           predicted,
           lowerBound,
           upperBound,
-          confidenceBand,
+          confidenceFan: null,
           isForecast,
 
           actualLine: !isForecast ? actual : null,
-
-          // Show predicted values for backtest rows and forecast rows.
-          predictedLine: predicted,
+          backtestLine: !isForecast ? predicted : null,
+          forecastLine: null,
         };
       })
       .filter((row) => row.label);
 
-    const target = rows.find((row) => row.isForecast && row.periodIndex != null);
+    const targetIndex = rows.findIndex(
+      (row) => row.isForecast && row.periodIndex != null,
+    );
+    const target = targetIndex >= 0 ? rows[targetIndex] : null;
+    let anchorIndex = -1;
+    for (let index = targetIndex - 1; index >= 0; index -= 1) {
+      if (!rows[index].isForecast) {
+        anchorIndex = index;
+        break;
+      }
+    }
+
+    if (
+      target &&
+      target.lowerBound != null &&
+      target.upperBound != null
+    ) {
+      target.confidenceFan = [target.lowerBound, target.upperBound];
+      target.forecastLine = target.predicted;
+
+      if (anchorIndex >= 0) {
+        const anchor = rows[anchorIndex];
+        const anchorValue = anchor.actual ?? anchor.predicted;
+        if (anchorValue != null) {
+          anchor.confidenceFan = [anchorValue, anchorValue];
+          anchor.forecastLine = anchorValue;
+        }
+      }
+    } else if (target) {
+      target.forecastLine = target.predicted;
+      if (anchorIndex >= 0) {
+        const anchor = rows[anchorIndex];
+        anchor.forecastLine = anchor.actual ?? anchor.predicted;
+      }
+    }
+
     const latestHistoricalIndex = Math.max(
       ...rows
         .filter((row) => !row.isForecast && row.periodIndex != null)
@@ -148,7 +178,7 @@ export default function YearlyActualVsPredictedLineChart({
   }, [data, rangeMonths]);
 
   const hasBounds = chartData.some(
-    (row) => row.confidenceBand != null,
+    (row) => row.confidenceFan != null,
   );
 
   return (
@@ -186,7 +216,7 @@ export default function YearlyActualVsPredictedLineChart({
       ) : (
         <div style={{ height }} className="w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart
+            <ComposedChart
               data={chartData}
               margin={{ top: 10, right: 20, left: 0, bottom: 5 }}
             >
@@ -198,13 +228,14 @@ export default function YearlyActualVsPredictedLineChart({
 
               <Tooltip
                 formatter={(value, name) => {
-                  if (name === "confidenceBand" && Array.isArray(value)) {
+                  if (name === "confidenceFan" && Array.isArray(value)) {
                     return [`${value[0]}–${value[1]} cases`, "95% prediction interval"];
                   }
 
                   const labels = {
                     actualLine: "Historical eligible cases",
-                    predictedLine: "Predicted (not actual)",
+                    backtestLine: "Historical prediction",
+                    forecastLine: "Next-month forecast",
                   };
 
                   return [value, labels[name] || name];
@@ -215,8 +246,9 @@ export default function YearlyActualVsPredictedLineChart({
                 formatter={(value) => {
                   const labels = {
                     actualLine: "Historical eligible cases",
-                    predictedLine: "Predicted (not actual)",
-                    confidenceBand: "95% prediction interval",
+                    backtestLine: "Historical prediction",
+                    forecastLine: "Next-month forecast",
+                    confidenceFan: "95% prediction interval",
                   };
 
                   return labels[value] || value;
@@ -225,13 +257,13 @@ export default function YearlyActualVsPredictedLineChart({
 
               {hasBounds && (
                 <Area
-                  type="monotone"
-                  dataKey="confidenceBand"
+                  type="linear"
+                  dataKey="confidenceFan"
                   stroke="none"
                   fill="#2563eb"
                   fillOpacity={0.12}
                   activeDot={false}
-                  name="confidenceBand"
+                  name="confidenceFan"
                   legendType="rect"
                   connectNulls={false}
                 />
@@ -250,16 +282,26 @@ export default function YearlyActualVsPredictedLineChart({
 
               <Line
                 type="monotone"
-                dataKey="predictedLine"
-                name="predictedLine"
+                dataKey="backtestLine"
+                name="backtestLine"
                 stroke="#2563eb"
-                strokeWidth={2.5}
+                strokeWidth={2}
                 strokeDasharray="6 6"
                 dot={<HollowDot stroke="#2563eb" />}
                 activeDot={{ r: 5 }}
                 connectNulls={false}
               />
-            </LineChart>
+              <Line
+                type="linear"
+                dataKey="forecastLine"
+                name="forecastLine"
+                stroke="#1d4ed8"
+                strokeWidth={3}
+                dot={<HollowDot stroke="#1d4ed8" />}
+                activeDot={{ r: 5 }}
+                connectNulls={false}
+              />
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       )}

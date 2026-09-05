@@ -23,7 +23,6 @@ const protectedRoutes = [
   { path: "dashboard", element: <Dashboard />, key: "dashboard" },
   { path: "analytics", element: <Analytics />, key: "analytics" },
   { path: "heatmap", element: <Heatmap />, key: "heatmap" },
-  { path: "predictions", element: <Predictions />, key: "predictions" },
 ];
 
 const adminRoutes = [
@@ -55,6 +54,7 @@ function AppRoutes() {
 
           <Route element={<PrivateRoute allowedRoles={["admin", "cesu"]} />}>
             <Route path="datasets" element={<Data />} />
+            <Route path="predictions" element={<Predictions />} />
           </Route>
 
           <Route element={<PrivateRoute allowedRoles={["admin", "cesu", "surveillance_team"]} />}>

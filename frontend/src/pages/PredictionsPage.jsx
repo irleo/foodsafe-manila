@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ChevronDownIcon } from "@heroicons/react/24/outline";
 
 import { useAuth } from "../context/AuthContext";
 import { notify } from "../utils/toast";
@@ -12,7 +13,6 @@ import YearlyPredictionErrorBarChart from "../components/charts/YearlyPrediction
 import {
   buildPredictionRows,
   getDistrictScope,
-  getPredictionScope,
   getPrimaryForecast,
   getWholeManilaScope,
   modelLabel,
@@ -41,26 +41,6 @@ function getRowLabel(row) {
 function displayMetric(value, suffix = "") {
   const number = Number(value);
   return Number.isFinite(number) ? `${number.toFixed(2)}${suffix}` : "—";
-}
-
-function DistrictSelect({ id, value, options, onChange, title }) {
-  return (
-    <div className="flex flex-col gap-1 sm:flex-row sm:items-center">
-      <select
-        id={id}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-        title={title}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
 }
 
 function EvaluationTable({ evaluation }) {
@@ -163,6 +143,23 @@ function EvaluationTable({ evaluation }) {
   );
 }
 
+function getTrustSummary(evaluation) {
+  const observationCount = Number(evaluation?.prophet?.observationCount || 0);
+  const checkedMonths = observationCount
+    ? ` across ${observationCount} matched district-month checks`
+    : "";
+
+  if (!evaluation?.sufficient) {
+    return "Limited shared history; treat the forecast as decision support, not an observed result.";
+  }
+
+  if (evaluation.bestHistoricalModel === "prophet") {
+    return `Prophet had the smaller historical average error${checkedMonths}.`;
+  }
+
+  return `The benchmark had the smaller historical average error${checkedMonths}; Prophet remains the operational model.`;
+}
+
 export default function Predictions() {
   const { auth } = useAuth();
   const token = auth?.accessToken;
@@ -175,10 +172,7 @@ export default function Predictions() {
   const [emptyMsg, setEmptyMsg] = useState("");
   const forecastModel = "prophet";
   const [selectedDisease, setSelectedDisease] = useState("");
-  const [selectedChartDistrict, setSelectedChartDistrict] = useState("manila");
-  const [selectedErrorDistrict, setSelectedErrorDistrict] = useState("manila");
-  const [selectedHistoryDistrict, setSelectedHistoryDistrict] =
-    useState("manila");
+  const [selectedDistrict, setSelectedDistrict] = useState("");
   const [historyPage, setHistoryPage] = useState(1);
 
   useEffect(() => {
@@ -231,9 +225,7 @@ export default function Predictions() {
           throw new Error(response.message || "No prediction run was created.");
         }
         setRun(response);
-        setSelectedChartDistrict("manila");
-        setSelectedErrorDistrict("manila");
-        setSelectedHistoryDistrict("manila");
+        setSelectedDistrict("");
         setHistoryPage(1);
         setEmptyMsg("");
         return {
@@ -282,55 +274,55 @@ export default function Predictions() {
     () => (Array.isArray(payload.districts) ? payload.districts : []),
     [payload.districts],
   );
-  const districtOptions = useMemo(
-    () => [
-      { value: "manila", label: "Whole Manila" },
-      ...districts.map((district) => ({
-        value: district.districtKey || district.district,
-        label: district.district,
-      })),
-    ],
-    [districts],
+  const districtOutlooks = useMemo(
+    () =>
+      districts.map((district) => {
+        const scope = getDistrictScope(district, forecastModel);
+        return {
+          key: district.districtKey || district.district,
+          district: district.district,
+          message: scope?.message || district.message,
+          forecast: getPrimaryForecast(scope),
+          scope,
+        };
+      }),
+    [districts, forecastModel],
   );
+  useEffect(() => {
+    if (
+      selectedDistrict &&
+      !districtOutlooks.some((item) => item.key === selectedDistrict)
+    ) {
+      setSelectedDistrict("");
+    }
+  }, [districtOutlooks, selectedDistrict]);
 
+  const selectedDistrictOutlook = useMemo(
+    () => districtOutlooks.find((item) => item.key === selectedDistrict) || null,
+    [districtOutlooks, selectedDistrict],
+  );
   const wholeManilaScope = useMemo(
     () => getWholeManilaScope(payload, forecastModel),
-    [forecastModel, payload],
+    [payload, forecastModel],
   );
-  const chartScope = useMemo(
-    () => getPredictionScope(payload, selectedChartDistrict, forecastModel),
-    [forecastModel, payload, selectedChartDistrict],
-  );
-  const errorScope = useMemo(
-    () => getPredictionScope(payload, selectedErrorDistrict, forecastModel),
-    [forecastModel, payload, selectedErrorDistrict],
-  );
-  const historyScope = useMemo(
-    () => getPredictionScope(payload, selectedHistoryDistrict, forecastModel),
-    [forecastModel, payload, selectedHistoryDistrict],
-  );
-
-  const chartRows = useMemo(
-    () => buildPredictionRows(chartScope),
-    [chartScope],
-  );
-  const errorRows = useMemo(
-    () => buildPredictionRows(errorScope),
-    [errorScope],
-  );
-  const historyRows = useMemo(
-    () => buildPredictionRows(historyScope),
-    [historyScope],
+  const selectedScope = selectedDistrict
+    ? selectedDistrictOutlook?.scope || null
+    : wholeManilaScope;
+  const selectedForecast = getPrimaryForecast(selectedScope);
+  const selectedLabel = selectedDistrictOutlook?.district || "Whole Manila";
+  const selectedRows = useMemo(
+    () => buildPredictionRows(selectedScope),
+    [selectedScope],
   );
   const predictionHistoryRows = useMemo(
     () =>
-      historyRows.filter(
+      selectedRows.filter(
         (row) =>
           !row.isForecast &&
           Number.isFinite(row.actual) &&
           Number.isFinite(row.predicted),
       ),
-    [historyRows],
+    [selectedRows],
   );
   const historyTotalPages = Math.max(
     1,
@@ -342,36 +334,9 @@ export default function Predictions() {
     safeHistoryPage * HISTORY_ROWS_PER_PAGE,
   );
 
-  const nextForecast = getPrimaryForecast(wholeManilaScope);
   const evaluation = payload.modelEvaluation || null;
   const modelCoverage = payload.modelCoverage || null;
-  const activeCoverage = wholeManilaScope?.coverage || payload.coverage || {};
-  const chartLabel =
-    districtOptions.find((option) => option.value === selectedChartDistrict)
-      ?.label || "Whole Manila";
-  const errorLabel =
-    districtOptions.find((option) => option.value === selectedErrorDistrict)
-      ?.label || "Whole Manila";
-  const historyLabel =
-    districtOptions.find((option) => option.value === selectedHistoryDistrict)
-      ?.label || "Whole Manila";
   const horizonMonths = Number(run?.forecastHorizonMonths || 1);
-  const aggregateInterval = wholeManilaScope?.intervalAggregation || null;
-
-  const districtOutlooks = useMemo(
-    () =>
-      districts.map((district) => {
-        const scope = getDistrictScope(district, forecastModel);
-        return {
-          district: district.district,
-          message: scope?.message || district.message,
-          model: scope?.resolvedModel,
-          comparison: district.modelComparison,
-          forecast: getPrimaryForecast(scope),
-        };
-      }),
-    [districts, forecastModel],
-  );
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
@@ -422,16 +387,6 @@ export default function Predictions() {
       )}
 
       {run &&
-        activeCoverage.totalDistricts > 0 &&
-        !activeCoverage.completeCityForecast && (
-          <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-            Whole-Manila output is unavailable for this model because only{" "}
-            {activeCoverage.successfulDistricts} of{" "}
-            {activeCoverage.totalDistricts} districts produced a valid target
-            forecast. District results remain visible below.
-          </p>
-        )}
-      {run &&
         comparisonAvailable &&
         modelCoverage?.prophet?.successfulDistricts <
           modelCoverage?.prophet?.totalDistricts && (
@@ -443,257 +398,158 @@ export default function Predictions() {
           </p>
         )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-row gap-2">
-            <p className="text-sm text-gray-600">
-              Predicted eligible cases — not actual cases
-            </p>
-            {diseaseOptions.length > 0 && (
-              <select
-                id="prediction-disease"
-                value={selectedDisease}
-                onChange={(event) => {
-                  setSelectedDisease(event.target.value);
-                  setHistoryPage(1);
-                }}
-                className="min-h-11 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm"
-              >
-                {diseaseOptions.map((disease) => (
-                  <option key={disease} value={disease}>
-                    {disease}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          <p className="mt-2 text-3xl font-semibold text-gray-900">
-            {nextForecast?.predicted ?? "—"}
-          </p>
-          <p className="mt-2 text-sm text-gray-600">
-            {nextForecast
-              ? "Whole-Manila analytical estimate"
-              : "No complete Whole-Manila forecast available"}
-          </p>
-          {nextForecast?.expectedStatus && (
-            <p className="mt-2 text-sm font-semibold text-blue-700">
-              {formatStatusLabel(nextForecast.expectedStatus)}
-            </p>
-          )}
-          {nextForecast?.lower != null &&
-            nextForecast?.upper != null && (
-              <p className="mt-2 text-xs text-gray-500">
-                95% prediction interval: {nextForecast.lower}–
-                {nextForecast.upper} cases
+      {run && (
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7">
+          <div className="flex flex-col gap-4 border-b border-gray-100 pb-5 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-600">
+                District forecast
               </p>
-            )}
-          {nextForecast &&
-            (nextForecast.lower == null || nextForecast.upper == null) && (
-              <p className="mt-2 text-xs text-amber-700">
-                Whole-Manila prediction interval not calculated: {aggregateInterval?.calibrationObservations || 0} of {aggregateInterval?.minimumRequiredObservations || 19} required common rolling-origin errors are available.
-              </p>
-            )}
-          {nextForecast && (
-            <p className="mt-2 text-xs text-blue-700">
-              Coherent bottom-up sum of all six district Prophet forecasts.
-            </p>
-          )}
-          {run && (
-            <div className="mt-5 grid grid-cols-2 gap-2 border-t border-gray-100 pt-4">
-              <div className="rounded-lg bg-blue-50 px-3 py-2.5">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-blue-600">
-                  Forecast target month
-                </p>
-                <p className="mt-1 text-sm font-semibold text-blue-900">
-                  {formatYearMonth(
-                    run.forecastTargetYear,
-                    run.forecastTargetMonth,
-                  )}
-                </p>
-              </div>
-              <div className="rounded-lg bg-gray-50 px-3 py-2.5">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
-                  Horizon
-                </p>
-                <p className="mt-1 text-sm font-semibold text-gray-800">
-                  {horizonMonths} month{horizonMonths === 1 ? "" : "s"}
-                </p>
-              </div>
-              <div className="col-span-2 flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-blue-800">
-                <span
-                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600"
-                  aria-hidden="true"
-                />
-                Monthly eligible cases for {payload.disease || selectedDisease},
-                grouped by district
-              </div>
+              <h2 className="mt-1 text-xl font-semibold text-gray-900">
+                Choose a district to follow its forecast story
+              </h2>
             </div>
-          )}
-        </div>
-
-        <div className="rounded-xl border border-blue-100 bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-gray-600">Operational forecasting method</p>
-          <p className="mt-0.5 text-xl font-semibold text-gray-900">
-            Trend-based monthly method (Prophet)
-          </p>
-          <p className="mt-2 text-sm text-blue-700">
-            Prophet is used for every operational district forecast. Same-month-last-year remains visible only as a performance benchmark and is never substituted as a fallback.
-          </p>
-          <div className="mt-4 border-t border-blue-100 pt-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Whole-Manila uncertainty</p>
-            <p className="mt-1 text-sm text-gray-600">
-              The city point forecast is the sum of all six district Prophet forecasts. Its 95% interval is calibrated from common rolling-origin errors of that same summed pipeline; district bounds are never added together.
-            </p>
-            <p className="mt-2 text-xs text-gray-500">
-              Calibration history: {aggregateInterval?.calibrationObservations || 0}/{aggregateInterval?.minimumRequiredObservations || 19} required observations
-            </p>
+            {diseaseOptions.length > 0 && (
+              <label className="flex flex-col gap-1 text-xs font-medium text-gray-500">
+                Disease
+                <select
+                  id="prediction-disease"
+                  value={selectedDisease}
+                  onChange={(event) => {
+                    setSelectedDisease(event.target.value);
+                    setHistoryPage(1);
+                  }}
+                  className="min-h-11 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900"
+                >
+                  {diseaseOptions.map((disease) => (
+                    <option key={disease} value={disease}>
+                      {disease}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </div>
-          {!comparisonAvailable && (
-            <p className="mt-2 text-sm text-amber-700">
-              Check the latest dataset to generate the model comparison.
-            </p>
-          )}
-          <p className="mt-2 text-sm text-gray-600">
-            {run?.generatedAt
-              ? `Generated ${new Date(run.generatedAt).toLocaleString("en-PH")}`
-              : "—"}
-          </p>
-        </div>
-      </div>
 
-      <YearlyActualVsPredictedLineChart
-        title={`Historical Confirmed Cases vs Predicted — ${modelLabel(chartScope?.resolvedModel)} (${chartLabel})`}
-        data={chartRows}
-        description={selectedChartDistrict === "manila"
-          ? aggregateInterval?.status === "calculated"
-            ? `The Whole-Manila point forecast is the sum of six district Prophet forecasts. Its target interval is calibrated from ${aggregateInterval.calibrationObservations} common rolling-origin aggregate errors; historical aggregate rows do not reuse district marginal bounds.`
-            : "The Whole-Manila series is the bottom-up sum of district Prophet forecasts. No aggregate prediction band is shown until sufficient common rolling-origin calibration history is available."
-          : "The shaded area is the district-level Prophet 95% posterior-predictive interval; a zero lower endpoint does not mean zero uncertainty."}
-        controls={
-          <DistrictSelect
-            id="chart-district"
-            value={selectedChartDistrict}
-            options={districtOptions}
-            onChange={setSelectedChartDistrict}
-            title="Select district for the historical chart"
-          />
-        }
-      />
-
-      <div>
-        <h2 className="text-lg font-semibold">Model Evaluation</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Prophet is checked against the same-month-last-year benchmark on shared historical months. The comparison monitors performance but does not switch the operational method.
-        </p>
-      </div>
-      <EvaluationTable evaluation={evaluation} />
-
-      <YearlyPredictionErrorBarChart
-        title={`Prediction Error by Period — ${modelLabel(errorScope?.resolvedModel)} (${errorLabel})`}
-        data={errorRows}
-        mode="signed"
-        description={selectedErrorDistrict === "manila"
-          ? "Each bar compares the actual Whole-Manila count with the coherent bottom-up sum of the six district Prophet predictions for that historical month."
-          : "Each bar is a rolling one-step Prophet error for the selected district. Seasonal Naive benchmark errors are excluded from this operational chart."}
-        controls={
-          <DistrictSelect
-            id="error-district"
-            value={selectedErrorDistrict}
-            options={districtOptions}
-            onChange={setSelectedErrorDistrict}
-            title="Select district for prediction errors"
-          />
-        }
-      />
-
-      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="mb-6 flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
-          <div>
-            <h2 className="text-lg font-semibold">
-              District Next-Month Outlook
-            </h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Analytical estimates intended to support short-term surveillance.
-            </p>
+          <div className="mt-5 flex flex-wrap items-center gap-2" role="group" aria-label="Forecast district">
+            {districtOutlooks.map((item) => {
+              const isSelected = item.key === selectedDistrict;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => {
+                    setSelectedDistrict(isSelected ? "" : item.key);
+                    setHistoryPage(1);
+                  }}
+                  className={`min-h-11 rounded-full border px-4 py-2.5 text-sm font-medium transition ${
+                    isSelected
+                      ? "border-blue-600 bg-blue-600 text-white shadow-sm"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50"
+                  }`}
+                  title={item.forecast ? `Show ${item.district}` : item.message || "Forecast unavailable"}
+                >
+                  {item.district}
+                </button>
+              );
+            })}
           </div>
-          <p className="max-w-md text-sm text-gray-500 sm:text-right">
-            These values are not observed cases, guaranteed counts, predicted
-            outbreaks, or official outbreak declarations.
+          <p className="mt-3 text-xs text-gray-500">
+            {selectedDistrict
+              ? "Select the active district again to return to Whole Manila."
+              : "No district selected — showing Whole Manila."}
           </p>
-        </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {districtOutlooks.map((item) => (
-            <article
-              key={item.district}
-              className="rounded-xl border border-gray-200 bg-gray-50 p-5"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="font-semibold text-gray-900">{item.district}</h3>
-                {item.comparison?.sufficient && item.comparison.bestHistoricalModel === "seasonal_naive" && (
-                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700">
-                    Benchmark had smaller historical error
-                  </span>
+
+          {selectedForecast ? (
+            <div className="mt-7 grid gap-5 lg:grid-cols-[minmax(240px,0.32fr)_minmax(0,0.68fr)]">
+              <div className="rounded-2xl bg-gradient-to-br from-blue-600 to-blue-500 p-6 text-white">
+                <p className="text-sm font-medium text-blue-100">
+                  {selectedLabel} · {formatYearMonth(run.forecastTargetYear, run.forecastTargetMonth)}
+                </p>
+                <p className="mt-5 text-6xl font-semibold tracking-tight">
+                  {selectedForecast.predicted}
+                </p>
+                <p className="mt-1 text-sm text-blue-100">
+                  predicted eligible cases — not actual cases
+                </p>
+                {selectedForecast.expectedStatus && (
+                  <p className="mt-5 inline-flex rounded-full bg-white/15 px-3 py-1.5 text-sm font-semibold">
+                    {formatStatusLabel(selectedForecast.expectedStatus)}
+                  </p>
                 )}
+                <div className="mt-6 border-t border-white/20 pt-5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-100">
+                    Prophet 95% prediction interval
+                  </p>
+                  {selectedForecast.lower != null && selectedForecast.upper != null ? (
+                    <p className="mt-1 text-2xl font-semibold">
+                      {selectedForecast.lower}–{selectedForecast.upper} cases
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-sm font-medium">Prediction interval not calculated</p>
+                  )}
+                  <p className="mt-4 text-xs leading-5 text-blue-100">
+                    {horizonMonths}-month horizon · Generated {run.generatedAt ? new Date(run.generatedAt).toLocaleString("en-PH") : "—"}
+                  </p>
+                </div>
               </div>
-              <p className="mt-4 text-xs text-gray-500">
-                Predicted confirmed cases — not actual
-              </p>
-              <p className="mt-1 text-2xl font-semibold">
-                {item.forecast?.predicted ?? "—"}
-              </p>
-              {item.forecast?.expectedStatus && (
-                <p className="mt-2 text-xs font-semibold text-blue-700">
-                  {formatStatusLabel(item.forecast.expectedStatus)}
-                </p>
-              )}
-              <p className="mt-2 text-sm text-gray-600">
-                Model: <strong>{modelLabel(item.model)}</strong>
-              </p>
-              {item.forecast?.lower != null && item.forecast?.upper != null && (
-                <p className="mt-2 text-xs text-gray-500">
-                  Prophet 95% prediction interval: {item.forecast.lower}–{item.forecast.upper} cases
-                </p>
-              )}
-              {item.forecast && (item.forecast.lower == null || item.forecast.upper == null) && (
-                <p className="mt-2 text-xs text-amber-700">Prediction interval not calculated.</p>
-              )}
-              {!item.forecast && (
-                <p className="mt-2 text-xs text-amber-700">
-                  {item.message || "No sufficient data"}
-                </p>
-              )}
-            </article>
-          ))}
-        </div>
-      </section>
 
-      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <YearlyActualVsPredictedLineChart
+                title={`${selectedLabel} forecast trajectory`}
+                data={selectedRows}
+                height={360}
+                description={selectedDistrict
+                  ? "Historical confirmed and Prophet backtest values lead into next month. The shaded fan appears only between the latest observation and the forecast, widening to the district's 95% prediction interval."
+                  : "Historical Whole-Manila totals and bottom-up Prophet predictions lead into next month. A shaded fan appears only when the aggregate forecast has a genuinely calculated 95% interval."}
+              />
+            </div>
+          ) : (
+            <p className="mt-6 rounded-xl bg-gray-50 p-5 text-sm text-gray-600">
+              No district forecast is available for this disease.
+            </p>
+          )}
+        </section>
+      )}
+
+      {run && (
+        <details className="group rounded-xl border border-gray-200 bg-white shadow-sm">
+          <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 px-5 py-3.5 [&::-webkit-details-marker]:hidden">
+            <span className="font-semibold text-gray-900">Model performance</span>
+            <span className="min-w-0 flex-1 text-sm text-gray-600 sm:text-right">
+              {getTrustSummary(evaluation)}
+            </span>
+            <ChevronDownIcon className="h-5 w-5 shrink-0 text-gray-400 transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="border-t border-gray-100 p-5">
+            <p className="mb-4 text-sm text-gray-600">
+              Prophet is checked against the same-month-last-year benchmark on shared historical months. This comparison monitors trust; it never switches the operational model.
+            </p>
+            <EvaluationTable evaluation={evaluation} />
+          </div>
+        </details>
+      )}
+
+      {run && selectedScope && (
+        <>
+          <YearlyPredictionErrorBarChart
+            title={`Prediction Error by Period — ${modelLabel(selectedScope?.resolvedModel)} (${selectedLabel})`}
+            data={selectedRows}
+            mode="signed"
+            description="Each bar is a rolling one-step Prophet error for the selected district. Seasonal Naive benchmark errors are excluded from this operational chart."
+          />
+
+          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div>
             <h2 className="text-lg font-semibold">
               Monthly Prediction History
             </h2>
             <p className="mt-1 text-sm text-gray-500">
-              {historyLabel} — one-step{" "}
-              {modelLabel(historyScope?.resolvedModel)} predictions
+              {selectedLabel} — one-step{" "}
+              {modelLabel(selectedScope?.resolvedModel)} predictions
             </p>
-            {selectedHistoryDistrict === "manila" && (
-              <p className="mt-1 text-xs text-gray-500">
-                Aggregate rows are bottom-up Prophet backtests. Their errors calibrate the current Whole-Manila interval; district marginal bounds are not added together.
-              </p>
-            )}
           </div>
-          <DistrictSelect
-            id="history-district"
-            value={selectedHistoryDistrict}
-            options={districtOptions}
-            onChange={(value) => {
-              setSelectedHistoryDistrict(value);
-              setHistoryPage(1);
-            }}
-            title="Select district for prediction history"
-          />
         </div>
 
         <div className="overflow-x-auto">
@@ -711,7 +567,7 @@ export default function Predictions() {
             <tbody>
               {!pagedHistoryRows.length ? (
                 <tr>
-                  <td colSpan={7} className="p-4 text-sm text-gray-500">
+                    <td colSpan={6} className="p-4 text-sm text-gray-500">
                     No comparable backtest observations are available.
                   </td>
                 </tr>
@@ -774,7 +630,9 @@ export default function Predictions() {
             </div>
           </div>
         )}
-      </section>
+          </section>
+        </>
+      )}
     </div>
   );
 }

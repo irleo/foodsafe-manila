@@ -40,31 +40,38 @@ export default function Sidebar({ isOpen, onClose }) {
     }
   };
 
-  const links = [
-          { name: "Dashboard", path: "/dashboard", icon: Squares2X2Icon },
-          ...(["admin", "cesu"].includes(auth?.role) ? [{
-            name: "Data Upload",
-            path: "/datasets",
-            icon: ArrowDownOnSquareIcon,
-          }] : []),
-          ...(["admin", "cesu", "surveillance_team"].includes(auth?.role) ? [{
-            name: "Report Logs",
-            path: "/reports",
-            icon: ClipboardDocumentCheckIcon,
-          }] : []),
-          { name: "Heatmap", path: "/heatmap", icon: MapIcon },
-          { name: "Analytics", path: "/analytics", icon: ChartPieIcon },
-          {
-            name: "Predictions",
-            path: "/predictions",
-            icon: ArrowTrendingUpIcon,
-          },
-          ...(auth?.role === "admin" ? [{
-            name: "User Management",
-            path: "/user-management",
-            icon: UserGroupIcon,
-          }] : []),
-        ];
+  const navigationGroups = [
+    {
+      label: "Situational Awareness",
+      links: [
+        { name: "Dashboard", path: "/dashboard", icon: Squares2X2Icon },
+        { name: "Heatmap", path: "/heatmap", icon: MapIcon },
+        { name: "Analytics", path: "/analytics", icon: ChartPieIcon },
+      ],
+    },
+    {
+      label: "Casework",
+      links: [
+        ...(["admin", "cesu", "surveillance_team"].includes(auth?.role)
+          ? [{ name: "Report Logs", path: "/reports", icon: ClipboardDocumentCheckIcon }]
+          : []),
+        ...(["admin", "cesu"].includes(auth?.role)
+          ? [{ name: "Data Upload", path: "/datasets", icon: ArrowDownOnSquareIcon }]
+          : []),
+      ],
+    },
+    {
+      label: "Administration",
+      links: [
+        ...(["admin", "cesu"].includes(auth?.role)
+          ? [{ name: "Predictions", path: "/predictions", icon: ArrowTrendingUpIcon }]
+          : []),
+        ...(auth?.role === "admin"
+          ? [{ name: "User Management", path: "/user-management", icon: UserGroupIcon }]
+          : []),
+      ],
+    },
+  ].filter((group) => group.links.length > 0);
 
   return (
     <aside
@@ -78,45 +85,57 @@ export default function Sidebar({ isOpen, onClose }) {
       `}
     >
       <div className="flex flex-col h-full">
-        <nav className="p-4 space-y-1">
-          {links.map(({ name, path, icon, end }) => (
-            <NavLink
-              key={path}
-              to={path}
-              end={end}
-              onClick={onClose}
-              className={({ isActive }) =>
-                [
-                  "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
-                  isActive
-                    ? "bg-blue-50 text-blue-700 border border-blue-200 font-medium"
-                    : "text-gray-700 hover:bg-gray-100",
-                ].join(" ")
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {createElement(icon, {
-                    className: [
-                      "h-5 w-5",
-                      isActive ? "text-blue-700" : "text-gray-500",
-                    ].join(" "),
-                  })}
-                  <span className="flex-1">{name}</span>
-                </>
-              )}
-            </NavLink>
+        <nav className="space-y-5 p-4">
+          {navigationGroups.map((group) => (
+            <section key={group.label} aria-labelledby={`nav-${group.label.replaceAll(" ", "-").toLowerCase()}`}>
+              <h2
+                id={`nav-${group.label.replaceAll(" ", "-").toLowerCase()}`}
+                className="mb-2 px-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400"
+              >
+                {group.label}
+              </h2>
+              <div className="space-y-1">
+                {group.links.map(({ name, path, icon, end }) => (
+                  <NavLink
+                    key={path}
+                    to={path}
+                    end={end}
+                    onClick={onClose}
+                    className={({ isActive }) =>
+                      [
+                        "flex items-center gap-3 rounded-lg px-4 py-3 transition-colors",
+                        isActive
+                          ? "border border-blue-200 bg-blue-50 font-medium text-blue-700"
+                          : "text-gray-700 hover:bg-gray-100",
+                      ].join(" ")
+                    }
+                  >
+                    {({ isActive }) => (
+                      <>
+                        {createElement(icon, {
+                          className: [
+                            "h-5 w-5 shrink-0",
+                            isActive ? "text-blue-700" : "text-gray-500",
+                          ].join(" "),
+                        })}
+                        <span className="flex-1">{name}</span>
+                      </>
+                    )}
+                  </NavLink>
+                ))}
+              </div>
+            </section>
           ))}
         </nav>
 
         {auth?.accessToken && (
-          <div className="mt-auto px-4 py-2 border-t border-gray-200">
+          <div className="mt-auto border-t border-gray-200 px-4 py-2">
             <button
               onClick={handleLogout}
-              className="flex items-center gap-3 w-full text-red-600 px-4 py-3 rounded-lg hover:bg-red-100 cursor-pointer"
+              className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-red-600 hover:bg-red-100"
             >
-              <ArrowLeftStartOnRectangleIcon className="h-5 w-5" />
-              Logout
+              <ArrowLeftStartOnRectangleIcon className="h-5 w-5 shrink-0" />
+              <span>Logout</span>
             </button>
           </div>
         )}
