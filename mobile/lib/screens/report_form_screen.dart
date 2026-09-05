@@ -1571,7 +1571,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
             ),
             SizedBox(height: 8),
             Text(
-              'Thank you for helping the city monitor food-related illness signals.',
+              'Thank you for helping the city monitor food-related disease signals.',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(fontSize: 14, color: Colors.grey[600]),
             ),

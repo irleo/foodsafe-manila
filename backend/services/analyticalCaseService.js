@@ -40,7 +40,7 @@ function reportDisease(report) {
     report?.disease
       || report?.investigation?.suspectedDisease
       || report?.validation?.condition,
-  ) || "Unclassified foodborne illness";
+  ) || "Unclassified foodborne disease";
 }
 
 function reportDistrict(report) {

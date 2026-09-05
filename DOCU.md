@@ -4,11 +4,11 @@ Updated on: 2026-08-31
 
 ## Overall Project Purpose
 
-FoodSafe Manila is a foodborne illness monitoring platform for Manila. It combines:
+FoodSafe Manila is a foodborne disease monitoring platform for Manila. It combines:
 
 - A web admin dashboard for health officials and analysts.
 - A backend API that stores official case data, citizen reports, analytics, heatmap data, notifications, users, and prediction runs.
-- A Flutter mobile app for citizens to register, submit suspected foodborne illness reports, view alerts, inspect nearby risk, and see analytics.
+- A Flutter mobile app for citizens to register, submit suspected foodborne disease reports, view alerts, inspect nearby risk, and see analytics.
 
 The backend is the source of truth. Both the React frontend and Flutter app call the same Express/MongoDB API on port 5000.
 
@@ -433,7 +433,7 @@ Missing or unclear:
 - `backend/models/Notification.js`: Notification schema.
 - `backend/models/OfficialCase.js`: Monthly official case schema with district, barangay, disease, classification, and cases.
 - `backend/models/PredictionRun.js`: Stored monthly Prophet run containing operational forecasts, Seasonal Naïve benchmark metrics, rolling-origin errors, prediction intervals, and aggregate calibration metadata.
-- `backend/models/Report.js`: Citizen suspected illness report schema.
+- `backend/models/Report.js`: Citizen suspected disease report schema.
 - `backend/models/WebUser.js`: Web/admin account schema stored in `webUsers`.
 
 ### Backend SMS and OTP Services
