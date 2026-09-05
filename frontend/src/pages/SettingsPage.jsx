@@ -3,6 +3,7 @@ import { InformationCircleIcon, PlusIcon, TrashIcon } from "@heroicons/react/24/
 import { fetchThresholdSettings, updateThresholdSettings } from "../api/thresholds";
 import { useAuth } from "../context/AuthContext";
 import { notify } from "../utils/toast";
+import { getErrorMessage } from "../utils/errors";
 import { SURVEILLANCE_DISEASES } from "../constants/surveillanceMethodology.js";
 
 const emptyPeriod = {
@@ -38,7 +39,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!token) return;
-    loadSettings().catch((error) => notify.error(error.message));
+    loadSettings().catch((error) => notify.error(getErrorMessage(error, "Threshold settings could not be loaded.")));
   }, [loadSettings, token]);
 
   const updatePeriod = (index, field, value) => {
@@ -68,7 +69,7 @@ export default function SettingsPage() {
       setExcludedPeriods(data.settings.excludedPeriods || []);
       notify.success("Surveillance settings updated");
     } catch (error) {
-      notify.error(error.message);
+      notify.error(getErrorMessage(error, "Threshold settings could not be saved."));
     } finally {
       setBusy(false);
     }

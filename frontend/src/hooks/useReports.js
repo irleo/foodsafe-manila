@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { getErrorMessage } from "../utils/errors";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
@@ -71,7 +72,7 @@ export function useReports(token, { fetchAll = false, autoFetch = true } = {}) {
         setPagination(first?.pagination || null);
         setPermissions(first?.permissions || { canAccessPatientIdentity: false });
       } catch (err) {
-        setErrorMsg(err?.message || "Failed to load reports.");
+        setErrorMsg(getErrorMessage(err, "Reports could not be loaded."));
         setReports([]);
       } finally {
         setLoading(false);

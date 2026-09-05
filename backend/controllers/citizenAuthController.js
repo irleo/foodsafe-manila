@@ -8,6 +8,7 @@ import {
 } from "../utils/citizenAuth.js";
 import { validatePassword } from "../utils/passwordValidation.js";
 import { consumeMobileOtpVerification } from "../services/mobileOtpService.js";
+import { logRequestError } from "../utils/serverLogger.js";
 
 // POST /api/auth/register
 export const registerCitizen = async (req, res) => {
@@ -55,7 +56,7 @@ export const registerCitizen = async (req, res) => {
     if (error?.code === 11000) {
       return res.status(409).json({ message: "Phone number already registered" });
     }
-    console.error("Citizen register error:", error);
+    logRequestError(error, req, "CITIZEN_REGISTER_ERROR");
     return res.status(500).json({ message: "Failed to register user" });
   }
 };
@@ -89,7 +90,7 @@ export const loginCitizen = async (req, res) => {
       refreshToken,
     });
   } catch (error) {
-    console.error("Citizen login error:", error);
+    logRequestError(error, req, "CITIZEN_LOGIN_ERROR");
     return res.status(500).json({ message: "Failed to login" });
   }
 };
@@ -106,7 +107,7 @@ export const checkPhoneExists = async (req, res) => {
     const exists = await MobileUser.exists({ phoneNumber: normalizedPhone });
     return res.json({ exists: Boolean(exists) });
   } catch (error) {
-    console.error("Phone exists check error:", error);
+    logRequestError(error, req, "PHONE_LOOKUP_ERROR");
     return res.status(500).json({ message: "Failed to check phone number" });
   }
 };
@@ -149,7 +150,7 @@ export const resetCitizenPassword = async (req, res) => {
 
     return res.json({ success: true });
   } catch (error) {
-    console.error("Citizen reset password error:", error);
+    logRequestError(error, req, "CITIZEN_PASSWORD_RESET_ERROR");
     return res.status(500).json({ message: "Failed to reset password" });
   }
 };
@@ -182,7 +183,7 @@ export const refreshCitizenToken = async (req, res) => {
       user: sanitizeMobileUser(mobileUser),
     });
   } catch (error) {
-    console.error("Citizen refresh error:", error);
+    logRequestError(error, req, "CITIZEN_SESSION_REFRESH_ERROR");
     return res.status(403).json({ message: "Invalid refresh token" });
   }
 };

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:foodsafe_manila/widgets/snackbar_widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_service.dart';
+import '../services/api_client.dart';
 import '../utils/philippine_mobile_number.dart';
 import '../widgets/app_loading.dart';
 import '../widgets/philippine_mobile_prefix.dart';
@@ -109,7 +110,7 @@ class _SignupScreenState extends State<SignupScreen> {
       SnackbarWidgets.success(context, "Verification code sent");
       return true;
     } catch (error) {
-      if (mounted) SnackbarWidgets.error(context, error.toString());
+      if (mounted) SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
       return false;
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -144,7 +145,7 @@ class _SignupScreenState extends State<SignupScreen> {
         Navigator.pop(context); // return to login
       }
     } catch (error) {
-      if (mounted) SnackbarWidgets.error(context, error.toString());
+      if (mounted) SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -168,7 +169,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
         setState(() => _currentStep = 1);
       } catch (error) {
-        if (mounted) SnackbarWidgets.error(context, error.toString());
+        if (mounted) SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
       } finally {
         if (mounted) setState(() => _loading = false);
       }

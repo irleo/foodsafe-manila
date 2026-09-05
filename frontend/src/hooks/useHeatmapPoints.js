@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchDistrictHeatmap } from "../api/heatmap";
+import { getErrorMessage } from "../utils/errors";
 
 /**
  * Fetch centroid-weighted district heatmap points from OfficialCase.
@@ -71,7 +72,7 @@ export function useHeatmapPoints({
         setFilterOptions(data?.filterOptions || {});
       } catch (err) {
         if (!isMounted) return;
-        setErrorMsg(err?.message || "Failed to load heatmap data.");
+        setErrorMsg(getErrorMessage(err, "Heatmap data is currently unavailable."));
         setPoints([]);
         setDistrictStats([]);
         setDiseaseStats([]);

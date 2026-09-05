@@ -169,12 +169,18 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       }
     } on ApiException catch (e) {
       if (mounted) {
-        SnackbarWidgets.error(context, e.message);
+        SnackbarWidgets.error(context, ApiClient.safeErrorMessage(e));
       }
       return false;
-    } catch (e) {
+    } catch (error) {
       if (mounted) {
-        SnackbarWidgets.error(context, "Error: $e");
+        SnackbarWidgets.error(
+          context,
+          ApiClient.safeErrorMessage(
+            error,
+            fallback: 'The report could not be submitted.',
+          ),
+        );
       }
       return false;
     } finally {
@@ -335,8 +341,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       }
 
       return false;
-    } catch (e) {
-      debugPrint('Manila boundary check error: $e');
+    } catch (_) {
       return false;
     }
   }

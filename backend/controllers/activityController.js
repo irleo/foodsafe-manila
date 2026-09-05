@@ -1,6 +1,7 @@
 import ActivityLog from "../models/ActivityLog.js";
 import ReportAuditLog from "../models/ReportAuditLog.js";
 import WebUser from "../models/WebUser.js";
+import { logRequestError } from "../utils/serverLogger.js";
 import { paginationMeta, parsePagination } from "../utils/pagination.js";
 
 const REPORT_WORKFLOW_ROLES = ["admin", "cesu", "surveillance_team"];
@@ -169,7 +170,7 @@ export const getRecentActivity = async (req, res) => {
       pagination: paginationMeta({ page, limit, total }),
     });
   } catch (error) {
-    console.error("Failed to fetch recent activity:", error);
+    logRequestError(error, req, "DASHBOARD_DATA_ERROR");
     return res.status(500).json({ message: "Failed to fetch recent activity." });
   }
 };

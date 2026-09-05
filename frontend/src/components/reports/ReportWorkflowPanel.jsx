@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { formatStatusLabel } from "../../utils/formatStatusLabel";
+import { getErrorMessage } from "../../utils/errors";
 import {
   DISEASE_CASE_RULES,
   SURVEILLANCE_DISEASES,
@@ -67,7 +68,7 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
       setMessage(data.message || "Report updated.");
       await onUpdated?.();
     } catch (requestError) {
-      setError(requestError.message || "Unable to update this report.");
+      setError(getErrorMessage(requestError, "The report could not be updated."));
     } finally {
       setBusyAction("");
     }
@@ -115,7 +116,7 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
       setMessage(result.message || "Investigation decision recorded.");
       await onUpdated?.();
     } catch (requestError) {
-      setError(requestError.message || "Unable to record the investigation decision.");
+      setError(getErrorMessage(requestError, "The investigation decision could not be recorded."));
       await onUpdated?.();
     } finally {
       setBusyAction("");

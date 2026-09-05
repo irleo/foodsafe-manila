@@ -24,11 +24,19 @@ import {
   monitorRequestPerformance,
   startProcessMemoryMonitor,
 } from "./middleware/performanceMonitoring.js";
+import {
+  errorHandler,
+  notFoundHandler,
+  requestContext,
+  standardizeErrorResponses,
+} from "./middleware/errorHandler.js";
+import { ErrorCodes } from "./errors/errorCodes.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+app.disable("x-powered-by");
 
 const allowedOriginsEnv = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
@@ -46,6 +54,8 @@ const allowedOrigins =
       ];
 
 // Middleware
+app.use(requestContext);
+app.use(standardizeErrorResponses);
 app.use(express.json());
 app.use(cookieParser());
 app.use(monitorRequestPerformance);
@@ -74,6 +84,10 @@ const apiLimiter = rateLimit({
   max: 600,
   standardHeaders: true,
   legacyHeaders: false,
+  message: {
+    code: ErrorCodes.RATE_LIMITED,
+    message: "Too many requests. Please try again later.",
+  },
 });
 
 const authLoginLimiter = rateLimit({
@@ -81,7 +95,10 @@ const authLoginLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: "Too many login attempts. Please try again later.",
+  message: {
+    code: ErrorCodes.RATE_LIMITED,
+    message: "Too many login attempts. Please try again later.",
+  },
 });
 
 const refreshLimiter = rateLimit({
@@ -89,6 +106,10 @@ const refreshLimiter = rateLimit({
   max: 300,
   standardHeaders: true,
   legacyHeaders: false,
+  message: {
+    code: ErrorCodes.RATE_LIMITED,
+    message: "Too many session refresh requests. Please try again later.",
+  },
 });
 
 // Limits first
@@ -118,22 +139,8 @@ app.use("/api/predictions", predictionsRouter);
 app.use("/api/thresholds", thresholdRouter);
 app.use("/api", mobileRouter);
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({
-    message: "Route not found",
-    path: req.originalUrl,
-  });
-});
-
-// Global error handler
-app.use((err, req, res, next) => {
-  console.error(err);
-
-  res.status(err.status || 500).json({
-    message: err.message || "Server Error",
-  });
-});
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 // Start server
 const startServer = async () => {

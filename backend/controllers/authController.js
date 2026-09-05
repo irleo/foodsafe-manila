@@ -10,6 +10,7 @@ import {
 } from "../services/emailService.js";
 import { logActivity } from "../utils/logActivity.js";
 import { validatePassword } from "../utils/passwordValidation.js";
+import { logRequestError } from "../utils/serverLogger.js";
 
 const RESET_OTP_TTL_MINUTES = 10;
 const RESET_OTP_LENGTH = 6;
@@ -221,23 +222,13 @@ export const sendRequestAccessOtp = async (req, res) => {
         expiresMinutes: ACCESS_OTP_TTL_MINUTES,
       });
 
-      console.log("OTP email sent through Brevo to:", normalizedEmail);
     } catch (mailError) {
-      console.error("Brevo SMTP failed:", {
-        message: mailError.message,
-        code: mailError.code,
-        command: mailError.command,
-        response: mailError.response,
-        responseCode: mailError.responseCode,
-      });
+      logRequestError(mailError, req, "ACCESS_OTP_DELIVERY_ERROR");
 
       if (isProd) throw mailError;
 
       usedDevFallback = true;
-      console.warn(
-        "SMTP unavailable in development. Using access OTP fallback for:",
-        normalizedEmail,
-      );
+      console.warn("SMTP unavailable in development; using access OTP fallback.");
     }
 
     return res.json({
@@ -252,11 +243,7 @@ export const sendRequestAccessOtp = async (req, res) => {
         : {}),
     });
   } catch (error) {
-    console.error("Error sending access request OTP:", {
-      message: error.message,
-      code: error.code,
-      stack: error.stack,
-    });
+    logRequestError(error, req, "ACCESS_OTP_ERROR");
 
     return res
       .status(500)
@@ -394,7 +381,7 @@ export const requestAccess = async (req, res) => {
         message: "An account or access request with this email already exists.",
       });
     }
-    console.error("Error requesting access:", error);
+    logRequestError(error, req, "ACCESS_REQUEST_ERROR");
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -476,7 +463,7 @@ export const login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error logging in:", error);
+    logRequestError(error, req, "LOGIN_ERROR");
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -536,7 +523,7 @@ export const refreshToken = async (req, res) => {
       return res.status(401).json({ message: "Session expired" });
     }
 
-    console.error("Error refreshing token:", error);
+    logRequestError(error, req, "SESSION_REFRESH_ERROR");
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -550,7 +537,7 @@ export const logout = (req, res) => {
 
     return res.status(200).json({ message: "Logged out successfully" });
   } catch (error) {
-    console.error("Error logging out:", error);
+    logRequestError(error, req, "LOGOUT_ERROR");
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -610,10 +597,7 @@ export const forgotPassword = async (req, res) => {
     } catch (mailError) {
       if (isProd) throw mailError;
       usedDevFallback = true;
-      console.warn(
-        "SMTP unavailable in development. Using OTP fallback for:",
-        user.email,
-      );
+      console.warn("SMTP unavailable in development; using reset OTP fallback.");
     }
 
     return res.json({
@@ -628,7 +612,7 @@ export const forgotPassword = async (req, res) => {
         : {}),
     });
   } catch (error) {
-    console.error("Error sending password reset OTP:", error);
+    logRequestError(error, req, "PASSWORD_RESET_OTP_ERROR");
     return res.status(500).json({ message: "Failed to process request." });
   }
 };
@@ -671,7 +655,7 @@ export const verifyResetOtp = async (req, res) => {
 
     return res.json({ success: true, message: "OTP verified." });
   } catch (error) {
-    console.error("Error verifying reset OTP:", error);
+    logRequestError(error, req, "PASSWORD_RESET_VERIFY_ERROR");
     return res.status(500).json({ message: "Failed to verify OTP." });
   }
 };
@@ -744,7 +728,7 @@ export const completePasswordReset = async (req, res) => {
 
     return res.json({ success: true, message: "Password has been reset." });
   } catch (error) {
-    console.error("Error completing password reset:", error);
+    logRequestError(error, req, "PASSWORD_RESET_ERROR");
     return res.status(500).json({ message: "Failed to reset password." });
   }
 };

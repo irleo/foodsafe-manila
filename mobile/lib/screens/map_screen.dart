@@ -278,8 +278,8 @@ class MapScreenState extends State<MapScreen> {
             addPolygon(points);
           }
         }
-      } catch (e) {
-        debugPrint('Error parsing polygon: $e');
+      } catch (_) {
+        // Skip malformed polygon data without exposing parser internals.
       }
     }
 

@@ -13,6 +13,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import axios from "axios";
 import { notify } from "../utils/toast";
+import { getErrorMessage, logClientError } from "../utils/errors";
 
 export default function Sidebar({ isOpen, onClose }) {
   const { auth, setAuth } = useAuth();
@@ -29,10 +30,10 @@ export default function Sidebar({ isOpen, onClose }) {
       await notify.promise(logoutPromise, {
         loading: "Logging you out…",
         success: "Logged out successfully!",
-        error: (e) => e?.response?.data?.message || "Logout failed.",
+        error: (error) => getErrorMessage(error, "Logout failed."),
       });
     } catch (error) {
-      console.error("Logout failed", error);
+      logClientError("Logout failed", error);
     } finally {
       setAuth(null);
       navigate("/login", { replace: true });

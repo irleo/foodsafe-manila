@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Mail } from "lucide-react";
 import { notify } from "../utils/toast";
 import AuthPageLayout from "../layouts/AuthPageLayout";
+import { getErrorMessage } from "../utils/errors";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const OTP_RESEND_COOLDOWN_SECONDS = 180;
@@ -71,7 +72,7 @@ export default function ForgotPassword() {
       setShowOtpModal(true);
       setResendCooldown(OTP_RESEND_COOLDOWN_SECONDS);
     } catch (err) {
-      setError(err?.message || "Something went wrong.");
+      setError(getErrorMessage(err, "The password reset request could not be completed."));
     } finally {
       setLoading(false);
     }
@@ -137,7 +138,7 @@ export default function ForgotPassword() {
         `/reset-password?email=${encodeURIComponent(email.trim())}&otp=${encodeURIComponent(code)}`,
       );
     } catch (err) {
-      setError(err?.message || "Failed to verify code.");
+      setError(getErrorMessage(err, "The verification code could not be checked."));
     } finally {
       setLoading(false);
     }
@@ -320,7 +321,7 @@ export default function ForgotPassword() {
                   setResendCooldown(OTP_RESEND_COOLDOWN_SECONDS);
                   setOtp(["", "", "", "", "", ""]);
                 } catch (err) {
-                  setError(err?.message || "Failed to resend code.");
+                  setError(getErrorMessage(err, "The verification code could not be resent."));
                 } finally {
                   setLoading(false);
                 }

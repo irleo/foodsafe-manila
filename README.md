@@ -7,6 +7,10 @@
 
 The embedded API under `mobile/backend/` is deprecated. Do not run it.
 
+Production API errors use safe, stable error codes and an `ERR-XXXXXXXX`
+reference. Share that reference when troubleshooting; technical stack traces and
+service details are written only to redacted backend logs.
+
 ## Setup
 
 ### Backend

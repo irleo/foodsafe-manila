@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../widgets/snackbar_widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_service.dart';
+import '../services/api_client.dart';
 import '../services/session.dart';
 import '../utils/philippine_mobile_number.dart';
 import '../widgets/app_loading.dart';
@@ -56,6 +57,16 @@ class _LogInScreenState extends State<LoginScreen> {
         Navigator.pushReplacementNamed(context, '/dashboard');
       } else {
         SnackbarWidgets.error(context, "Invalid phone number or password");
+      }
+    } catch (error) {
+      if (mounted) {
+        SnackbarWidgets.error(
+          context,
+          ApiClient.safeErrorMessage(
+            error,
+            fallback: 'Unable to sign in. Please try again.',
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _loading = false);

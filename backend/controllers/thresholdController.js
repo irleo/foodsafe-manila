@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { logRequestError } from "../utils/serverLogger.js";
 import SurveillanceThresholdConfig from "../models/SurveillanceThresholdConfig.js";
 import {
   calculateSurveillanceThreshold,
@@ -64,7 +65,8 @@ export async function getThresholdSettings(req, res) {
     const stored = await loadStoredSettings();
     return res.json({ settings: settingsResponse(stored) });
   } catch (error) {
-    return res.status(500).json({ message: error.message || "Unable to load threshold settings" });
+    logRequestError(error, req, "THRESHOLD_SETTINGS_ERROR");
+    return res.status(500).json({ message: "Threshold settings could not be loaded." });
   }
 }
 
@@ -105,9 +107,10 @@ export async function updateThresholdSettings(req, res) {
     return res.json({ settings: settingsResponse(stored) });
   } catch (error) {
     if (error?.name === "ValidationError") {
-      return res.status(400).json({ message: error.message });
+      return res.status(400).json({ message: "Threshold settings are invalid." });
     }
-    return res.status(500).json({ message: error.message || "Unable to update threshold settings" });
+    logRequestError(error, req, "THRESHOLD_SETTINGS_ERROR");
+    return res.status(500).json({ message: "Threshold settings could not be updated." });
   }
 }
 
@@ -131,8 +134,9 @@ export async function getCurrentThreshold(req, res) {
       settings: settingsResponse(stored),
     });
   } catch (error) {
+    logRequestError(error, req, "THRESHOLD_CALCULATION_ERROR");
     return res.status(error.status || 500).json({
-      message: error.message || "Unable to calculate the current surveillance threshold",
+      message: "The surveillance threshold could not be calculated.",
     });
   }
 }

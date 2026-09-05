@@ -12,6 +12,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { notify } from "../utils/toast";
 import AuthPageLayout from "../layouts/AuthPageLayout";
+import { getErrorMessage, logClientError } from "../utils/errors";
 import {
   getPasswordValidationResults,
   validatePassword,
@@ -143,7 +144,7 @@ const RequestAccess = () => {
     notify.promise(otpPromise, {
       loading: "Sending verification code...",
       success: (r) => r?.data?.message || "Verification code sent.",
-      error: (e) => e?.response?.data?.message || "Failed to send code.",
+      error: (error) => getErrorMessage(error, "The verification code could not be sent."),
     });
     const otpResult = await otpPromise;
 
@@ -178,8 +179,8 @@ const RequestAccess = () => {
     try {
       await sendAccessOtp();
     } catch (err) {
-      console.error(err);
-      setError(err?.response?.data?.message || "Failed to send code.");
+      logClientError("Failed to send access code", err);
+      setError(getErrorMessage(err, "The verification code could not be sent."));
     } finally {
       setLoading(false);
     }
@@ -203,7 +204,7 @@ const RequestAccess = () => {
       notify.promise(requestPromise, {
         loading: "Requesting access...",
         success: (r) => r?.data?.message || "Request submitted successfully!",
-        error: (e) => e?.response?.data?.message || "Request failed.",
+        error: (error) => getErrorMessage(error, "The access request could not be completed."),
       });
       await requestPromise;
 
@@ -211,8 +212,8 @@ const RequestAccess = () => {
       setOtpModalOpen(false);
       setTimeout(() => navigate("/login"), 2000);
     } catch (err) {
-      console.error(err);
-      setError(err?.response?.data?.message || "Request failed.");
+      logClientError("Failed to request access", err);
+      setError(getErrorMessage(err, "The access request could not be completed."));
     } finally {
       setLoading(false);
     }
@@ -608,8 +609,8 @@ const RequestAccess = () => {
                 try {
                   await sendAccessOtp();
                 } catch (err) {
-                  console.error(err);
-                  setError(err?.response?.data?.message || "Failed to send code.");
+                  logClientError("Failed to resend access code", err);
+                  setError(getErrorMessage(err, "The verification code could not be resent."));
                 } finally {
                   setLoading(false);
                 }

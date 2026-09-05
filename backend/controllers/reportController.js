@@ -11,6 +11,7 @@ import { paginationMeta, parsePagination } from "../utils/pagination.js";
 import { refreshDashboardSummaryAfterWrite } from "../services/dashboardSummaryService.js";
 import { listReportAudit, recordReportAudit } from "../services/reportAuditService.js";
 import { getDohMorbidityWeek } from "../utils/dohMorbidityWeek.js";
+import { logRequestError } from "../utils/serverLogger.js";
 import {
   normalizeSurveillanceDisease,
   validateProbableClassification,
@@ -82,7 +83,6 @@ function sameSet(a = [], b = []) {
 
 export const createReport = async (req, res) => {
   if (process.env.NODE_ENV !== "production") {
-    console.log("HIT createReport", req.method, req.originalUrl);
   }
 
   try {
@@ -332,7 +332,7 @@ export const createReport = async (req, res) => {
 
     return res.status(201).json(report);
   } catch (error) {
-    console.error("Error creating report:", error);
+    logRequestError(error, req, "REPORT_CREATE_ERROR");
     return res.status(500).json({ message: "Failed to create report." });
   }
 };
@@ -388,7 +388,7 @@ export const getUserReports = async (req, res) => {
       pagination: paginationMeta({ page, limit, total }),
     });
   } catch (error) {
-    console.error("Error fetching user reports:", error);
+    logRequestError(error, req, "REPORT_SERVICE_ERROR");
     return res.status(500).json({ message: "Failed to load reports" });
   }
 };
@@ -413,14 +413,13 @@ export const getLastUserReport = async (req, res) => {
       lastReportAt: latestReport ? latestReport.reportedAt : null,
     });
   } catch (error) {
-    console.error("Error fetching last report:", error);
+    logRequestError(error, req, "REPORT_SERVICE_ERROR");
     return res.status(500).json({ message: "Failed to load last report" });
   }
 };
 
 export const getReports = async (req, res) => {
   if (process.env.NODE_ENV !== "production") {
-    console.log("HIT getReports", req.method, req.originalUrl);
   }
 
   if (!["admin", "cesu", "surveillance_team"].includes(req.user?.role)) {
@@ -630,6 +629,7 @@ export const getReports = async (req, res) => {
       permissions: { canAccessPatientIdentity },
     });
   } catch (error) {
+    logRequestError(error, req, "REPORT_SERVICE_ERROR");
     return res.status(500).json({ message: "Failed to fetch reports." });
   }
 };
@@ -715,7 +715,7 @@ export const completeInvestigation = async (req, res) => {
     });
     return res.json({ message: "Investigation completed.", report: await Report.findById(report._id).select(workflowStatusFields).lean() });
   } catch (error) {
-    console.error("Error completing investigation:", error);
+    logRequestError(error, req, "REPORT_INVESTIGATION_ERROR");
     return res.status(500).json({ message: "Failed to complete investigation." });
   }
 };
@@ -761,7 +761,7 @@ export const markReportSuspected = async (req, res) => {
     await refreshDashboardSummaryAfterWrite();
     return res.json({ message: "Case marked as suspected.", report: await Report.findById(report._id).select(workflowStatusFields).lean() });
   } catch (error) {
-    console.error("Error marking case as suspected:", error);
+    logRequestError(error, req, "REPORT_STATUS_ERROR");
     return res.status(500).json({ message: "Failed to mark case as suspected." });
   }
 };
@@ -826,7 +826,7 @@ export const ruleOutReport = async (req, res) => {
       report: await Report.findById(report._id).select(workflowStatusFields).lean(),
     });
   } catch (error) {
-    console.error("Error ruling out report:", error);
+    logRequestError(error, req, "REPORT_STATUS_ERROR");
     return res.status(500).json({ message: "Failed to rule out report." });
   }
 };
@@ -921,7 +921,7 @@ export const validateReport = async (req, res) => {
     await refreshDashboardSummaryAfterWrite();
     return res.json({ message: "Case classification recorded.", report: await Report.findById(report._id).select(workflowStatusFields).lean() });
   } catch (error) {
-    console.error("Error recording case confirmation:", error);
+    logRequestError(error, req, "REPORT_CONFIRMATION_ERROR");
     return res.status(500).json({ message: "Failed to record case confirmation." });
   }
 };
@@ -947,7 +947,7 @@ export const getReportAudit = async (req, res) => {
       )),
     });
   } catch (error) {
-    console.error("Error loading report audit trail:", error);
+    logRequestError(error, req, "REPORT_AUDIT_ERROR");
     return res.status(500).json({ message: "Failed to load report audit trail." });
   }
 };

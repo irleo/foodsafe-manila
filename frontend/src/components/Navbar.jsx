@@ -10,6 +10,7 @@ import Spinner from "./Spinner";
 import { useEffect, useRef, useState } from "react";
 import logo from "../../../mobile/assets/foodsafe_logo.png";
 import { notify } from "../utils/toast";
+import { logClientError } from "../utils/errors";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const configuredPollMs = Number(import.meta.env.VITE_NOTIFICATION_POLL_MS);
@@ -61,7 +62,7 @@ export default function Navbar({ isSidebarOpen, toggleSidebar }) {
         setNotifications(Array.isArray(data?.items) ? data.items : []);
       } catch (error) {
         if (!isMounted) return;
-        console.error("Failed to refresh notifications", error);
+        logClientError("Failed to refresh notifications", error);
       } finally {
         requestInFlight = false;
       }
@@ -116,7 +117,7 @@ export default function Navbar({ isSidebarOpen, toggleSidebar }) {
         setNotifications(Array.isArray(data?.items) ? data.items : []);
       } catch (error) {
         if (!isMounted) return;
-        console.error("Failed to load notifications", error);
+        logClientError("Failed to load notifications", error);
         setNotifications([]);
       }
     })();
@@ -157,7 +158,7 @@ export default function Navbar({ isSidebarOpen, toggleSidebar }) {
       if (!res.ok) throw new Error("Failed to update notification");
       await fetchNotifications();
     } catch (error) {
-      console.error("Failed to update notification", error);
+      logClientError("Failed to update notification", error);
     }
   };
 
@@ -172,7 +173,7 @@ export default function Navbar({ isSidebarOpen, toggleSidebar }) {
       if (!res.ok) throw new Error("Failed to mark all as read");
       await fetchNotifications();
     } catch (error) {
-      console.error("Failed to mark notifications as read", error);
+      logClientError("Failed to mark notifications as read", error);
     }
   };
 

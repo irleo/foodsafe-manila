@@ -1,4 +1,23 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const REQUEST_TIMEOUT_MS = 15_000;
+const REFRESH_TIMEOUT_MS = 13 * 60 * 1000;
+
+async function fetchJson(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    const body = await res.json().catch(() => ({}));
+    return { res, body };
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("The prediction service did not respond in time.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 /**
  * Load latest saved PredictionRun (DB-backed).
@@ -14,10 +33,9 @@ export async function fetchLatestPredictions(
   if (districtKey) qs.set("districtKey", districtKey);
   if (district) qs.set("district", district);
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
-  const res = await fetch(`${API_BASE}/api/predictions${suffix}`, {
+  const { res, body: j } = await fetchJson(`${API_BASE}/api/predictions${suffix}`, {
     headers: { Authorization: token ? `Bearer ${token}` : "" },
   });
-  const j = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(j.message || "Prediction request failed");
   }
@@ -33,7 +51,7 @@ export async function refreshPredictions(
   token,
   { datasetId, forecastHorizonMonths } = {},
 ) {
-  const res = await fetch(`${API_BASE}/api/predictions/refresh`, {
+  const { res, body: j } = await fetchJson(`${API_BASE}/api/predictions/refresh`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -41,20 +59,38 @@ export async function refreshPredictions(
     },
     body: JSON.stringify({ datasetId, forecastHorizonMonths }),
   });
-  const j = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(j.message || "Prediction refresh failed");
   }
   if (!j.accepted) return j;
 
-  const timeoutAt = Date.now() + (15 * 60 * 1000);
+  const jobId = j.refreshJob?.jobId;
+  if (!jobId) {
+    throw new Error("The prediction service did not return a refresh job ID.");
+  }
+  const pollDatasetId = datasetId || j.refreshJob?.datasetId;
+
+  const timeoutAt = Date.now() + REFRESH_TIMEOUT_MS;
   while (Date.now() < timeoutAt) {
     await new Promise((resolve) => setTimeout(resolve, 3000));
-    const latest = await fetchLatestPredictions(token, { datasetId });
-    if (latest?.refreshJob?.status === "failed") {
-      throw new Error(latest.refreshJob.errorMessage || "Global forecast refresh failed");
+    const latest = await fetchLatestPredictions(token, {
+      datasetId: pollDatasetId,
+    });
+    const refreshJob = latest?.refreshJob;
+    if (!refreshJob || refreshJob.status === "idle") {
+      throw new Error("The prediction refresh was interrupted. Please try again.");
     }
-    if (latest?.refreshJob?.status === "succeeded") return latest;
+    if (refreshJob.jobId !== jobId) {
+      throw new Error("The prediction refresh was replaced by another job.");
+    }
+    if (refreshJob.status === "failed") {
+      throw new Error(
+        refreshJob.errorMessage || "Global forecast refresh failed",
+      );
+    }
+    if (refreshJob.status === "succeeded") return latest;
   }
-  throw new Error("The global forecast is still processing. You can leave this page and return later.");
+  throw new Error(
+    "Prediction refresh exceeded its time limit. Please check the Render logs.",
+  );
 }

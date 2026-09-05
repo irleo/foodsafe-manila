@@ -6,6 +6,7 @@ import {
   InformationCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "../context/AuthContext";
+import { getErrorMessage, logClientError } from "../utils/errors";
 
 import { useLatestDatasetId } from "../hooks/useLatestDatasetId";
 import { useOfficialCases } from "../hooks/useOfficialCases";
@@ -117,7 +118,7 @@ export default function Dashboard() {
         setActivity(Array.isArray(data?.items) ? data.items : []);
       } catch (error) {
         if (!isMounted) return;
-        console.error("Failed to load recent activity", error);
+        logClientError("Failed to load recent activity", error);
         setActivity([]);
       }
     };
@@ -156,7 +157,7 @@ export default function Dashboard() {
         setThresholdResult(response?.result || null);
       } catch (error) {
         if (!isMounted) return;
-        setThresholdError(error.message || "Unable to calculate threshold");
+        setThresholdError(getErrorMessage(error, "Threshold data is currently unavailable."));
       } finally {
         if (isMounted) setThresholdLoading(false);
       }

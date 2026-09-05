@@ -8,6 +8,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import useAxiosPrivate from "../hooks/useAxiosPrivate";
 import { formatStatusLabel } from "../utils/formatStatusLabel";
+import { getErrorMessage } from "../utils/errors";
 
 const PAGE_LIMIT = 10;
 const ASSIGNABLE_ROLES = new Set(["cesu", "surveillance_team"]);
@@ -87,7 +88,7 @@ export default function UserManagement() {
       await Promise.all([fetchRequests(), fetchManagedUsers(), fetchStats()]);
       setError("");
     } catch (requestError) {
-      setError(requestError?.response?.data?.message || "Failed to load users.");
+      setError(getErrorMessage(requestError, "User data could not be loaded."));
     } finally {
       setLoading(false);
     }
@@ -165,7 +166,7 @@ export default function UserManagement() {
       );
       await refreshAll();
     } catch (requestError) {
-      setError(requestError?.response?.data?.message || "Failed to update user status.");
+      setError(getErrorMessage(requestError, "The user status could not be updated."));
     } finally {
       setActionLoadingId(null);
     }
@@ -183,7 +184,7 @@ export default function UserManagement() {
       setInfoMessage("User role updated successfully.");
       await refreshAll();
     } catch (requestError) {
-      setError(requestError?.response?.data?.message || "Failed to update user role.");
+      setError(getErrorMessage(requestError, "The user role could not be updated."));
     } finally {
       setActionLoadingId(null);
     }

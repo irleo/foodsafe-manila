@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchLatestPredictions } from "../api/predictions";
+import { getErrorMessage } from "../utils/errors";
 
 export function useLatestPredictionRun(token) {
   const [predictionRun, setPredictionRun] = useState(null);
@@ -30,7 +31,7 @@ export function useLatestPredictionRun(token) {
       } catch (error) {
         if (!isMounted) return;
         setPredictionRun(null);
-        setErrorMsg(error?.message || "Failed to load the saved forecast.");
+        setErrorMsg(getErrorMessage(error, "Prediction data is currently unavailable."));
       } finally {
         if (isMounted) setLoading(false);
       }

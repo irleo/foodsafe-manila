@@ -3,6 +3,7 @@ import { getDashboardSummary } from "../services/dashboardSummaryService.js";
 import { getAnalyticalCaseRows } from "../services/analyticalCaseService.js";
 import { calculateLatestSurveillanceThreshold } from "../services/surveillanceThresholdService.js";
 import { SURVEILLANCE_DISEASES } from "../constants/surveillanceMethodology.js";
+import { logRequestError } from "../utils/serverLogger.js";
 
 const riskSnapshotCache = createAsyncTtlCache({
   name: "mobile-risk-snapshot",
@@ -154,7 +155,7 @@ export const getMobileDashboard = async (req, res) => {
 
     return res.json(payload);
   } catch (error) {
-    console.error("Mobile dashboard error:", error);
+    logRequestError(error, req, "DASHBOARD_DATA_ERROR");
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -167,7 +168,7 @@ export const getMobileRiskHeatmap = async (req, res) => {
 
     return res.json({ success: true, months, areas, summary });
   } catch (error) {
-    console.error("Mobile risk heatmap error:", error);
+    logRequestError(error, req, "HEATMAP_SERVICE_ERROR");
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -188,7 +189,7 @@ export const getMobileNearbyRisk = async (req, res) => {
       barangayNo ? getNearbyAreaRisk(barangayNo, months) : Promise.resolve(null),
       getRiskSnapshot(months),
       getLatestSurveillanceThreshold().catch((error) => {
-        console.error("Mobile surveillance threshold error:", error);
+        logRequestError(error, req, "THRESHOLD_CALCULATION_ERROR");
         return null;
       }),
     ]);
@@ -219,7 +220,7 @@ export const getMobileNearbyRisk = async (req, res) => {
       message: thresholdMessage,
     });
   } catch (error) {
-    console.error("Mobile nearby risk error:", error);
+    logRequestError(error, req, "HEATMAP_SERVICE_ERROR");
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -268,7 +269,7 @@ export const getMobileOfficialAnalytics = async (req, res) => {
       caseDefinition: "Confirmed cases from authoritative CESU uploads only.",
     });
   } catch (error) {
-    console.error("Mobile official analytics error:", error);
+    logRequestError(error, req, "ANALYTICS_SERVICE_ERROR");
     return res.status(500).json({ message: "Server error" });
   }
 };

@@ -3,6 +3,7 @@ import { fetchCurrentThreshold } from "../../api/thresholds";
 import { SURVEILLANCE_DISEASES } from "../../constants/surveillanceMethodology.js";
 import { formatStatusLabel } from "../../utils/formatStatusLabel";
 import { formatThresholdValue } from "../../utils/formatThresholdValue.js";
+import { getErrorMessage } from "../../utils/errors";
 
 const MANILA_DISTRICTS = Array.from(
   { length: 6 },
@@ -72,7 +73,7 @@ export default function DistrictThresholdOverview({ token, datasetId }) {
       .catch((error) => {
         if (!isMounted) return;
         setThresholdResults({});
-        setErrorMessage(error.message || "Unable to load district thresholds");
+        setErrorMessage(getErrorMessage(error, "Threshold data is currently unavailable."));
       })
       .finally(() => {
         if (isMounted) setLoading(false);

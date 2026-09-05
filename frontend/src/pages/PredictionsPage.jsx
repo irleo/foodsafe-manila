@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { notify } from "../utils/toast";
 import { formatStatusLabel } from "../utils/formatStatusLabel";
+import { getErrorMessage } from "../utils/errors";
 import { fetchLatestPredictions, refreshPredictions } from "../api/predictions";
 import { useLatestDatasetId } from "../hooks/useLatestDatasetId";
 import DataCoverageNotice from "../components/DataCoverageNotice";
@@ -202,7 +203,7 @@ export default function Predictions() {
       } catch (error) {
         if (!isMounted) return;
         setRun(null);
-        setEmptyMsg(error?.message || "Failed to load saved forecast");
+        setEmptyMsg(getErrorMessage(error, "Prediction data is currently unavailable."));
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -222,7 +223,9 @@ export default function Predictions() {
         );
       setIsGenerating(true);
       try {
-        await refreshPredictions(token, { forecastHorizonMonths: 1 });
+        const refreshResult = await refreshPredictions(token, {
+          forecastHorizonMonths: 1,
+        });
         const response = await fetchLatestPredictions(token);
         if (response?.hasPrediction === false) {
           throw new Error(response.message || "No prediction run was created.");
@@ -233,16 +236,22 @@ export default function Predictions() {
         setSelectedHistoryDistrict("manila");
         setHistoryPage(1);
         setEmptyMsg("");
-        return response;
+        return {
+          ...response,
+          alreadyUpToDate: refreshResult?.alreadyUpToDate === true,
+        };
       } finally {
         setIsGenerating(false);
       }
     };
 
     notify.promise(refresh(), {
-      loading: "Refreshing forecasts for all diseases and districts…",
-      success: "Monthly forecasts refreshed",
-      error: (error) => error?.message || "Failed to refresh forecast",
+      loading: "Checking the latest dataset and saved forecasts…",
+      success: (result) =>
+        result?.alreadyUpToDate
+          ? "Saved forecasts are already up to date"
+          : "Monthly forecasts refreshed",
+      error: (error) => getErrorMessage(error, "Prediction data is currently unavailable."),
     });
   };
 
@@ -369,9 +378,9 @@ export default function Predictions() {
         <div>
           <h1 className="text-2xl font-bold">Predictions</h1>
           <p className="mt-1 max-w-4xl text-gray-600">
-            One refresh prepares monthly forecasts for every supported disease
-            and all six districts. Use the filters below to choose what each
-            graph displays.
+            New official datasets automatically generate monthly forecasts for
+            every supported disease and all six districts. Saved results are
+            reused until another dataset is uploaded.
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:items-end">
@@ -384,8 +393,8 @@ export default function Predictions() {
             >
               <span aria-hidden="true">↻</span>
               {isGenerating
-                ? "Refreshing all forecasts…"
-                : "Refresh All Monthly Forecasts"}
+                ? "Refreshing forecast..."
+                : "Refresh Forecast"}
             </button>
           )}
         </div>
@@ -542,7 +551,7 @@ export default function Predictions() {
           </div>
           {!comparisonAvailable && (
             <p className="mt-2 text-sm text-amber-700">
-              Refresh Forecast to generate the model comparison.
+              Check the latest dataset to generate the model comparison.
             </p>
           )}
           <p className="mt-2 text-sm text-gray-600">

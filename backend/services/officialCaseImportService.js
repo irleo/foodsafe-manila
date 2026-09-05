@@ -318,7 +318,7 @@ export async function importOfficialCasesXlsx({
           sheet: null,
           row: null,
           field: "workbook",
-          message: error?.message || "Invalid Excel workbook.",
+          message: "Invalid Excel workbook.",
         },
       ],
     };

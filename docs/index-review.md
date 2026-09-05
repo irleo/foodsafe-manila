@@ -33,3 +33,11 @@ selectivity or read-cost improvement. Re-run after loading production-like data.
 Only add a candidate when `totalDocsExamined` is materially larger than
 `nReturned` and the candidate removes an in-memory sort or reduces examined
 documents enough to justify its write/storage cost.
+
+## 2026-09-05 refresh coordination update
+
+Added the partial unique `predictionRunsActiveScopeUnique` index on
+`model + granularity + datasetScope + status` for documents whose status is
+`running`. This is not a speculative read-performance index: it enforces the
+application invariant that only one active forecast can run for a dataset scope,
+including when requests reach different Render application instances.

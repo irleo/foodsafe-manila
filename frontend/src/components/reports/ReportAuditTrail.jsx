@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, History } from "lucide-react";
 import { formatStatusLabel } from "../../utils/formatStatusLabel";
+import { getErrorMessage } from "../../utils/errors";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
@@ -20,7 +21,7 @@ export default function ReportAuditTrail({ reportId, token }) {
         if (!response.ok) throw new Error(data.message || "Unable to load audit trail.");
         if (active) setItems(Array.isArray(data.items) ? data.items : []);
       } catch (error) {
-        if (active) setErrorMessage(error.message || "Unable to load audit trail.");
+        if (active) setErrorMessage(getErrorMessage(error, "The report audit trail could not be loaded."));
       }
     })();
 

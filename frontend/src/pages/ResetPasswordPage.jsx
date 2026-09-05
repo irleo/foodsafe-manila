@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Eye, EyeOff, Lock } from "lucide-react";
 import { notify } from "../utils/toast";
 import AuthPageLayout from "../layouts/AuthPageLayout";
+import { getErrorMessage } from "../utils/errors";
 import {
   getPasswordValidationResults,
   validatePassword,
@@ -84,7 +85,7 @@ export default function ResetPassword() {
 
       setDone(true);
     } catch (err) {
-      setError(err?.message || "Something went wrong.");
+      setError(getErrorMessage(err, "The password could not be reset."));
     } finally {
       setLoading(false);
     }

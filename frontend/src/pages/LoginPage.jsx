@@ -4,6 +4,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { notify } from "../utils/toast";
 import AuthPageLayout from "../layouts/AuthPageLayout";
+import { getErrorMessage, logClientError } from "../utils/errors";
 
 import { Eye, EyeOff } from "lucide-react";
 
@@ -48,7 +49,7 @@ const Login = () => {
       await notify.promise(Promise.resolve(res), {
         loading: "Logging you in…",
         success: "Login succesful!",
-        error: (e) => e?.response?.data?.message || "Login failed.",
+        error: (error) => getErrorMessage(error, "Login failed."),
       });
 
       if (rememberMe) {
@@ -59,12 +60,13 @@ const Login = () => {
 
       navigate("/dashboard");
     } catch (err) {
-      const msg =
-        err?.response?.data?.message ||
-        "Login failed. Please check your credentials.";
+      const msg = getErrorMessage(
+        err,
+        "Login failed. Please check your credentials.",
+      );
 
       notify?.error?.(msg);
-      console.error(err);
+      logClientError("Login failed", err);
     } finally {
       setLoading(false);
     }

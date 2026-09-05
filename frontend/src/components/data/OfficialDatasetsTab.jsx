@@ -7,6 +7,7 @@ import RecentDatasetsList from "../datasets/RecentDatasetsList";
 import Spinner from "../Spinner.jsx";
 import { delay } from "../../utils/delay.js";
 import { notify } from "../../utils/toast.js";
+import { getErrorMessage } from "../../utils/errors.js";
 
 const MANILA_DISTRICTS = Array.from({ length: 6 }, (_, index) => `District ${index + 1}`);
 
@@ -112,7 +113,7 @@ export default function OfficialDatasetsTab() {
             res?.formatType
               ? `Imported (${res.formatType}): ${datasetName}`
               : `Uploaded: ${res?.dataset?.name || datasetName}`,
-          error: (e) => e?.message || "Upload failed.",
+          error: (error) => getErrorMessage(error, "The file could not be processed."),
         },
       );
 
@@ -128,7 +129,7 @@ export default function OfficialDatasetsTab() {
       setFile(null);
       await fetchRecent();
     } catch (err) {
-      setErrorMsg(err.message || "Upload failed.");
+      setErrorMsg(getErrorMessage(err, "The file could not be processed."));
     } finally {
       setUploading(false);
       setValidating(false);

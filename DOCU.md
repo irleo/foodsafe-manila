@@ -130,14 +130,22 @@ The backend is the source of truth. Both the React frontend and Flutter app call
 - The Whole-Manila point forecast is coherent and bottom-up: it is the sum of all six district Prophet point forecasts. Whole-Manila output is unavailable unless all six districts have valid Prophet target forecasts.
 - Whole-Manila district bounds are never added. When at least 19 common rolling-origin aggregate errors are available, the 95% interval uses the corrected empirical 95th percentile of absolute errors from the same bottom-up Prophet pipeline: `max(0, pointForecast - radius)` to `pointForecast + radius`. Otherwise, the interval is explicitly stored and displayed as not calculated.
 - Prediction runs use schema version 9 and are stored in MongoDB with model, granularity, dataset scope, basis period, forecast target period, trigger, status, payload methodology, calibration status, and coverage metadata.
-- Manual admin refresh endpoint.
-- Automatic refresh after official upload.
+- Successful official uploads create one durable `running` prediction record and
+  automatically generate the forecast for that dataset.
+- The manual admin refresh endpoint reuses an active upload job or the current
+  saved forecast. It computes only when the latest validated dataset has no
+  successful prediction, allowing recovery from a failed upload-triggered run
+  without recomputing an unchanged dataset.
 - Prediction retrieval endpoint with optional district filtering.
 - Backtest and forecast payloads exposed to the frontend.
 - Prediction generated notifications.
-- A process-wide forecast queue that coalesces duplicate jobs and allows only one forecast refresh at a time.
+- A database-enforced partial unique index permits only one `running` forecast
+  per dataset scope across Render instances; the process-wide queue serializes
+  Python execution inside an instance.
 - Sequential district Prophet execution so the backend runs no more than one Python forecast child process at a time.
-- Forecast queue-wait and execution-duration logging for Render monitoring.
+- Durable job IDs, bounded request/process/overall timeouts, and forecast
+  queue-wait and execution-duration logging support client polling and Render
+  monitoring without indefinitely pending loading toasts.
 
 ### Notifications and Activity
 
@@ -146,6 +154,24 @@ The backend is the source of truth. Both the React frontend and Flutter app call
 - Mark all notifications read.
 - Notification creation service used by access requests, reports, dataset uploads, prediction runs, and password resets.
 - Activity log creation for important backend events and dashboard recent-activity display.
+
+### Error Handling and Information Disclosure
+
+- Every request receives an `ERR-XXXXXXXX` identifier through the
+  `X-Request-ID` header; unexpected HTTP errors return the same identifier.
+- Error responses use a standardized `success`, `code`, and `message` envelope.
+  Server failures are mapped to safe module-specific messages while expected
+  validation and authentication feedback remains actionable.
+- Structured server logs retain stack traces, request method, route, error code,
+  and authenticated user ID. Credentials, bearer tokens, JWTs, and MongoDB URI
+  credentials are redacted; request bodies and query values are not logged.
+- Upload validation details are allowlisted and sanitized. Historical dataset
+  and prediction error strings are sanitized before being returned.
+- React render failures use a global recovery boundary. Web toasts/error states
+  and Flutter snackbars pass exception text through shared disclosure filters.
+- Leakage checks cover dashboard/mobile, datasets, reports, heatmap, analytics,
+  predictions, users, authentication, safe validation feedback, and historical
+  Prophet payloads.
 
 ### React Admin Frontend
 

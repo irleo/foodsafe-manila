@@ -4,12 +4,18 @@ import { createHash } from "crypto";
 import { pipeline } from "stream/promises";
 import mongoose from "mongoose";
 import Dataset from "../models/Dataset.js";
+import PredictionRun from "../models/PredictionRun.js";
 import { paginationMeta, parsePagination } from "../utils/pagination.js";
 import { logActivity } from "../utils/logActivity.js";
 import { importOfficialCasesXlsx } from "../services/officialCaseImportService.js";
 import { refreshMonthlyDistrictPredictions } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
 import { createNotification } from "../services/notificationService.js";
 import { resolveCumulativeDatasetContext } from "../services/cumulativeOfficialCaseService.js";
+import {
+  isSafePublicMessage,
+  sanitizeValidationErrors,
+} from "../middleware/errorHandler.js";
+import { logServerError } from "../utils/serverLogger.js";
 import {
   deleteDatasetObject,
   getDatasetObject,
@@ -20,6 +26,91 @@ const OFFICIAL_PROVIDER_TYPE = "cesu";
 const OFFICIAL_PROVIDER_NAME = "CESU";
 const OFFICIAL_TEMPLATE_STORAGE_KEY = "templates/FoodSafe_Template.xlsx";
 const XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const PREDICTION_GRANULARITY = "monthly_disease_district_cases";
+const DEFAULT_PREDICTION_REFRESH_TIMEOUT_MS = 12 * 60 * 1000;
+
+function predictionRefreshTimeoutMs() {
+  const parsed = Number.parseInt(process.env.PREDICTION_REFRESH_TIMEOUT_MS, 10);
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : DEFAULT_PREDICTION_REFRESH_TIMEOUT_MS;
+}
+
+async function startDatasetPredictionRefresh(datasetId) {
+  let job;
+  try {
+    job = await PredictionRun.create({
+      model: "prophet",
+      granularity: PREDICTION_GRANULARITY,
+      datasetScope: datasetId,
+      basisDatasetId: datasetId,
+      trigger: "official_upload",
+      status: "running",
+      startedAt: new Date(),
+    });
+  } catch (error) {
+    if (error?.code === 11000) {
+      console.log(
+        "Prediction refresh already active for datasetId:",
+        String(datasetId),
+      );
+      return;
+    }
+    logServerError(error, {
+      code: "PREDICTION_JOB_CREATE_FAILED",
+      route: "dataset:upload",
+    });
+    return;
+  }
+
+  const timeoutMs = predictionRefreshTimeoutMs();
+  const abortController = new AbortController();
+  const timeout = setTimeout(() => {
+    abortController.abort(
+      new Error(`Prediction refresh exceeded its ${timeoutMs} ms time limit.`),
+    );
+  }, timeoutMs);
+  timeout.unref?.();
+
+  void refreshMonthlyDistrictPredictions({
+    trigger: "official_upload",
+    datasetId,
+    predictionRunId: job._id,
+    horizonMonths: 1,
+    force: true,
+    signal: abortController.signal,
+  })
+    .then((saved) => {
+      console.log(
+        "PredictionRun saved:",
+        saved?._id?.toString?.() || saved?._id || "(unknown)",
+      );
+    })
+    .catch(async (error) => {
+      logServerError(error, {
+        code: "PREDICTION_REFRESH_FAILED",
+        route: "dataset:upload",
+      });
+      try {
+        await PredictionRun.updateOne(
+          { _id: job._id, status: "running" },
+          {
+            $set: {
+              status: "failed",
+              finishedAt: new Date(),
+              errorMessage: "Prediction refresh could not be completed.",
+            },
+          },
+        );
+      } catch (updateError) {
+        logServerError(updateError, {
+          code: "PREDICTION_STATUS_UPDATE_FAILED",
+          route: "dataset:upload",
+        });
+      }
+    })
+    .finally(() => clearTimeout(timeout));
+}
 
 function calculateFileSha256(buffer) {
   return createHash("sha256").update(buffer).digest("hex");
@@ -258,32 +349,18 @@ export const uploadDataset = async (req, res) => {
       },
     });
 
-    // Non-blocking prediction refresh. Upload succeeds even if prediction fails.
+    // Create the durable job before responding so manual refreshes reuse it.
     console.log(
       "Starting monthly district prediction refresh for datasetId:",
       result.datasetId,
     );
-    refreshMonthlyDistrictPredictions({
-      trigger: "official_upload",
-      datasetId: result.datasetId,
-      horizonMonths: 1,
-      force: true,
-    })
-      .then((saved) => {
-        console.log(
-          "PredictionRun saved:",
-          saved?._id?.toString?.() || saved?._id || "(unknown)",
-        );
-      })
-      .catch((e) => {
-        console.error("Prediction refresh failed:", e?.message || e);
-      });
+    await startDatasetPredictionRefresh(result.datasetId);
 
     return res.status(201).json(result);
   } catch (error) {
     if (uploadedStorageKey) {
       await deleteDatasetObject(uploadedStorageKey).catch((cleanupError) => {
-        console.error("Failed to remove orphaned R2 object:", cleanupError?.message || cleanupError);
+        logRequestError(cleanupError, req, "DATASET_STORAGE_CLEANUP_ERROR");
       });
     }
 
@@ -295,9 +372,9 @@ export const uploadDataset = async (req, res) => {
 
     if (dataset) {
       dataset.status = "failed";
-      dataset.errorMessage = error.message || "Upload failed.";
+      dataset.errorMessage = "The file could not be processed.";
       await dataset.save().catch((saveError) => {
-        console.error("Failed to mark dataset as failed:", saveError?.message || saveError);
+        logRequestError(saveError, req, "DATASET_STATUS_UPDATE_ERROR");
       });
       await createNotification({
         type: "dataset_failed",
@@ -318,19 +395,33 @@ export const uploadDataset = async (req, res) => {
         },
       });
     }
-    return res.status(500).json({ message: error.message });
+    logServerError(error, {
+      errorId: req.errorId,
+      code: "DATASET_UPLOAD_ERROR",
+      method: req.method,
+      route: req.baseUrl,
+      userId: req.user?.id,
+    });
+    return res.status(500).json({
+      code: "DATASET_SERVICE_ERROR",
+      message: "The file could not be processed.",
+    });
   }
 };
 
 export const handleDatasetUploadError = async (err, req, res, next) => {
   if (!err) return next();
+  const reason = err?.code === "LIMIT_FILE_SIZE"
+    ? "The Excel workbook must not exceed 25 MB."
+    : isSafePublicMessage(err?.message)
+      ? err.message
+      : "The file could not be processed.";
 
   try {
     const name = String(req.body?.name || "").trim() || "Unnamed upload";
     const originalFileName =
       req.file?.originalname || String(req.body?.originalFileName || "unknown");
     const mimeType = req.file?.mimetype || String(req.body?.mimeType || "");
-    const reason = err?.message || "Upload rejected.";
     const failed = await Dataset.create({
       name,
       dataSource: "official_upload",
@@ -372,10 +463,10 @@ export const handleDatasetUploadError = async (err, req, res, next) => {
       },
     });
   } catch (saveErr) {
-    console.error("Failed to persist upload rejection:", saveErr?.message || saveErr);
+    logRequestError(saveErr, req, "DATASET_REJECTION_PERSIST_ERROR");
   }
 
-  return res.status(400).json({ message: err?.message || "Upload rejected." });
+  return res.status(400).json({ message: reason });
 };
 
 /**
@@ -445,13 +536,18 @@ export const listDatasets = async (req, res) => {
         : null;
       return {
         ...entry,
+        errorMessage: isSafePublicMessage(entry.errorMessage)
+          ? entry.errorMessage
+          : entry.status === "failed"
+            ? "The file could not be processed."
+            : null,
         analyticalCoverageStart: cumulative?.coverageStart || null,
         analyticalCoverageEnd: cumulative?.coverageEnd || null,
         cumulativeUploadCount: cumulative?.uploadCount || 0,
         validationErrorCount: Number.isFinite(entry.validationErrorCount)
           ? entry.validationErrorCount
           : validationErrors.length,
-        validationErrors: validationErrors.slice(0, 5),
+        validationErrors: sanitizeValidationErrors(validationErrors).slice(0, 5),
       };
     }));
 
@@ -460,7 +556,14 @@ export const listDatasets = async (req, res) => {
       pagination: paginationMeta({ page, limit, total }),
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logServerError(error, {
+      errorId: req.errorId,
+      code: "DATASET_LIST_ERROR",
+      method: req.method,
+      route: req.baseUrl,
+      userId: req.user?.id,
+    });
+    res.status(500).json({ message: "The dataset request could not be completed." });
   }
 };
 
@@ -508,10 +611,12 @@ export const downloadDataset = async (req, res) => {
       || error?.$metadata?.httpStatusCode === 404;
     if (!res.headersSent) {
       return res.status(notFound ? 404 : 500).json({
-        message: notFound ? "Stored dataset file is unavailable." : error.message,
+        message: notFound
+          ? "Stored dataset file is unavailable."
+          : "The dataset could not be downloaded.",
       });
     }
-    console.error("Dataset download failed after response started:", error?.message || error);
+    logRequestError(error, req, "DATASET_DOWNLOAD_STREAM_ERROR");
   }
 };
 
@@ -529,10 +634,10 @@ export const downloadOfficialCaseTemplate = async (req, res) => {
     if (!res.headersSent) {
       return res.status(notFound ? 404 : 500).json({
         message: notFound
-          ? `Template not found in R2 at ${OFFICIAL_TEMPLATE_STORAGE_KEY}.`
-          : err?.message || "Server error",
+          ? "Template is not available."
+          : "The template could not be downloaded.",
       });
     }
-    console.error("Template download failed after response started:", err?.message || err);
+    logRequestError(err, req, "TEMPLATE_DOWNLOAD_STREAM_ERROR");
   }
 };
