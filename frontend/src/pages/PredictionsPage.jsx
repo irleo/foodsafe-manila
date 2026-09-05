@@ -5,7 +5,11 @@ import { useAuth } from "../context/AuthContext";
 import { notify } from "../utils/toast";
 import { formatStatusLabel } from "../utils/formatStatusLabel";
 import { getErrorMessage } from "../utils/errors";
-import { fetchLatestPredictions, refreshPredictions } from "../api/predictions";
+import {
+  fetchLatestPredictions,
+  refreshPredictions,
+  requestPredictionRefresh,
+} from "../api/predictions";
 import { useLatestDatasetId } from "../hooks/useLatestDatasetId";
 import DataCoverageNotice from "../components/DataCoverageNotice";
 import YearlyActualVsPredictedLineChart from "../components/charts/YearlyActualVsPredictedLineChart";
@@ -19,6 +23,7 @@ import {
 } from "../utils/predictionModelView";
 
 const HISTORY_ROWS_PER_PAGE = 12;
+const FORECAST_STATUS_POLL_MS = 3_000;
 
 function formatMonth(value) {
   const month = Number(value);
@@ -178,35 +183,81 @@ export default function Predictions() {
   useEffect(() => {
     if (!token) return undefined;
     let isMounted = true;
+    let pollTimer = null;
+    let isInitialRequest = true;
+    const resumeAttempts = new Set();
 
-    (async () => {
+    const loadLatestPrediction = async () => {
       try {
-        setLoading(true);
-        setEmptyMsg("");
+        if (isInitialRequest) {
+          setLoading(true);
+          setEmptyMsg("");
+        }
         const response = await fetchLatestPredictions(token);
         if (!isMounted) return;
+
+        const refreshJob = response?.refreshJob;
+        const refreshIsRunning = refreshJob?.status === "running";
         if (response?.hasPrediction === false) {
           setRun(null);
-          setEmptyMsg(
-            response.message ||
-              "No saved monthly district prediction run found.",
-          );
+          if (refreshIsRunning) {
+            setEmptyMsg("A forecast for the latest dataset is being generated. This may take several minutes, and the page will update automatically.");
+          } else if (refreshJob?.status === "failed") {
+            setEmptyMsg(refreshJob.errorMessage || "Forecast generation failed. Refresh the forecast to try again.");
+          } else {
+            setEmptyMsg(
+              response.message ||
+                "No saved monthly district prediction run found.",
+            );
+          }
         } else {
           setRun(response);
+          setEmptyMsg("");
+        }
+
+        if (refreshIsRunning) {
+          if (
+            canRefresh
+            && refreshJob.workerActive === false
+            && refreshJob.jobId
+            && !resumeAttempts.has(refreshJob.jobId)
+          ) {
+            resumeAttempts.add(refreshJob.jobId);
+            try {
+              await requestPredictionRefresh(token, {
+                datasetId: refreshJob.datasetId,
+                forecastHorizonMonths: 1,
+              });
+            } catch (error) {
+              if (isMounted) {
+                setEmptyMsg(
+                  getErrorMessage(error, "The interrupted forecast could not be resumed."),
+                );
+              }
+            }
+          }
+          pollTimer = window.setTimeout(
+            loadLatestPrediction,
+            FORECAST_STATUS_POLL_MS,
+          );
         }
       } catch (error) {
         if (!isMounted) return;
         setRun(null);
         setEmptyMsg(getErrorMessage(error, "Prediction data is currently unavailable."));
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted && isInitialRequest) setLoading(false);
+        isInitialRequest = false;
       }
-    })();
+    };
+
+    void loadLatestPrediction();
 
     return () => {
       isMounted = false;
+      if (pollTimer) window.clearTimeout(pollTimer);
     };
-  }, [token]);
+  }, [canRefresh, token]);
 
   const onRefresh = () => {
     const refresh = async () => {
@@ -238,7 +289,7 @@ export default function Predictions() {
     };
 
     notify.promise(refresh(), {
-      loading: "Checking the latest dataset and saved forecasts…",
+      loading: "Refreshing forecasts. This may take several minutes…",
       success: (result) =>
         result?.alreadyUpToDate
           ? "Saved forecasts are already up to date"
@@ -350,17 +401,24 @@ export default function Predictions() {
         </div>
         <div className="flex flex-col gap-2 sm:items-end">
           {canRefresh && (
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={isGenerating || !token}
-              className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              <span aria-hidden="true">↻</span>
-              {isGenerating
-                ? "Refreshing forecast..."
-                : "Refresh Forecast"}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={onRefresh}
+                disabled={isGenerating || !token}
+                className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                <span aria-hidden="true">↻</span>
+                {isGenerating
+                  ? "Refreshing forecast..."
+                  : "Refresh Forecast"}
+              </button>
+              {isGenerating && (
+                <p role="status" className="max-w-64 text-xs text-gray-500 sm:text-right">
+                  This may take several minutes.
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>

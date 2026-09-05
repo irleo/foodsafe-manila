@@ -196,7 +196,7 @@ export default function OfficialDatasetsTab() {
                 <span className="font-medium">Raw health office XLSX</span>: multi-sheet, each sheet = disease. Needs “Report date”, “District”, “Case Classification”.
               </li>
               <li>
-                <span className="font-medium">FoodSafe template XLSX</span>: enter district, barangay, disease, date of onset, classification, cases, and optional date reported. FoodSafe calculates morbidity fields automatically.
+                <span className="font-medium">FoodSafe template XLSX</span>: enter district, barangay, disease, report date, classification, and cases. FoodSafe calculates calendar and morbidity fields from the CESU report date.
               </li>
             </ul>
           </div>

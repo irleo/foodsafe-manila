@@ -93,7 +93,7 @@ def run_forecast(series: list, horizon_months: int, backtest_months: int) -> dic
         raise ValueError(f"need_at_least_{MIN_TRAINING_MONTHS}_months")
     if horizon_months < 1 or horizon_months > 36:
         raise ValueError("invalid_horizonMonths")
-    if backtest_months < 1 or backtest_months > 120:
+    if backtest_months < 0 or backtest_months > 120:
         raise ValueError("invalid_backtestMonths")
 
     train_df = pd.DataFrame(

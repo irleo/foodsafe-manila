@@ -1,7 +1,10 @@
 import mongoose from "mongoose";
 import PredictionRun from "../models/PredictionRun.js";
 import Dataset from "../models/Dataset.js";
-import { refreshMonthlyDistrictPredictions } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
+import {
+  isMonthlyDistrictPredictionRefreshActive,
+  refreshMonthlyDistrictPredictions,
+} from "../services/predictions/refreshMonthlyDistrictPredictions.js";
 import { logServerError } from "../utils/serverLogger.js";
 import { isSafePublicMessage } from "../middleware/errorHandler.js";
 
@@ -55,6 +58,12 @@ function publicRefreshJob(run) {
     jobId: String(run._id),
     datasetId: run.basisDatasetId ? String(run.basisDatasetId) : null,
     status: run.status === "success" ? "succeeded" : run.status,
+    workerActive:
+      run.status === "running"
+      && isMonthlyDistrictPredictionRefreshActive({
+        datasetId: run.basisDatasetId,
+        predictionRunId: run._id,
+      }),
     requestedAt: run.startedAt || run.createdAt || null,
     completedAt: run.finishedAt || null,
     errorMessage: isSafePublicMessage(run.errorMessage)
@@ -122,6 +131,56 @@ async function latestRefresh(datasetScope) {
   }
 
   return run;
+}
+
+function launchRefreshWorker({ job, datasetId, horizonMonths, trigger, req }) {
+  const timeoutMs = refreshTimeoutMs();
+  const abortController = new AbortController();
+  const timeout = setTimeout(() => {
+    abortController.abort(
+      new Error(`Prediction refresh exceeded its ${timeoutMs} ms time limit.`),
+    );
+  }, timeoutMs);
+  timeout.unref?.();
+
+  void refreshMonthlyDistrictPredictions({
+    trigger,
+    datasetId,
+    predictionRunId: job._id,
+    horizonMonths,
+    force: true,
+    signal: abortController.signal,
+  })
+    .catch(async (error) => {
+      logServerError(error, {
+        errorId: req.errorId,
+        code: "PREDICTION_REFRESH_FAILED",
+        method: req.method,
+        route: req.baseUrl,
+        userId: req.user?.id,
+      });
+      try {
+        await PredictionRun.updateOne(
+          { _id: job._id, status: "running" },
+          {
+            $set: {
+              status: "failed",
+              finishedAt: new Date(),
+              errorMessage: "Prediction refresh could not be completed.",
+            },
+          },
+        );
+      } catch (updateError) {
+        logServerError(updateError, {
+          errorId: req.errorId,
+          code: "PREDICTION_STATUS_UPDATE_FAILED",
+          method: req.method,
+          route: req.baseUrl,
+          userId: req.user?.id,
+        });
+      }
+    })
+    .finally(() => clearTimeout(timeout));
 }
 
 export const getPredictions = async (req, res) => {
@@ -197,10 +256,26 @@ export const refreshPredictions = async (req, res) => {
     const datasetId = dataset._id;
     const existing = await latestRefresh(datasetId);
     if (existing?.status === "running") {
+      const workerIsActive = isMonthlyDistrictPredictionRefreshActive({
+        datasetId,
+        predictionRunId: existing._id,
+      });
+      if (!workerIsActive) {
+        launchRefreshWorker({
+          job: existing,
+          datasetId,
+          horizonMonths: Number.isFinite(horizonMonths) ? horizonMonths : 1,
+          trigger: "manual",
+          req,
+        });
+      }
       return res.status(202).json({
         success: true,
         accepted: true,
-        message: "The global forecast refresh is already running.",
+        resumed: !workerIsActive,
+        message: workerIsActive
+          ? "The global forecast refresh is already running."
+          : "The interrupted forecast worker has been resumed.",
         refreshJob: publicRefreshJob(existing),
       });
     }
@@ -253,53 +328,13 @@ export const refreshPredictions = async (req, res) => {
       });
     }
 
-    const timeoutMs = refreshTimeoutMs();
-    const abortController = new AbortController();
-    const timeout = setTimeout(() => {
-      abortController.abort(
-        new Error(`Prediction refresh exceeded its ${timeoutMs} ms time limit.`),
-      );
-    }, timeoutMs);
-    timeout.unref?.();
-
-    void refreshMonthlyDistrictPredictions({
-      trigger: "manual",
+    launchRefreshWorker({
+      job,
       datasetId,
-      predictionRunId: job._id,
       horizonMonths: Number.isFinite(horizonMonths) ? horizonMonths : 1,
-      force: true,
-      signal: abortController.signal,
-    })
-      .catch(async (error) => {
-        logServerError(error, {
-          errorId: req.errorId,
-          code: "PREDICTION_REFRESH_FAILED",
-          method: req.method,
-          route: req.baseUrl,
-          userId: req.user?.id,
-        });
-        try {
-          await PredictionRun.updateOne(
-            { _id: job._id, status: "running" },
-            {
-              $set: {
-                status: "failed",
-                finishedAt: new Date(),
-                errorMessage: "Prediction refresh could not be completed.",
-              },
-            },
-          );
-        } catch (updateError) {
-          logServerError(updateError, {
-            errorId: req.errorId,
-            code: "PREDICTION_STATUS_UPDATE_FAILED",
-            method: req.method,
-            route: req.baseUrl,
-            userId: req.user?.id,
-          });
-        }
-      })
-      .finally(() => clearTimeout(timeout));
+      trigger: "manual",
+      req,
+    });
 
     return res.status(202).json({
       success: true,

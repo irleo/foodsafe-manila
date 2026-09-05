@@ -47,7 +47,7 @@ export async function fetchLatestPredictions(
  * @param {string} token
  * @param {{ datasetId?: string, forecastHorizonMonths?: number }} [opts]
  */
-export async function refreshPredictions(
+export async function requestPredictionRefresh(
   token,
   { datasetId, forecastHorizonMonths } = {},
 ) {
@@ -62,6 +62,17 @@ export async function refreshPredictions(
   if (!res.ok) {
     throw new Error(j.message || "Prediction refresh failed");
   }
+  return j;
+}
+
+export async function refreshPredictions(
+  token,
+  { datasetId, forecastHorizonMonths } = {},
+) {
+  const j = await requestPredictionRefresh(token, {
+    datasetId,
+    forecastHorizonMonths,
+  });
   if (!j.accepted) return j;
 
   const jobId = j.refreshJob?.jobId;
@@ -89,6 +100,12 @@ export async function refreshPredictions(
       );
     }
     if (refreshJob.status === "succeeded") return latest;
+    if (refreshJob.status === "running" && refreshJob.workerActive === false) {
+      await requestPredictionRefresh(token, {
+        datasetId: pollDatasetId,
+        forecastHorizonMonths,
+      });
+    }
   }
   throw new Error(
     "Prediction refresh exceeded its time limit. Please check the Render logs.",

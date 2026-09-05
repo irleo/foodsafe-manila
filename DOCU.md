@@ -85,7 +85,7 @@ The backend is the source of truth. Both the React frontend and Flutter app call
 ### Official Dataset Uploads
 
 - XLSX upload flow for raw health-office workbooks and the simplified processed template.
-- The processed sheet accepts `district`, `barangay`, `disease`, `date_of_onset`, `case_classification`, `cases`, and optional `date_reported`; city, calendar fields, DOH morbidity year/week, Sunday week start, and source are derived server-side from onset.
+- The processed sheet accepts `district`, `barangay`, `disease`, `report_date`, `case_classification`, and `cases`; city, calendar fields, DOH morbidity year/week, Sunday week start, and source are derived server-side from the CESU report date.
 - Strict supported-disease, district/barangay, date, positive-whole-number, exact-row duplicate, and file-hash duplicate validation.
 - Private Cloudflare R2 storage for `templates/FoodSafe_Template.xlsx` and validated originals under `datasets/<dataset-id>/`; MongoDB stores object metadata and normalized records.
 - Authenticated template and original-dataset streaming downloads with client-side failure toasts.
@@ -462,7 +462,7 @@ Missing or unclear:
 - `backend/services/emailService.js`: SMTP email sending for OTP flows.
 - `backend/services/notificationService.js`: Notification creation helpers.
 - `backend/services/officialCaseImportService.js`: Official XLSX detection, validation, import, aggregation, and dataset persistence.
-- `backend/services/officialCaseNormalizer.js`: Raw/template normalization, including onset-based calendar and morbidity derivation.
+- `backend/services/officialCaseNormalizer.js`: Raw/template normalization, including report-date-based calendar and morbidity derivation.
 - `backend/services/r2StorageService.js`: Private R2 object upload, download, and orphan cleanup.
 - `backend/services/statisticsCaseBuilders.js`: Analytics/statistics builders from official cases.
 - `backend/services/validateDatasetFile.js`: Generic dataset file validation helper.

@@ -23,6 +23,14 @@ function normalizeTemplateRowKeys(row = {}) {
   );
 }
 
+function worksheetHeaders(sheet) {
+  const [headerRow = []] = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: "",
+  });
+  return Array.isArray(headerRow) ? headerRow : [];
+}
+
 function rawSheetHasRequiredHeaders(rows) {
   const headers = new Set(Object.keys(rows[0] || {}).map(normalizeHeaderKey));
   return ["report_date", "district", "case_classification"]
@@ -31,10 +39,8 @@ function rawSheetHasRequiredHeaders(rows) {
 
 function detectWorkbookFormat(workbook) {
   for (const sheetName of workbook?.SheetNames || []) {
-    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
-    if (!rows.length) continue;
-    const headers = new Set(Object.keys(rows[0] || {}).map(normalizeHeaderKey));
-    if (["city", "district", "barangay", "disease", "year", "month", "case_classification", "cases"]
+    const headers = new Set(worksheetHeaders(workbook.Sheets[sheetName]).map(normalizeHeaderKey));
+    if (["district", "barangay", "disease", "report_date", "case_classification", "cases"]
       .every((header) => headers.has(header))) {
       return { ok: true, formatType: "processed_template", sheetName };
     }

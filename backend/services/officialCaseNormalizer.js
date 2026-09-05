@@ -207,12 +207,8 @@ export function normalizeTemplateRow(row = {}) {
     row.barangay ?? row.Barangay,
   );
   const disease = normalizeDisease(row.disease);
-  const dateOfOnset = parseExcelDate(row.date_of_onset ?? row.dateOfOnset);
-  const dateReportedInput = row.date_reported ?? row.dateReported;
-  const hasDateReported = dateReportedInput !== undefined
-    && dateReportedInput !== null
-    && String(dateReportedInput).trim() !== "";
-  const dateReported = hasDateReported ? parseExcelDate(dateReportedInput) : null;
+  const reportDateInput = row.report_date ?? row.reportDate;
+  const reportDate = parseExcelDate(reportDateInput);
   const cls = normalizeCaseClassification(
     row.case_classification ?? row.caseClassification,
   );
@@ -248,19 +244,11 @@ export function normalizeTemplateRow(row = {}) {
     };
   if (!disease)
     return { ok: false, field: "disease", message: "Disease is missing or unsupported." };
-  if (!dateOfOnset)
-    return { ok: false, field: "dateOfOnset", message: "Date of onset must be a valid Excel date or YYYY-MM-DD value." };
-  const year = dateOfOnset.getUTCFullYear();
+  if (!reportDate)
+    return { ok: false, field: "reportDate", message: "Report date must be a valid Excel date or YYYY-MM-DD value." };
+  const year = reportDate.getUTCFullYear();
   if (year < MIN_YEAR || year > MAX_YEAR)
-    return { ok: false, field: "dateOfOnset", message: `Date of onset year must be ${MIN_YEAR}–${MAX_YEAR}.` };
-  if (hasDateReported && !dateReported)
-    return { ok: false, field: "dateReported", message: "Date reported must be a valid Excel date or YYYY-MM-DD value." };
-  if (
-    dateReported
-    && (dateReported.getUTCFullYear() < MIN_YEAR || dateReported.getUTCFullYear() > MAX_YEAR)
-  ) {
-    return { ok: false, field: "dateReported", message: `Date reported year must be ${MIN_YEAR}–${MAX_YEAR}.` };
-  }
+    return { ok: false, field: "reportDate", message: `Report date year must be ${MIN_YEAR}–${MAX_YEAR}.` };
   if (!cls)
     return {
       ok: false,
@@ -274,7 +262,7 @@ export function normalizeTemplateRow(row = {}) {
       message: "Cases must be a positive whole number.",
     };
 
-  const weekData = getDohMorbidityWeek(dateOfOnset);
+  const weekData = getDohMorbidityWeek(reportDate);
 
   return {
     ok: true,
@@ -285,14 +273,13 @@ export function normalizeTemplateRow(row = {}) {
       barangayNo,
       disease,
       year,
-      month: dateOfOnset.getUTCMonth() + 1,
+      month: reportDate.getUTCMonth() + 1,
       epidemiologicalYear: weekData.epidemiologicalYear,
       epidemiologicalWeek: weekData.epidemiologicalWeek,
       weekStartDate: weekData.weekStartDate,
-      dateOfOnset,
-      dateReported,
-      surveillanceDate: dateOfOnset,
-      surveillanceDateBasis: "onset_date",
+      dateReported: reportDate,
+      surveillanceDate: reportDate,
+      surveillanceDateBasis: "report_date",
       caseClassification: cls,
       cases,
       source: "official",

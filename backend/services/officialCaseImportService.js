@@ -15,7 +15,7 @@ const TEMPLATE_REQUIRED = [
   "district",
   "barangay",
   "disease",
-  "date_of_onset",
+  "report_date",
   "case_classification",
   "cases",
 ];
@@ -35,6 +35,14 @@ function hasAllHeaders(headers = [], required = []) {
   return required.every((r) => set.has(normalizeHeaderKey(r)));
 }
 
+function worksheetHeaders(sheet) {
+  const [headerRow = []] = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: "",
+  });
+  return Array.isArray(headerRow) ? headerRow : [];
+}
+
 export function detectOfficialCaseXlsxFormat(wb) {
   const sheetNames = wb?.SheetNames || [];
   if (!sheetNames.length)
@@ -42,9 +50,7 @@ export function detectOfficialCaseXlsxFormat(wb) {
 
   // Template: find any sheet containing all required template columns
   for (const sn of sheetNames) {
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: "" });
-    if (!rows.length) continue;
-    const headers = Object.keys(rows[0] || {});
+    const headers = worksheetHeaders(wb.Sheets[sn]);
     if (hasAllHeaders(headers, TEMPLATE_REQUIRED)) {
       return { ok: true, formatType: "processed_template", sheetName: sn };
     }
@@ -52,9 +58,7 @@ export function detectOfficialCaseXlsxFormat(wb) {
 
   // Raw: any sheet containing raw required columns
   for (const sn of sheetNames) {
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: "" });
-    if (!rows.length) continue;
-    const headers = Object.keys(rows[0] || {});
+    const headers = worksheetHeaders(wb.Sheets[sn]);
     if (hasAllHeaders(headers, RAW_REQUIRED)) {
       return { ok: true, formatType: "raw_health_office" };
     }
@@ -76,7 +80,7 @@ function validateRawWorkbook(wb) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: "" });
     if (!rows.length) continue;
     totalRows += rows.length;
-    const headers = Object.keys(rows[0] || {});
+    const headers = worksheetHeaders(wb.Sheets[sn]);
     if (!hasAllHeaders(headers, RAW_REQUIRED)) continue;
     validSheets += 1;
   }
@@ -99,9 +103,8 @@ function validateTemplateWorkbook(wb, preferredSheetName) {
     (preferredSheetName && wb.SheetNames.includes(preferredSheetName)
       ? preferredSheetName
       : wb.SheetNames.find((sn) => {
-          const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: "" });
-          const headers = Object.keys(rows[0] || {});
-          return rows.length && hasAllHeaders(headers, TEMPLATE_REQUIRED);
+          const headers = worksheetHeaders(wb.Sheets[sn]);
+          return hasAllHeaders(headers, TEMPLATE_REQUIRED);
         })) || null;
 
   if (!sheetName) {
@@ -523,8 +526,7 @@ export async function importOfficialCasesXlsx({
         n.value.district,
         n.value.barangayNo,
         n.value.disease,
-        n.value.dateOfOnset?.toISOString?.() || "",
-        n.value.dateReported?.toISOString?.() || "",
+        n.value.surveillanceDate?.toISOString?.() || "",
         n.value.caseClassification,
         n.value.cases,
       ].join("|");
