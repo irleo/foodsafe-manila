@@ -225,6 +225,22 @@ class ApiService {
     return ApiClient.decodeMap(response);
   }
 
+  static Future<Map<String, dynamic>> getInsightsDistribution({
+    required String period,
+  }) async {
+    final response = await ApiClient.get(
+      '/official-cases/analytics',
+      query: {'period': period},
+    );
+
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Failed to load insights data',
+    );
+
+    return ApiClient.decodeMap(response);
+  }
+
   static Future<Map<String, dynamic>> fetchLatestPredictions({
     String? datasetId,
     String? districtKey,
