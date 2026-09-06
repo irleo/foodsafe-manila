@@ -133,7 +133,7 @@ export default function ResetPasswordPage() {
 
               <Link
                 to="/login"
-                className="block w-full text-center bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors"
+                className="block w-full text-center bg-[#134c8c] text-white py-3 rounded-lg hover:bg-[#0c3a6b] transition-colors"
               >
                 Go to Login
               </Link>
@@ -141,7 +141,7 @@ export default function ResetPasswordPage() {
           ) : !form.email.trim() || !form.otp.trim() ? (
             <Link
               to="/forgot-password"
-              className="block w-full text-center bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors"
+              className="block w-full text-center bg-[#134c8c] text-white py-3 rounded-lg hover:bg-[#0c3a6b] transition-colors"
             >
               Back to Forgot Password
             </Link>
@@ -164,7 +164,7 @@ export default function ResetPasswordPage() {
                   <input
                     id="password"
                     type={show1 ? "text" : "password"}
-                    className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                    className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent transition-all ${
                       form.password && !passwordValidation.isValid
                         ? "border-red-300"
                         : "border-gray-300"
@@ -222,7 +222,7 @@ export default function ResetPasswordPage() {
                   <input
                     id="confirm"
                     type={show2 ? "text" : "password"}
-                    className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                    className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent transition-all ${
                       passwordsMatch ? "border-gray-300" : "border-red-300"
                     }`}
                     placeholder="Confirm new password"
@@ -262,7 +262,7 @@ export default function ResetPasswordPage() {
                 disabled={
                   loading || !passwordValidation.isValid || !passwordsMatch
                 }
-                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-[#134c8c] text-white py-3 rounded-lg hover:bg-[#0c3a6b] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading && (
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -271,7 +271,7 @@ export default function ResetPasswordPage() {
               </button>
 
               <div className="text-center text-sm text-gray-600">
-                <Link to="/login" className="text-blue-600 hover:text-blue-700">
+                <Link to="/login" className="text-[#134c8c] hover:text-[#0c3a6b]">
                   Back to Login
                 </Link>
               </div>

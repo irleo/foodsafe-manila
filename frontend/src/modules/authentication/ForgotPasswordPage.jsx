@@ -173,7 +173,7 @@ export default function ForgotPasswordPage() {
                   <input
                     id="email"
                     type="email"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent transition-all"
                     placeholder="user@sample.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -190,7 +190,7 @@ export default function ForgotPasswordPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-[#134c8c] text-white py-3 rounded-lg hover:bg-[#0c3a6b] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading && (
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -200,7 +200,7 @@ export default function ForgotPasswordPage() {
 
               <div className="text-center text-sm text-gray-600">
                 Remembered your password?{" "}
-                <Link to="/login" className="text-blue-600 hover:text-blue-700">
+                <Link to="/login" className="text-[#134c8c] hover:text-[#0c3a6b]">
                   Login
                 </Link>
               </div>
@@ -228,7 +228,7 @@ export default function ForgotPasswordPage() {
                 type="button"
                 onClick={() => setShowOtpModal(true)}
                 disabled={loading}
-                className="inline-flex items-center justify-center w-full px-4 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed mb-3"
+                className="inline-flex items-center justify-center w-full px-4 py-3 rounded-lg bg-[#134c8c] text-white hover:bg-[#0c3a6b] transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed mb-3"
               >
                 Enter OTP Code
               </button>
@@ -249,7 +249,7 @@ export default function ForgotPasswordPage() {
               </button>
 
               <div className="text-center text-sm text-gray-600">
-                <Link to="/login" className="text-blue-600 hover:text-blue-700">
+                <Link to="/login" className="text-[#134c8c] hover:text-[#0c3a6b]">
                   Back to Login
                 </Link>
               </div>
@@ -278,7 +278,7 @@ export default function ForgotPasswordPage() {
                   value={digit}
                   onChange={(e) => handleOtpChange(index, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                  className="h-11 min-w-0 w-full text-center text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="h-11 min-w-0 w-full text-center text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent"
                   disabled={loading}
                 />
               ))}
@@ -295,7 +295,7 @@ export default function ForgotPasswordPage() {
               <button
                 type="button"
                 onClick={handleVerifyOtp}
-                className="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-2 rounded-lg bg-[#134c8c] text-white hover:bg-[#0c3a6b] text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={loading}
               >
                 Verify OTP
@@ -303,7 +303,7 @@ export default function ForgotPasswordPage() {
             </div>
             <button
               type="button"
-              className="mt-3 w-full text-sm text-blue-600 hover:text-blue-700 disabled:opacity-50"
+              className="mt-3 w-full text-sm text-[#134c8c] hover:text-[#0c3a6b] disabled:opacity-50"
               disabled={loading || resendCooldown > 0}
               onClick={async () => {
                 if (resendCooldown > 0) return;

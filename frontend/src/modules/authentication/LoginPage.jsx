@@ -102,7 +102,7 @@ const LoginPage = () => {
                 <input
                   id="email"
                   type="email"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent transition-all"
                   placeholder="user@sample.com"
                   required
                   value={form.email}
@@ -123,7 +123,7 @@ const LoginPage = () => {
                   <input
                     id="password"
                     type={showPassword ? "text" : "password"}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all pr-12"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent transition-all pr-12"
                     placeholder="Enter your password"
                     required
                     value={form.password}
@@ -154,7 +154,7 @@ const LoginPage = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-[#134c8c] text-white py-3 rounded-lg hover:bg-[#0c3a6b] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading && (
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -166,7 +166,7 @@ const LoginPage = () => {
                 <label className="inline-flex items-center gap-2 text-gray-700">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="h-4 w-4 rounded border-gray-300 text-[#134c8c] focus:ring-[#134c8c]"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
                     disabled={loading}
@@ -175,7 +175,7 @@ const LoginPage = () => {
                 </label>
                 <Link
                   to="/forgot-password"
-                  className="text-blue-600 hover:text-blue-700 text-sm"
+                  className="text-[#134c8c] hover:text-[#0c3a6b] text-sm"
                 >
                   Forgot Password?
                 </Link>
@@ -189,7 +189,7 @@ const LoginPage = () => {
 
               <Link
                 to="/request-access"
-                className="block w-full text-center px-4 py-3 border-2 border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+                className="block w-full text-center px-4 py-3 border-2 border-[#134c8c] text-[#134c8c] rounded-lg hover:bg-[#e1ebf7] transition-colors"
               >
                 Request for Access
               </Link>

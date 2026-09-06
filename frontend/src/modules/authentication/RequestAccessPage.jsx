@@ -232,11 +232,11 @@ const RequestAccessPage = () => {
         backLabel="Back to login"
         contentWidth="wide"
       >
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <p className="text-sm text-blue-800 font-semibold">
+          <div className="bg-[#e1ebf7] border border-[#b8cce4] rounded-lg p-4 mb-6">
+            <p className="text-sm text-[#0c3a6b] font-semibold">
               For Health Officials & Researchers Only
             </p>
-            <p className="text-sm text-blue-700 mt-2">
+            <p className="text-sm text-[#134c8c] mt-2">
               This registration is for MHD personnel, health analysts, and
               authorized researchers who need access to the administrative
               dashboard for data analytics and outbreak monitoring.
@@ -255,16 +255,16 @@ const RequestAccessPage = () => {
           </div>
 
           {otpSent && !submitted && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-              <p className="text-sm text-blue-800 font-semibold">
+            <div className="bg-[#e1ebf7] border border-[#b8cce4] rounded-lg p-4 mb-6">
+              <p className="text-sm text-[#0c3a6b] font-semibold">
                 Verify your email address
               </p>
-              <p className="text-sm text-blue-700 mt-2">
+              <p className="text-sm text-[#134c8c] mt-2">
                 Enter the 6-digit code sent to {form.email.trim()} before
                 submitting your access request.
               </p>
               {devOtp && (
-                <p className="mt-2 text-xs text-blue-800">
+                <p className="mt-2 text-xs text-[#0c3a6b]">
                   Development OTP: <span className="font-semibold">{devOtp}</span>
                   {devOtpExpiry ? ` (expires in ${devOtpExpiry} minutes)` : ""}
                 </p>
@@ -298,7 +298,7 @@ const RequestAccessPage = () => {
                     id="username"
                     name="username"
                     type="text"
-                    className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all border-gray-300"
+                    className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent transition-all border-gray-300"
                     placeholder="Juan Dela Cruz"
                     value={form.username}
                     onChange={setField("username")}
@@ -318,7 +318,7 @@ const RequestAccessPage = () => {
                     id="email"
                     name="email"
                     type="email"
-                    className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all border-gray-300"
+                    className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent transition-all border-gray-300"
                     placeholder="your.email@agency.gov.ph or institution.edu.ph"
                     value={form.email}
                     onChange={setField("email")}
@@ -343,7 +343,7 @@ const RequestAccessPage = () => {
                       id="password"
                       name="password"
                       type={showPassword ? "text" : "password"}
-                      className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                      className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent transition-all ${
                         form.password && !passwordValidation.isValid
                           ? "border-red-400"
                           : "border-gray-300"
@@ -385,7 +385,7 @@ const RequestAccessPage = () => {
                       id="confirmPassword"
                       name="confirmPassword"
                       type={showConfirmPassword ? "text" : "password"}
-                      className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                      className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent transition-all ${
                         !passwordsMatch ? "border-red-400" : "border-gray-300"
                       }`}
                       placeholder="********"
@@ -451,7 +451,7 @@ const RequestAccessPage = () => {
                     id="organization"
                     name="organization"
                     type="text"
-                    className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all border-gray-300"
+                    className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent transition-all border-gray-300"
                     placeholder="Department of Health, WHO, etc."
                     value={form.organization}
                     onChange={setField("organization")}
@@ -471,7 +471,7 @@ const RequestAccessPage = () => {
                     id="position"
                     name="position"
                     type="text"
-                    className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all border-gray-300"
+                    className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent transition-all border-gray-300"
                     placeholder="Health Analyst, Researcher, etc."
                     value={form.position}
                     onChange={setField("position")}
@@ -488,7 +488,7 @@ const RequestAccessPage = () => {
                 <select
                   id="requestedRole"
                   name="requestedRole"
-                  className="w-full px-4 py-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all border-gray-300"
+                  className="w-full px-4 py-3 border rounded-lg bg-white focus:ring-2 focus:ring-[#134c8c] focus:border-transparent transition-all border-gray-300"
                   value={form.requestedRole}
                   onChange={setField("requestedRole")}
                   disabled={loading}
@@ -523,7 +523,7 @@ const RequestAccessPage = () => {
               type="button"
               onClick={otpSent ? () => setOtpModalOpen(true) : handleSendOtp}
               disabled={otpSent ? !canSubmit : !canRequestOtp}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full bg-[#134c8c] text-white py-3 rounded-lg hover:bg-[#0c3a6b] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading && (
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -556,7 +556,7 @@ const RequestAccessPage = () => {
               Enter the 6-digit code sent to {form.email.trim()}.
             </p>
             {devOtp && (
-              <p className="mt-2 text-xs text-blue-800 text-center">
+              <p className="mt-2 text-xs text-[#0c3a6b] text-center">
                 Development OTP: <span className="font-semibold">{devOtp}</span>
                 {devOtpExpiry ? ` (expires in ${devOtpExpiry} minutes)` : ""}
               </p>
@@ -575,7 +575,7 @@ const RequestAccessPage = () => {
                   value={digit}
                   onChange={(e) => handleOtpChange(index, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                  className="h-11 min-w-0 w-full text-center text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="h-11 min-w-0 w-full text-center text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent"
                   disabled={loading}
                 />
               ))}
@@ -591,7 +591,7 @@ const RequestAccessPage = () => {
               </button>
               <button
                 type="button"
-                className="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-2 rounded-lg bg-[#134c8c] text-white hover:bg-[#0c3a6b] text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleVerifyAndSubmit}
                 disabled={loading}
               >
@@ -600,7 +600,7 @@ const RequestAccessPage = () => {
             </div>
             <button
               type="button"
-              className="mt-3 w-full text-sm text-blue-600 hover:text-blue-700 disabled:opacity-50"
+              className="mt-3 w-full text-sm text-[#134c8c] hover:text-[#0c3a6b] disabled:opacity-50"
               disabled={loading || resendCooldown > 0}
               onClick={async () => {
                 if (resendCooldown > 0) return;
