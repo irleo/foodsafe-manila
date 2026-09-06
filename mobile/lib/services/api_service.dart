@@ -147,6 +147,7 @@ class ApiService {
     required String? exposureDistrict,
     String? exposureBarangay,
     int? exposureBarangayNo,
+    String? exposureDescription,
     required Map<String, dynamic> location,
   }) async {
     final response = await ApiClient.post(
@@ -158,6 +159,7 @@ class ApiService {
         'exposureDistrict': exposureDistrict,
         'exposureBarangay': exposureBarangay,
         'exposureBarangayNo': exposureBarangayNo,
+        'exposureDescription': exposureDescription,
         'location': location,
       },
     );

@@ -1,3 +1,4 @@
+/*
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -411,6 +412,7 @@ class AnalyticsScreenState extends State<AnalyticsScreen> {
       isDistrictLoading = false;
     });
   }
+
 
   Future<void> fetchDisease() async {
     setState(() => isDiseaseLoading = true);
@@ -1588,7 +1590,7 @@ class AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  String formatDropdownText(String item, String label) {
+  String formatDropdownText(String item, String? label) {
     const months = {
       '1': 'Jan',
       '2': 'Feb',
@@ -1729,3 +1731,5 @@ class AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 }
+
+*/

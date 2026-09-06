@@ -13,19 +13,15 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Session.initialize();
   await ApiClient.warmSession();
-  await NotificationService.initialize();
+  await NotificationService.initialize(); 
   await LocationService.preloadLocation();
   runApp(
-    MainApp(
-      initialRoute: ApiClient.hasAuthenticatedSession ? '/dashboard' : '/login',
-    ),
+    MainApp(),
   );
 }
 
 class MainApp extends StatelessWidget {
-  final String initialRoute;
-
-  const MainApp({super.key, required this.initialRoute});
+  const MainApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +29,7 @@ class MainApp extends StatelessWidget {
       builder: (context, child) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          initialRoute: initialRoute,
+          initialRoute: '/dashboard',
           routes: {
             '/login': (context) => const LoginScreen(),
             '/signup': (context) => const SignupScreen(),

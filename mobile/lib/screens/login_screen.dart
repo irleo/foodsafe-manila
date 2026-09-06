@@ -9,6 +9,7 @@ import '../services/session.dart';
 import '../utils/philippine_mobile_number.dart';
 import '../widgets/app_loading.dart';
 import '../widgets/philippine_mobile_prefix.dart';
+import '../screens/report_form_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -52,7 +53,26 @@ class _LogInScreenState extends State<LoginScreen> {
       if (user != null) {
         await Session.saveCurrentUser(user);
         if (!mounted) return;
-        SnackbarWidgets.success(context, "Login successful");
+
+        SnackbarWidgets.success(context, "Sign in successful");
+
+        final args =
+            ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+        if (args != null && args['returnToReport'] == true) {
+          Navigator.pushReplacementNamed(context, '/dashboard');
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ReportFormScreen(),
+              ),
+            );
+          });
+          return;
+        }
 
         Navigator.pushReplacementNamed(context, '/dashboard');
       } else {
@@ -117,9 +137,30 @@ class _LogInScreenState extends State<LoginScreen> {
               child: Column(
                 children: [
                   Padding(
-                    padding: EdgeInsets.fromLTRB(16, 64, 16, 24),
+                    padding: EdgeInsets.fromLTRB(16, 24, 16, 24),
                     child: Column(
-                      children: [Image.asset('assets/foodsafe_logo.png')],
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: InkWell(
+                            onTap: () => Navigator.pop(context),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  LucideIcons.chevronLeft,
+                                  color: Colors.white70,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  "Back",
+                                  style: GoogleFonts.inter(color: Colors.white70),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Image.asset('assets/foodsafe_logo.png')],
                     ),
                   ),
                   // White sheet (but still in SAME scroll)
@@ -135,7 +176,7 @@ class _LogInScreenState extends State<LoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          "Welcome Back",
+                          "Welcome back",
                           style: GoogleFonts.inter(
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
@@ -144,7 +185,7 @@ class _LogInScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          "Sign in to continue",
+                          "Sign in to continue to FoodSafe",
                           style: GoogleFonts.inter(
                             fontSize: 13,
                             color: Color(0xFF4B5563),
@@ -288,14 +329,16 @@ class _LogInScreenState extends State<LoginScreen> {
                         const SizedBox(height: 18),
 
                         const Divider(height: 1, color: Color(0xFFE5E7EB)),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 18),
 
-                        Text(
-                          "Don't have an account?",
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            color: Color(0xFF4B5563),
+                        Align(
+                          alignment: Alignment.center,
+                          child: Text(
+                            "Don't have an account?",
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: Color(0xFF4B5563),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 10),

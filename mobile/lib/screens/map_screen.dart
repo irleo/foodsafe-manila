@@ -470,7 +470,7 @@ class MapScreenState extends State<MapScreen> {
     );
   }
 
-  String _formatFilterItem(String item, String label) {
+  String _formatFilterItem(String item, String? label) {
     if (item == 'All') {
       switch (label) {
         case 'Year':
@@ -497,7 +497,6 @@ class MapScreenState extends State<MapScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
-        automaticallyImplyLeading: false,
         surfaceTintColor: const Color(0xFFF9FAFB),
         backgroundColor: Colors.white,
         toolbarHeight: 92,

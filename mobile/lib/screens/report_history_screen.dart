@@ -81,18 +81,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
     super.dispose();
   }
 
-  int get _totalSymptoms {
-    int total = 0;
-    for (var report in _reports) {
-      final symptomsValue = report['symptoms'];
-      if (symptomsValue is String && symptomsValue.isNotEmpty) {
-        total += symptomsValue.split(',').length;
-      } else if (symptomsValue is List) {
-        total += symptomsValue.length;
-      }
-    }
-    return total;
-  }
+  int _confirmedReportCount = 0;
 
   String _formatDate(DateTime dateTime) {
     final now = DateTime.now();
@@ -179,6 +168,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
 
     setState(() {
       _reports = reports;
+      _confirmedReportCount = (data['confirmedReports'] as num?)?.toInt() ?? 0;
       _totalReportCount = pagination is Map
           ? (pagination['total'] as num?)?.toInt() ?? reports.length
           : reports.length;
@@ -233,13 +223,6 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
 
     // 🔹 CASE 3: Middle
     return [1, '...', current, '...', total];
-  }
-
-  int get _totalDistrictsReported {
-    return _reports.where((report) {
-      var value = report['food_location'];
-      return value != null && value != "Not sure";
-    }).length;
   }
 
   String _formatNumber(int number) {
@@ -316,18 +299,8 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                       icon: LucideIcons.stethoscope,
                       iconBg: const Color(0xFFF3E8FF),
                       iconColor: const Color(0xFF9333EA),
-                      value: _formatNumber(_totalSymptoms),
-                      label: 'Page Symptoms',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildStatCard(
-                      icon: LucideIcons.mapPin,
-                      iconBg: const Color(0xFFD1FAE5),
-                      iconColor: const Color(0xFF059669),
-                      value: _formatNumber(_totalDistrictsReported),
-                      label: 'Page Areas',
+                      value: _formatNumber(_confirmedReportCount),
+                      label: 'Confirmed Reports',
                     ),
                   ),
                 ],
@@ -466,10 +439,16 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                                     (report['foodSource'] as String?) ??
                                     'Unknown';
 
+                                final exposureDescription =
+                                    report['exposureDescription'] as String?;
+
+                                final reportStatus =
+                                    (report['currentStatus'] as String?) ?? 'reported';
+
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 16),
                                   child: ReportCard(
-                                    status: 'Reviewed',
+                                    status: reportStatus,
                                     date: reportedAt != null
                                         ? _formatDate(reportedAt)
                                         : 'Unknown',
@@ -481,6 +460,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                                     reportBarangay: reportBarangay,
                                     exposureSite: exposureLocationDisplay,
                                     exposureBarangay: exposureBarangay,
+                                    exposureDescription: exposureDescription,
                                     foodSource: foodSource,
                                   ),
                                 );
@@ -848,6 +828,7 @@ class ReportCard extends StatelessWidget {
   final String? reportBarangay;
   final String exposureSite;
   final String? exposureBarangay;
+  final String? exposureDescription;
   final String foodSource;
   final VoidCallback? onDetailsTap;
 
@@ -861,19 +842,24 @@ class ReportCard extends StatelessWidget {
     this.reportBarangay,
     required this.exposureSite,
     this.exposureBarangay,
+    this.exposureDescription,
     required this.foodSource,
     this.onDetailsTap,
   });
 
   Color get statusColor {
     switch (status.toLowerCase()) {
-      case 'reviewed':
+      case 'reported':
         return Colors.blue;
-      case 'pending':
+      case 'suspected':
+        return Colors.purple;
+      case 'probable':
         return Colors.orange;
-      case 'resolved':
+      case 'confirmed':
         return Colors.green;
-      case 'rejected':
+      case 'not_validated':
+        return Colors.grey;
+      case 'ruled_out':
         return Colors.red;
       default:
         return Colors.grey;
@@ -957,6 +943,38 @@ class ReportCard extends StatelessWidget {
                           ),
                         ],
                       ),
+
+                      const Spacer(),
+
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: statusColor.withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Text(
+                          status
+                              .replaceAll('_', ' ')
+                              .split(' ')
+                              .map(
+                                (word) => word.isEmpty
+                                    ? word
+                                    : '${word[0].toUpperCase()}${word.substring(1)}',
+                              )
+                              .join(' '),
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: statusColor,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -996,10 +1014,10 @@ class ReportCard extends StatelessWidget {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.08),
+                        color: Colors.blue.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color: statusColor.withValues(alpha: 0.15),
+                          color: Colors.blue.withValues(alpha: 0.15),
                         ),
                       ),
                       child: Text(
@@ -1007,7 +1025,7 @@ class ReportCard extends StatelessWidget {
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: statusColor,
+                          color: Colors.blue,
                         ),
                       ),
                     );
@@ -1153,6 +1171,53 @@ class ReportCard extends StatelessWidget {
                           ],
                         ),
                       ),
+
+                      if (exposureDescription != null &&
+                          exposureDescription!.trim().isNotEmpty) ...[
+                        Container(
+                          margin: const EdgeInsets.only(top: 12),
+                          padding: const EdgeInsets.only(top: 12),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              top: BorderSide(color: Colors.grey.shade200),
+                            ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                LucideIcons.notebookPen,
+                                size: 18,
+                                color: Colors.purple.shade600
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Location Description',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade500,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      exposureDescription!,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.grey.shade900,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
