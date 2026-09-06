@@ -230,31 +230,16 @@ export const getMobileOfficialAnalytics = async (req, res) => {
     const period = String(req.query.period || "total_cumulative");
 
     const now = new Date();
-    const currentMonthStart = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
-    );
-
     let startDate = null;
     let endDate = null;
 
-    if (period === "last_month") {
+    if (period === "last_7_days" || period === "last_28_days") {
+      const days = period === "last_7_days" ? 7 : 28;
+
+      endDate = now;
       startDate = new Date(
-        Date.UTC(
-          currentMonthStart.getUTCFullYear(),
-          currentMonthStart.getUTCMonth() - 1,
-          1,
-        ),
+        now.getTime() - days * 24 * 60 * 60 * 1000,
       );
-      endDate = currentMonthStart;
-    } else if (period === "last_year") {
-      startDate = new Date(
-        Date.UTC(
-          currentMonthStart.getUTCFullYear(),
-          currentMonthStart.getUTCMonth() - 12,
-          1,
-        ),
-      );
-      endDate = currentMonthStart;
     }
 
     const rows = await getAnalyticalCaseRows({
@@ -266,14 +251,110 @@ export const getMobileOfficialAnalytics = async (req, res) => {
     });
 
     const filtered = rows.filter((row) => {
-      if (!startDate || !endDate) return true;
+      if (startDate && endDate) {
+        const rowDateValue = row.surveillanceDate || row.weekStartDate;
+        const rowDate = new Date(rowDateValue);
 
-      const rowDate = new Date(
-        Date.UTC(Number(row.year), Number(row.month) - 1, 1),
+        if (
+          Number.isNaN(rowDate.getTime()) ||
+          rowDate < startDate ||
+          rowDate >= endDate
+        ) {
+          return false;
+        }
+      }
+
+      const district = req.query.district?.toString().trim();
+      const disease = req.query.disease?.toString().trim();
+
+      if (district && row.district !== district) return false;
+      if (disease && row.disease !== disease) return false;
+
+      return true;
+    });
+
+    const allRows = rows.filter((row) => {
+      const district = req.query.district?.toString().trim();
+      const disease = req.query.disease?.toString().trim();
+
+      if (district && row.district !== district) return false;
+      if (disease && row.disease !== disease) return false;
+
+      return true;
+    });
+
+    const validDates = allRows
+      .map((row) => ({
+        year: Number(row.year),
+        month: Number(row.month),
+      }))
+      .filter(
+        ({ year, month }) =>
+          Number.isInteger(year) && Number.isInteger(month) && month >= 1 && month <= 12,
       );
 
-      return rowDate >= startDate && rowDate < endDate;
-    });
+    const currentDate = new Date();
+    const currentYear = currentDate.getUTCFullYear();
+    const currentMonth = currentDate.getUTCMonth() + 1;
+
+    const previousDate = new Date(
+      Date.UTC(currentYear, currentMonth - 2, 1),
+    );
+
+    const currentMonthCases = allRows
+      .filter(
+        (row) =>
+          Number(row.year) === currentYear &&
+          Number(row.month) === currentMonth,
+      )
+      .reduce((sum, row) => sum + Number(row.cases || 0), 0);
+
+    const previousMonthCases = allRows
+      .filter(
+        (row) =>
+          Number(row.year) === previousDate.getUTCFullYear() &&
+          Number(row.month) === previousDate.getUTCMonth() + 1,
+      )
+      .reduce((sum, row) => sum + Number(row.cases || 0), 0);
+
+    const firstDate = validDates.sort(
+      (a, b) => a.year * 12 + a.month - (b.year * 12 + b.month),
+    )[0];
+
+    const lastDate = validDates.length
+      ? validDates[validDates.length - 1]
+      : null;
+
+    const groupTotals = (items, selector) => {
+      const totals = new Map();
+
+      for (const item of items) {
+        const key = selector(item);
+        if (!key) continue;
+
+        totals.set(
+          key,
+          (totals.get(key) || 0) + Number(item.cases || 0),
+        );
+      }
+
+      return [...totals.entries()]
+        .map(([name, cases]) => ({ name, cases }))
+        .sort((a, b) => b.cases - a.cases);
+    };
+
+    const overviewDistricts = groupTotals(allRows, (row) => row.district);
+    const overviewDiseases = groupTotals(allRows, (row) => row.disease);
+
+    const cumulativeCases = allRows.reduce(
+      (sum, row) => sum + Number(row.cases || 0),
+      0,
+    );
+
+    const monthlyChange =
+      previousMonthCases > 0
+        ? ((currentMonthCases - previousMonthCases) / previousMonthCases) * 100
+        : null;
 
     const group = (items, selector) => {
       const totals = new Map();
@@ -320,6 +401,26 @@ export const getMobileOfficialAnalytics = async (req, res) => {
       ),
       districtData,
       diseaseDistribution,
+      overview: {
+        currentMonthCases,
+        previousMonthCases,
+        monthlyChange,
+        cumulativeCases,
+        coverageStart: firstDate
+          ? {
+              year: firstDate.year,
+              month: firstDate.month,
+            }
+          : null,
+        coverageEnd: lastDate
+          ? {
+              year: lastDate.year,
+              month: lastDate.month,
+            }
+          : null,
+        topDistrict: overviewDistricts[0] || null,
+        topDisease: overviewDiseases[0] || null,
+      },
     });
   } catch (error) {
     logRequestError(error, req, "ANALYTICS_SERVICE_ERROR");

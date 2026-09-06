@@ -15,11 +15,11 @@ class InsightsScreen extends StatefulWidget {
 
 class _InsightsScreenState extends State<InsightsScreen> {
   String selectedPeriod = '1Y';
-  String _districtPeriod = 'Last month';
-  String _diseasePeriod = 'Last month';
+  String _districtPeriod = 'Last 7 days';
+  String _diseasePeriod = 'Last 7 days';
 
   String _trendDistrict = 'All districts';
-  String _trendDisease = 'All diseases';
+  String _trendDisease = 'Typhoid and Paratyphoid';
 
   final _trendDistricts = [
     'All districts',
@@ -32,14 +32,13 @@ class _InsightsScreenState extends State<InsightsScreen> {
   ];
 
   final _trendDiseases = [
-    'All diseases',
-    'Diarrhea',
-    'Vomiting',
-    'Nausea',
-    'Fever',
-    'Headache',
+    'Typhoid and Paratyphoid',
+    'Rotavirus',
+    'Cholera',
+    'Acute Bloody Diarrhea',
   ];
 
+  Map<String, dynamic>? _overview;
   List<Map<String, dynamic>> districtData = [];
   List<Map<String, dynamic>> diseaseData = [];
 
@@ -49,19 +48,26 @@ class _InsightsScreenState extends State<InsightsScreen> {
   String? _districtError;
   String? _diseaseError;
 
+  List<Map<String, dynamic>> _forecastRows = [];
+
+  bool _isForecastLoading = true;
+  String? _forecastError;
+
   @override
   void initState() {
     super.initState();
+    _loadOverviewData();
+    _loadForecastData();
     _loadDistrictData();
     _loadDiseaseData();
   }
 
   String _periodKey(String value) {
     switch (value) {
-      case 'Last month':
-        return 'last_month';
-      case 'Last year':
-        return 'last_year';
+      case 'Last 7 days':
+        return 'last_7_days';
+      case 'Last 28 days':
+        return 'last_28_days';
       default:
         return 'total_cumulative';
     }
@@ -76,6 +82,363 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
     final parsed = double.tryParse(value?.toString() ?? '');
     return parsed != null && parsed.isFinite ? parsed.round() : 0;
+  }
+
+  int? _safeIntNullable(dynamic value) {
+    if (value == null || value == '') return null;
+
+    if (value is int) return value;
+
+    if (value is num) {
+      return value.isFinite ? value.round() : null;
+    }
+
+    final parsed = double.tryParse(value.toString());
+
+    return parsed != null && parsed.isFinite ? parsed.round() : null;
+  }
+
+  double? _safeDouble(dynamic value) {
+    if (value == null || value == '') return null;
+
+    final number = value is num
+        ? value.toDouble()
+        : double.tryParse(value.toString());
+
+    return number != null && number.isFinite ? number : null;
+  }
+
+  List<dynamic> _series(Map<String, dynamic> source, List<String> keys) {
+    for (final key in keys) {
+      final value = source[key];
+      if (value is List) return value;
+    }
+    return const [];
+  }
+
+  Map<String, dynamic>? _prophetScope(Map<String, dynamic> district) {
+    final models = district['models'];
+
+    if (models is Map && models['prophet'] is Map) {
+      return Map<String, dynamic>.from(models['prophet'] as Map);
+    }
+
+    // Supports the older response format where Prophet fields are
+    // directly on the district object.
+    if (models == null) {
+      return district;
+    }
+
+    return null;
+  }
+
+  void _mergeForecastMonth(
+    Map<String, Map<String, dynamic>> merged,
+    int year,
+    int month, {
+    double? actual,
+    double? predicted,
+    double? lower,
+    double? upper,
+    bool isForecast = false,
+  }) {
+    if (year < 1 || month < 1 || month > 12) return;
+
+    final key = '$year-$month';
+
+    final row = merged.putIfAbsent(
+      key,
+      () => {
+        'year': year,
+        'month': month,
+        'actual': null,
+        'predicted': null,
+        'lower': null,
+        'upper': null,
+        'isForecast': false,
+      },
+    );
+
+    if (actual != null) {
+      row['actual'] = (row['actual'] as double? ?? 0) + actual;
+    }
+
+    if (predicted != null) {
+      row['predicted'] = (row['predicted'] as double? ?? 0) + predicted;
+    }
+
+    if (lower != null) row['lower'] = lower;
+    if (upper != null) row['upper'] = upper;
+    if (isForecast) row['isForecast'] = true;
+  }
+
+  List<Map<String, dynamic>> _visibleForecastRows() {
+    if (_forecastRows.isEmpty) return [];
+
+    final rangeMonths = switch (selectedPeriod) {
+      '3M' => 3,
+      '6M' => 6,
+      _ => 12,
+    };
+
+    final rows = [..._forecastRows];
+
+    final lastRow = rows.lastWhere(
+      (row) => row['predicted'] != null,
+      orElse: () => rows.last,
+    );
+
+    final endDate = DateTime(lastRow['year'] as int, lastRow['month'] as int);
+
+    return rows.where((row) {
+      final rowDate = DateTime(row['year'] as int, row['month'] as int);
+
+      final difference =
+          (endDate.year - rowDate.year) * 12 + endDate.month - rowDate.month;
+
+      return difference >= 0 && difference <= rangeMonths;
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> _buildForecastRows(List<dynamic> districts) {
+    final merged = <String, Map<String, dynamic>>{};
+
+    for (final rawDistrict in districts) {
+      if (rawDistrict is! Map) continue;
+
+      final district = Map<String, dynamic>.from(rawDistrict);
+      final scope = _prophetScope(district);
+      if (scope == null) continue;
+
+      final history = _series(district, [
+        'historicalSeries',
+        'historySeries',
+        'actualSeries',
+        'history',
+      ]);
+
+      final backtest = _series(scope, [
+        'backtestSeries',
+        'validationSeries',
+        'inSampleSeries',
+      ]);
+
+      final forecast = _series(scope, [
+        'forecast',
+        'forecastSeries',
+        'predictedSeries',
+        'predictionSeries',
+        'forecasts',
+      ]);
+
+      for (final rawRow in history) {
+        if (rawRow is! Map) continue;
+
+        final row = Map<String, dynamic>.from(rawRow);
+        final year = _safeInt(row['year']);
+        final month = _safeInt(row['month']);
+
+        if (year == 0 || month == 0) continue;
+
+        _mergeForecastMonth(
+          merged,
+          year,
+          month,
+          actual: _safeDouble(
+            row['cases'] ?? row['actualCases'] ?? row['actual'],
+          ),
+        );
+      }
+
+      for (final rawRow in backtest) {
+        if (rawRow is! Map) continue;
+
+        final row = Map<String, dynamic>.from(rawRow);
+        final year = _safeInt(row['year']);
+        final month = _safeInt(row['month']);
+
+        if (year == 0 || month == 0) continue;
+
+        _mergeForecastMonth(
+          merged,
+          year,
+          month,
+          predicted: _safeDouble(row['predictedCases'] ?? row['predicted']),
+          lower: _safeDouble(row['lowerBound'] ?? row['lower']),
+          upper: _safeDouble(row['upperBound'] ?? row['upper']),
+        );
+      }
+
+      final forecastRows = forecast.whereType<Map>();
+
+      for (final rawRow in forecastRows) {
+        final row = Map<String, dynamic>.from(rawRow);
+
+        if (row['isPrimaryTarget'] != true && forecast.length > 1) {
+          continue;
+        }
+
+        final year = _safeInt(row['year'] ?? row['targetYear']);
+        final month = _safeInt(row['month'] ?? row['targetMonth']);
+
+        if (year == 0 || month == 0) continue;
+
+        _mergeForecastMonth(
+          merged,
+          year,
+          month,
+          predicted: _safeDouble(row['predictedCases'] ?? row['predicted']),
+          lower: _safeDouble(row['lowerBound'] ?? row['lower']),
+          upper: _safeDouble(row['upperBound'] ?? row['upper']),
+          isForecast: true,
+        );
+      }
+
+      if (forecast.isEmpty && scope['nextForecast'] is Map) {
+        final row = Map<String, dynamic>.from(scope['nextForecast'] as Map);
+        final year = _safeInt(row['year'] ?? row['targetYear']);
+        final month = _safeInt(row['month'] ?? row['targetMonth']);
+
+        if (year > 0 && month > 0) {
+          _mergeForecastMonth(
+            merged,
+            year,
+            month,
+            predicted: _safeDouble(row['predictedCases'] ?? row['predicted']),
+            lower: _safeDouble(row['lowerBound'] ?? row['lower']),
+            upper: _safeDouble(row['upperBound'] ?? row['upper']),
+            isForecast: true,
+          );
+        }
+      }
+    }
+
+    final rows = merged.values.toList()
+      ..sort((a, b) {
+        final aDate = DateTime(a['year'] as int, a['month'] as int);
+        final bDate = DateTime(b['year'] as int, b['month'] as int);
+        return aDate.compareTo(bDate);
+      });
+
+    return rows;
+  }
+
+  Future<void> _loadForecastData() async {
+    setState(() {
+      _isForecastLoading = true;
+      _forecastError = null;
+    });
+
+    try {
+      final result = await ApiService.fetchLatestPredictions();
+
+      if (result['hasPrediction'] != true) {
+        if (!mounted) return;
+
+        setState(() {
+          _forecastRows = [];
+          _isForecastLoading = false;
+          _forecastError =
+              result['message']?.toString() ??
+              'No saved forecast is available yet.';
+        });
+        return;
+      }
+
+      final payload = result['payload'];
+
+      final diseases = payload is Map && payload['diseases'] is List
+          ? payload['diseases'] as List
+          : <dynamic>[];
+
+      final availableDiseases = diseases
+          .whereType<Map>()
+          .map((item) => item['disease']?.toString())
+          .whereType<String>()
+          .toList();
+
+      if (availableDiseases.isNotEmpty &&
+          !availableDiseases.contains(_trendDisease)) {
+        _trendDisease = availableDiseases.first;
+      }
+
+      if (diseases.isEmpty) {
+        if (!mounted) return;
+
+        setState(() {
+          _forecastRows = [];
+          _forecastError = 'No disease forecast data is available yet.';
+          _isForecastLoading = false;
+        });
+        return;
+      }
+
+      Map<String, dynamic>? selectedDiseasePayload;
+
+      final matchingDisease = diseases.firstWhere(
+        (item) => item is Map && item['disease']?.toString() == _trendDisease,
+        orElse: () => null,
+      );
+
+      if (matchingDisease is Map) {
+        selectedDiseasePayload = Map<String, dynamic>.from(matchingDisease);
+      }
+
+      final districts = selectedDiseasePayload?['districts'] is List
+          ? selectedDiseasePayload!['districts'] as List
+          : <dynamic>[];
+
+      final selectedDistricts = _trendDistrict == 'All districts'
+          ? districts
+          : districts.where((district) {
+              if (district is! Map) return false;
+
+              final value = district['district'] ?? district['districtKey'];
+
+              return value?.toString() == _trendDistrict;
+            }).toList();
+
+      final rows = _buildForecastRows(selectedDistricts);
+
+      if (!mounted) return;
+
+      setState(() {
+        _forecastRows = rows;
+        _isForecastLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _forecastRows = [];
+        _forecastError = 'Unable to load forecast data.';
+        _isForecastLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadOverviewData() async {
+    try {
+      final result = await ApiService.getInsightsDistribution(
+        period: 'total_cumulative',
+      );
+
+      debugPrint('INSIGHTS OVERVIEW RESPONSE: $result');
+
+      if (!mounted) return;
+
+      setState(() {
+        _overview = result['overview'] is Map
+            ? Map<String, dynamic>.from(result['overview'] as Map)
+            : null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _overview = null;
+      });
+    }
   }
 
   Future<void> _loadDistrictData() async {
@@ -186,7 +549,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
                     const SizedBox(height: 24),
 
-                    _buildMonthlyTrend(),
+                    _buildForecast(),
 
                     const SizedBox(height: 24),
 
@@ -265,55 +628,79 @@ class _InsightsScreenState extends State<InsightsScreen> {
   // ------------------------------------------------------------
 
   Widget _buildOverviewCard() {
+    final overview = _overview;
+    final currentMonthCases = _safeIntNullable(overview?['currentMonthCases']);
+    final cumulativeCases = _safeIntNullable(overview?['cumulativeCases']);
+    final topDistrict = overview?['topDistrict'];
+    final topDisease = overview?['topDisease'];
+
     return Container(
       decoration: _cardDecoration(),
       child: Column(
         children: [
           _overviewRow(
-            icon: Icons.local_fire_department_outlined,
+            icon: LucideIcons.flame,
             label: 'Current Month',
-            value: '1,237 cases',
-            trailing: '12% vs last month',
-            trailingColor: Colors.red,
+            value: currentMonthCases == null
+                ? '—'
+                : '${_formatNumber(currentMonthCases)} cases',
+            trailing: _formatSignedPercent(overview?['monthlyChange']),
+            trailingColor: const Color(0xFF9CA3AF),
+            trailingWidget: _buildChangeIndicator(overview?['monthlyChange']),
           ),
 
           _divider(),
 
           _overviewRow(
-            icon: Icons.calendar_month_outlined,
+            icon: LucideIcons.calendar,
             label: 'Forecast',
-            value: '1,280 cases',
-            trailing: '3.5% · Oct 2026',
-            trailingColor: Colors.red,
-          ),
-
-          _divider(),
-
-          _overviewRow(
-            icon: Icons.monitor_heart_outlined,
-            label: 'Year to Date',
-            value: '7,318 cases',
-            trailing: 'Jan – Sep 2026',
+            value: _primaryForecast() == null
+                ? '—'
+                : '${_formatNumber(_safeInt(_primaryForecast()?['predicted']))} cases',
+            trailing: _formatMonthYear(_primaryForecast()),
             trailingColor: Colors.grey,
           ),
 
           _divider(),
 
           _overviewRow(
-            icon: Icons.location_on_outlined,
+            icon: LucideIcons.activity,
+            label: 'Total Cumulative',
+            value: cumulativeCases == null
+                ? '—'
+                : '${_formatNumber(cumulativeCases)} cases',
+            trailing: _formatCoverageRange(
+              overview?['coverageStart'],
+              overview?['coverageEnd'],
+            ),
+            trailingColor: Colors.grey,
+          ),
+
+          _divider(),
+
+          _overviewRow(
+            icon: LucideIcons.mapPin,
             label: 'Top District',
-            value: 'Tondo',
-            trailing: '6,185 cases',
+            value: topDistrict is Map
+                ? topDistrict['name']?.toString() ?? '—'
+                : '—',
+            trailing: topDistrict is Map
+                ? '${_formatNumber(_safeInt(topDistrict['cases']))} cases'
+                : '—',
             trailingColor: Colors.grey,
           ),
 
           _divider(),
 
           _overviewRow(
-            icon: Icons.medical_services_outlined,
+            icon: LucideIcons.stethoscope,
             label: 'Top Disease',
-            value: 'Diarrhea',
-            trailing: '7,862 reports',
+            value: topDisease is Map
+                ? topDisease['name']?.toString() ?? '—'
+                : '—',
+            trailing: topDisease is Map
+                ? '${_formatNumber(_safeInt(topDisease['cases']))} cases'
+                : '—',
             trailingColor: Colors.grey,
             showBottomBorder: false,
           ),
@@ -328,6 +715,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
     required String value,
     required String trailing,
     required Color trailingColor,
+    Widget? trailingWidget,
     bool showBottomBorder = true,
   }) {
     return Padding(
@@ -370,41 +758,33 @@ class _InsightsScreenState extends State<InsightsScreen> {
             ),
           ),
 
-          if (trailingColor == Colors.red)
-            Row(
-              children: [
-                const Icon(Icons.trending_up, color: Colors.red, size: 14),
-                const SizedBox(width: 2),
-                Text(
-                  trailing,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.red,
-                  ),
-                ),
-              ],
-            )
-          else
-            Text(
-              trailing,
-              style: GoogleFonts.inter(fontSize: 11, color: trailingColor),
-            ),
+          trailingWidget ??
+              Text(
+                trailing,
+                style: GoogleFonts.inter(fontSize: 11, color: trailingColor),
+              ),
         ],
       ),
     );
   }
 
   // ------------------------------------------------------------
-  // MONTHLY TREND
+  // FORECAST
   // ------------------------------------------------------------
 
-  Widget _buildMonthlyTrend() {
+  Widget _buildForecast() {
+    final forecast = _primaryForecast();
+    final forecastCases = _safeInt(forecast?['predicted']);
+    final forecastDate = forecast == null ? '—' : _formatMonthYear(forecast);
+    final selectedDistrictLabel = _trendDistrict == 'All districts'
+        ? 'All District'
+        : _trendDistrict;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Monthly Trend',
+          'Forecast',
           style: GoogleFonts.inter(
             fontSize: 16,
             fontWeight: FontWeight.w600,
@@ -430,7 +810,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(
-                        Icons.calendar_month_outlined,
+                        LucideIcons.calendar,
                         color: Color(0xFF3B82F6),
                         size: 18,
                       ),
@@ -445,19 +825,21 @@ class _InsightsScreenState extends State<InsightsScreen> {
                           Row(
                             children: [
                               Text(
-                                'Forecast',
+                                selectedDistrictLabel,
                                 style: GoogleFonts.inter(
                                   fontSize: 12,
                                   color: Color(0xFF9CA3AF),
                                 ),
                               ),
                               SizedBox(width: 7),
-                              _ForecastBadge(),
+                              _ForecastBadge(label: forecastDate),
                             ],
                           ),
                           SizedBox(height: 3),
                           Text(
-                            '1,280',
+                            forecast == null
+                                ? '—'
+                                : _formatNumber(forecastCases),
                             style: GoogleFonts.inter(
                               fontSize: 24,
                               fontWeight: FontWeight.w600,
@@ -465,7 +847,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                             ),
                           ),
                           Text(
-                            'estimated cases',
+                            'predicted eligible cases',
                             style: GoogleFonts.inter(
                               fontSize: 11,
                               color: Color(0xFF9CA3AF),
@@ -473,21 +855,6 @@ class _InsightsScreenState extends State<InsightsScreen> {
                           ),
                         ],
                       ),
-                    ),
-
-                    Row(
-                      children: [
-                        Icon(Icons.trending_up, color: Colors.red, size: 16),
-                        SizedBox(width: 3),
-                        Text(
-                          '3.5%',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.red,
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
@@ -506,6 +873,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                       selectedValue: _trendDistrict,
                       onSelected: (value) {
                         setState(() => _trendDistrict = value);
+                        _loadForecastData();
                       },
                     ),
                     const SizedBox(width: 8),
@@ -516,6 +884,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                       selectedValue: _trendDisease,
                       onSelected: (value) {
                         setState(() => _trendDisease = value);
+                        _loadForecastData();
                       },
                     ),
                   ],
@@ -525,39 +894,29 @@ class _InsightsScreenState extends State<InsightsScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Row(
                       children: [
                         _periodButton(
                           period: '3M',
                           selectedPeriod: selectedPeriod,
-                          onSelected: (value) => selectedPeriod = value,
+                          onSelected: (value) {
+                            setState(() => selectedPeriod = value);
+                          },
                         ),
                         _periodButton(
                           period: '6M',
                           selectedPeriod: selectedPeriod,
-                          onSelected: (value) => selectedPeriod = value,
+                          onSelected: (value) {
+                            setState(() => selectedPeriod = value);
+                          },
                         ),
                         _periodButton(
                           period: '1Y',
                           selectedPeriod: selectedPeriod,
-                          onSelected: (value) => selectedPeriod = value,
-                        ),
-                      ],
-                    ),
-
-                    Row(
-                      children: [
-                        _legend(
-                          color: const Color(0xFF3B82F6),
-                          label: 'Official',
-                        ),
-                        const SizedBox(width: 10),
-                        _legend(
-                          color: const Color(0xFF8B5CF6),
-                          label: 'Predicted',
-                          dashed: true,
+                          onSelected: (value) {
+                            setState(() => selectedPeriod = value);
+                          },
                         ),
                       ],
                     ),
@@ -565,102 +924,27 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 ),
               ),
 
-              SizedBox(
-                height: 150,
-                child: LineChart(
-                  LineChartData(
-                    minY: 0,
-                    maxY: 100,
-                    gridData: FlGridData(
-                      show: true,
-                      horizontalInterval: 25,
-                      drawVerticalLine: false,
-                      getDrawingHorizontalLine: (value) {
-                        return const FlLine(
-                          color: Color(0xFFF3F4F6),
-                          strokeWidth: 1,
-                        );
-                      },
-                    ),
-                    titlesData: const FlTitlesData(
-                      leftTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      rightTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      topTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                    ),
-                    borderData: FlBorderData(show: false),
-                    lineTouchData: LineTouchData(enabled: true),
-                    lineBarsData: [
-                      LineChartBarData(
-                        spots: const [
-                          FlSpot(0, 10),
-                          FlSpot(1, 28),
-                          FlSpot(2, 36),
-                          FlSpot(3, 34),
-                          FlSpot(4, 26),
-                          FlSpot(5, 18),
-                          FlSpot(6, 16),
-                          FlSpot(7, 21),
-                          FlSpot(8, 34),
-                          FlSpot(9, 52),
-                          FlSpot(10, 67),
-                          FlSpot(11, 80),
-                        ],
-                        isCurved: true,
-                        color: const Color(0xFF3B82F6),
-                        barWidth: 2,
-                        dotData: const FlDotData(show: false),
-                      ),
-
-                      LineChartBarData(
-                        spots: const [
-                          FlSpot(0, 12),
-                          FlSpot(1, 32),
-                          FlSpot(2, 38),
-                          FlSpot(3, 35),
-                          FlSpot(4, 28),
-                          FlSpot(5, 21),
-                          FlSpot(6, 18),
-                          FlSpot(7, 28),
-                          FlSpot(8, 43),
-                          FlSpot(9, 55),
-                          FlSpot(10, 73),
-                          FlSpot(11, 82),
-                        ],
-                        isCurved: true,
-                        color: const Color(0xFF8B5CF6),
-                        barWidth: 2,
-                        dotData: const FlDotData(show: false),
-                        dashArray: [5, 3],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              _buildForecastChart(),
 
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: const [
-                    _MonthLabel('Jan'),
-                    _MonthLabel('Feb'),
-                    _MonthLabel('Mar'),
-                    _MonthLabel('Apr'),
-                    _MonthLabel('May'),
-                    _MonthLabel('Jun'),
-                    _MonthLabel('Jul'),
-                    _MonthLabel('Aug'),
-                    _MonthLabel('Sep', active: true),
-                    _MonthLabel('Oct', purple: true),
+                padding: EdgeInsetsGeometry.fromLTRB(16, 0, 16, 12),
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 5,
+                  runSpacing: 8,
+                  children: [
+                    _legend(
+                      color: const Color(0xFF3B82F6),
+                      label: 'Historical Eligible',
+                    ),
+                    const SizedBox(width: 10),
+                    _legend(
+                      color: const Color(0xFF8B5CF6),
+                      label: 'Historical Prediction',
+                      dashed: true,
+                    ),
+                    const SizedBox(width: 10),
+                    _legend(color: const Color(0xFF8B5CF6), label: 'Forecast'),
                   ],
                 ),
               ),
@@ -668,6 +952,219 @@ class _InsightsScreenState extends State<InsightsScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildForecastChart() {
+    if (_isForecastLoading) {
+      return const SizedBox(
+        height: 150,
+        child: Center(
+          child: CircularProgressIndicator(color: Color(0xFF2563EB)),
+        ),
+      );
+    }
+
+    if (_forecastError != null) {
+      return Padding(
+        padding: const EdgeInsets.all(20),
+        child: Text(
+          _forecastError!,
+          style: GoogleFonts.inter(fontSize: 13, color: Colors.red),
+        ),
+      );
+    }
+
+    final rows = _visibleForecastRows();
+
+    if (rows.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(20),
+        child: Text(
+          'No predictive data available.',
+          style: GoogleFonts.inter(fontSize: 13, color: Color(0xFF9CA3AF)),
+        ),
+      );
+    }
+
+    final actualSpots = <FlSpot>[];
+    final predictionSpots = <FlSpot>[];
+    final forecastSpots = <FlSpot>[];
+
+    int? forecastIndex;
+
+    for (var index = 0; index < rows.length; index++) {
+      final row = rows[index];
+      final actual = _safeDouble(row['actual']);
+      final predicted = _safeDouble(row['predicted']);
+      final x = index.toDouble();
+
+      if (actual != null) {
+        actualSpots.add(FlSpot(x, actual));
+      }
+
+      if (predicted != null && row['isForecast'] != true) {
+        predictionSpots.add(FlSpot(x, predicted));
+      }
+
+      if (predicted != null && row['isForecast'] == true) {
+        forecastIndex = index;
+      }
+    }
+
+    if (forecastIndex != null) {
+      final targetIndex = forecastIndex;
+      final target = rows[targetIndex];
+
+      final targetPredicted = _safeDouble(target['predicted']);
+
+      if (targetPredicted != null) {
+        var anchorIndex = targetIndex - 1;
+
+        while (anchorIndex >= 0 && rows[anchorIndex]['isForecast'] == true) {
+          anchorIndex--;
+        }
+
+        if (anchorIndex >= 0) {
+          final anchor = rows[anchorIndex];
+          final anchorValue =
+              _safeDouble(anchor['actual']) ?? _safeDouble(anchor['predicted']);
+
+          if (anchorValue != null) {
+            forecastSpots.add(FlSpot(anchorIndex.toDouble(), anchorValue));
+          }
+        }
+
+        forecastSpots.add(FlSpot(targetIndex.toDouble(), targetPredicted));
+      }
+    }
+
+    final allValues = [
+      ...actualSpots.map((spot) => spot.y),
+      ...predictionSpots.map((spot) => spot.y),
+      ...forecastSpots.map((spot) => spot.y),
+    ];
+
+    final maxValue = allValues.isEmpty
+        ? 100.0
+        : allValues.reduce((a, b) => a > b ? a : b);
+
+    final monthLabels = rows.map((row) {
+      return _monthLabel(row['month'] as int, row['year'] as int);
+    }).toList();
+
+    return Container(
+      height: 150,
+      padding: EdgeInsets.symmetric(horizontal: 16),
+      child: LineChart(
+        LineChartData(
+          minX: 0,
+          maxX: rows.length > 1 ? (rows.length - 1).toDouble() : 1,
+          minY: 0,
+          maxY: maxValue == 0 ? 100 : maxValue * 1.15,
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            getDrawingHorizontalLine: (_) =>
+                const FlLine(color: Color(0xFFF3F4F6), strokeWidth: 1),
+          ),
+          titlesData: FlTitlesData(
+            leftTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 36,
+                interval: monthLabels.length > 8 ? 2 : 1,
+                getTitlesWidget: (value, meta) {
+                  final index = value.round();
+
+                  if (value != index.toDouble() ||
+                      index < 0 ||
+                      index >= monthLabels.length) {
+                    return const SizedBox.shrink();
+                  }
+
+                  final labelInterval = monthLabels.length > 8 ? 2 : 1;
+
+                  if (index % labelInterval != 0 &&
+                      index != monthLabels.length - 1) {
+                    return const SizedBox.shrink();
+                  }
+
+                  final row = rows[index];
+                  final isForecast = rows[index]['isForecast'] == true;
+
+                  return SideTitleWidget(
+                    meta: meta,
+                    fitInside: SideTitleFitInsideData(
+                      enabled: true,
+                      distanceFromEdge: 0,
+                      axisPosition: meta.axisPosition,
+                      parentAxisSize: meta.parentAxisSize,
+                    ),
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(text: monthLabels[index]),
+                          TextSpan(
+                            text: '\n${row['year']}',
+                            style: const TextStyle(fontSize: 8),
+                          ),
+                        ],
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      softWrap: true,
+                      style: GoogleFonts.inter(
+                        fontSize: 9,
+                        height: 1.15,
+                        fontWeight: FontWeight.w500,
+                        color: isForecast
+                            ? const Color(0xFFA78BFA)
+                            : const Color(0xFF9CA3AF),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          borderData: FlBorderData(show: false),
+          lineTouchData: LineTouchData(enabled: true),
+          lineBarsData: [
+            LineChartBarData(
+              spots: actualSpots,
+              isCurved: true,
+              color: const Color(0xFF3B82F6),
+              barWidth: 2,
+              dotData: const FlDotData(show: false),
+            ),
+            LineChartBarData(
+              spots: predictionSpots,
+              isCurved: true,
+              color: const Color(0xFF8B5CF6),
+              barWidth: 2,
+              dashArray: [5, 3],
+              dotData: const FlDotData(show: false),
+            ),
+            LineChartBarData(
+              spots: forecastSpots,
+              isCurved: true,
+              color: const Color(0xFF8B5CF6),
+              barWidth: 2,
+              dotData: const FlDotData(show: false),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -699,12 +1196,36 @@ class _InsightsScreenState extends State<InsightsScreen> {
     );
   }
 
+  String _monthLabel(int month, int year) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+
+    if (month < 1 || month > 12) {
+      return '$year';
+    }
+
+    return months[month - 1];
+  }
+
   Widget _legend({
     required Color color,
     required String label,
     bool dashed = false,
   }) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
           width: 16,
@@ -771,18 +1292,15 @@ class _InsightsScreenState extends State<InsightsScreen> {
     final maxCases = data.isEmpty
         ? 1
         : data
-            .map((item) => item['cases'] as int)
-            .fold<int>(0, (max, value) => value > max ? value : max);
+              .map((item) => item['cases'] as int)
+              .fold<int>(0, (max, value) => value > max ? value : max);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
-          style: GoogleFonts.inter(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 10),
         Container(
@@ -794,12 +1312,12 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 child: Row(
                   children: [
                     _periodButton(
-                      period: 'Last month',
+                      period: 'Last 7 days',
                       selectedPeriod: period,
                       onSelected: onPeriodChanged,
                     ),
                     _periodButton(
-                      period: 'Last year',
+                      period: 'Last 28 days',
                       selectedPeriod: period,
                       onSelected: onPeriodChanged,
                     ),
@@ -815,19 +1333,14 @@ class _InsightsScreenState extends State<InsightsScreen> {
               if (isLoading)
                 const Padding(
                   padding: EdgeInsets.all(24),
-                  child: CircularProgressIndicator(
-                    color: Color(0xFF2563EB),
-                  ),
+                  child: CircularProgressIndicator(color: Color(0xFF2563EB)),
                 )
               else if (errorMessage != null)
                 Padding(
                   padding: const EdgeInsets.all(20),
                   child: Text(
                     errorMessage,
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      color: Colors.red,
-                    ),
+                    style: GoogleFonts.inter(fontSize: 13, color: Colors.red),
                   ),
                 )
               else if (data.isEmpty)
@@ -990,7 +1503,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
-              Icons.lightbulb_outline,
+              LucideIcons.lightbulb,
               color: Color(0xFF3B82F6),
               size: 18,
             ),
@@ -1097,7 +1610,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                         ),
                         trailing: option == selectedValue
                             ? const Icon(
-                                Icons.check,
+                                LucideIcons.check,
                                 color: Color(0xFF2563EB),
                               )
                             : null,
@@ -1118,22 +1631,20 @@ class _InsightsScreenState extends State<InsightsScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFFEFF6FF)
-              : const Color(0xFFF9FAFB),
+          color: isSelected ? const Color(0xFFEFF6FF) : const Color(0xFFF9FAFB),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
+            /* Icon(
               icon,
               size: 14,
               color: isSelected
                   ? const Color(0xFF2563EB)
                   : const Color(0xFF9CA3AF),
             ),
-            const SizedBox(width: 5),
+            const SizedBox(width: 5), */
             Text(
               label,
               style: GoogleFonts.inter(
@@ -1145,15 +1656,111 @@ class _InsightsScreenState extends State<InsightsScreen> {
               ),
             ),
             const SizedBox(width: 3),
-            const Icon(
+            Icon(
               LucideIcons.chevronDown,
               size: 13,
-              color: Color(0xFF9CA3AF),
+              color: isSelected
+                  ? const Color(0xFF2563EB)
+                  : const Color(0xFF9CA3AF),
             ),
           ],
         ),
       ),
     );
+  }
+
+  String _formatMonthYear(dynamic value) {
+    if (value is! Map) return '—';
+
+    final month = _safeInt(value['month']);
+    final year = _safeInt(value['year']);
+
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+
+    if (month < 1 || month > 12 || year == 0) return '—';
+
+    return '${months[month - 1]} $year';
+  }
+
+  String _formatCoverageRange(dynamic start, dynamic end) {
+    final startLabel = _formatMonthYear(start);
+    final endLabel = _formatMonthYear(end);
+
+    if (startLabel == '—' || endLabel == '—') return '—';
+
+    return '$startLabel – $endLabel';
+  }
+
+  String _formatSignedPercent(dynamic value) {
+    final percent = _safeDouble(value);
+
+    if (percent == null) return '—';
+    if (percent == 0) return '0.0% vs last month';
+
+    final sign = percent > 0 ? '+' : '';
+    return '$sign${percent.toStringAsFixed(1)}% vs last month';
+  }
+
+  Widget _buildChangeIndicator(dynamic value) {
+    final percent = _safeDouble(value);
+    if (percent == null) {
+      return Text(
+        '—',
+        style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF9CA3AF)),
+      );
+    }
+    Color color;
+    IconData icon;
+    if (percent > 0) {
+      color = Colors.red;
+      icon = LucideIcons.trendingUp;
+    } else if (percent < 0) {
+      color = Colors.green;
+      icon = LucideIcons.trendingDown;
+    } else {
+      color = const Color(0xFF9CA3AF);
+      icon = LucideIcons.minus;
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 14),
+        const SizedBox(width: 2),
+        Text(
+          _formatSignedPercent(percent),
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Map<String, dynamic>? _primaryForecast() {
+    final rows = _visibleForecastRows();
+
+    for (final row in rows.reversed) {
+      if (row['isForecast'] == true && row['predicted'] != null) {
+        return row;
+      }
+    }
+
+    return null;
   }
 }
 
@@ -1162,7 +1769,9 @@ class _InsightsScreenState extends State<InsightsScreen> {
 // ------------------------------------------------------------
 
 class _ForecastBadge extends StatelessWidget {
-  const _ForecastBadge();
+  final String label;
+
+  const _ForecastBadge({required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -1173,36 +1782,12 @@ class _ForecastBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
-        'Oct 2026',
+        label,
         style: GoogleFonts.inter(
           fontSize: 10,
           fontWeight: FontWeight.w500,
-          color: Color(0xFF7C3AED),
+          color: const Color(0xFF7C3AED),
         ),
-      ),
-    );
-  }
-}
-
-class _MonthLabel extends StatelessWidget {
-  final String text;
-  final bool active;
-  final bool purple;
-
-  const _MonthLabel(this.text, {this.active = false, this.purple = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: GoogleFonts.inter(
-        fontSize: 9,
-        fontWeight: FontWeight.w500,
-        color: active
-            ? const Color(0xFF3B82F6)
-            : purple
-            ? const Color(0xFFA78BFA)
-            : const Color(0xFF9CA3AF),
       ),
     );
   }

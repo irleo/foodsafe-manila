@@ -225,10 +225,16 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getInsightsDistribution({
     required String period,
+    String? district,
+    String? disease,
   }) async {
     final response = await ApiClient.get(
       '/official-cases/analytics',
-      query: {'period': period},
+      query: {
+        'period': period,
+        if (district != null && district.isNotEmpty) 'district': district,
+        if (disease != null && disease.isNotEmpty) 'disease': disease,
+      },
     );
 
     ApiClient.throwIfError(
