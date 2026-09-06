@@ -34,10 +34,7 @@ export default function ReportLogsTab() {
 
   const [onlyCounted] = useState(false);
 
-  const loadReports = async ({
-    counted = onlyCounted,
-    page = 1,
-  } = {}) => {
+  const loadReports = async ({ counted = onlyCounted, page = 1 } = {}) => {
     await fetchReports({
       onlyCounted: counted,
       status: status || undefined,
@@ -50,7 +47,10 @@ export default function ReportLogsTab() {
   };
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => setSearch(searchInput.trim()), 300);
+    const timeoutId = window.setTimeout(
+      () => setSearch(searchInput.trim()),
+      300,
+    );
     return () => window.clearTimeout(timeoutId);
   }, [searchInput]);
 
@@ -86,8 +86,12 @@ export default function ReportLogsTab() {
                   }}
                   className={`inline-flex min-h-11 items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition ${active ? "border-[#134c8c] bg-[#134c8c] text-white" : "border-slate-300 bg-white text-slate-600 hover:bg-blue-50"}`}
                 >
-                  {option.value === "needs_review" ? <Inbox className="h-4 w-4" /> : null}
-                  {option.value === "resolved" ? <CheckCircle2 className="h-4 w-4" /> : null}
+                  {option.value === "needs_review" ? (
+                    <Inbox className="h-4 w-4" />
+                  ) : null}
+                  {option.value === "resolved" ? (
+                    <CheckCircle2 className="h-4 w-4" />
+                  ) : null}
                   {option.label}
                 </button>
               );
@@ -97,7 +101,6 @@ export default function ReportLogsTab() {
 
         <div className="mt-5 border-t border-slate-100 pt-4">
           <div className="grid w-full gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_190px_190px]">
-
             <div>
               <label className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
                 <Search className="h-3.5 w-3.5" />
@@ -149,7 +152,8 @@ export default function ReportLogsTab() {
           </div>
         </div>
         <p className="mt-3 text-xs text-gray-500">
-          Needs review includes Reported, Suspected, and Probable cases. Resolved includes Confirmed, Not Confirmed, and Ruled Out outcomes.
+          Needs review includes Reported, Suspected, and Probable cases.
+          Resolved includes Confirmed, Not Confirmed, and Ruled Out outcomes.
         </p>
       </div>
 

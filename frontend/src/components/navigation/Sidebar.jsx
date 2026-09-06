@@ -9,6 +9,7 @@ import {
   Squares2X2Icon,
   ArrowDownOnSquareIcon,
   ClipboardDocumentCheckIcon,
+  Cog6ToothIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "../../context/AuthContext";
 import axios from "axios";
@@ -64,7 +65,10 @@ export default function Sidebar({ isOpen, onClose, isCollapsed = false }) {
       label: "Administration",
       links: [
         ...(["admin", "cesu"].includes(auth?.role)
-          ? [{ name: "Predictions", path: "/predictions", icon: ArrowTrendingUpIcon }]
+          ? [
+              { name: "Predictions", path: "/predictions", icon: ArrowTrendingUpIcon },
+              { name: "Settings", path: "/settings", icon: Cog6ToothIcon },
+            ]
           : []),
         ...(auth?.role === "admin"
           ? [{ name: "User Management", path: "/user-management", icon: UserGroupIcon }]
