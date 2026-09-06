@@ -228,48 +228,109 @@ export const getMobileNearbyRisk = async (req, res) => {
 // GET /api/official-cases/analytics
 export const getMobileOfficialAnalytics = async (req, res) => {
   try {
-    const selectedYear = req.query.year && req.query.year !== "all" ? Number(req.query.year) : undefined;
-    const selectedMonth = req.query.month && req.query.month !== "all" ? Number(req.query.month) : undefined;
+    const period = String(req.query.period || "total_cumulative");
+
+    const now = new Date();
+    const currentMonthStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+    );
+
+    let startDate = null;
+    let endDate = null;
+
+    if (period === "last_month") {
+      startDate = new Date(
+        Date.UTC(
+          currentMonthStart.getUTCFullYear(),
+          currentMonthStart.getUTCMonth() - 1,
+          1,
+        ),
+      );
+      endDate = currentMonthStart;
+    } else if (period === "last_year") {
+      startDate = new Date(
+        Date.UTC(
+          currentMonthStart.getUTCFullYear(),
+          currentMonthStart.getUTCMonth() - 12,
+          1,
+        ),
+      );
+      endDate = currentMonthStart;
+    }
+
     const rows = await getAnalyticalCaseRows({
-      statuses: ["confirmed"],
+      statuses: [
+        "reported",
+        "suspected",
+        "probable",
+        "confirmed",
+        "not_validated",
+      ],
       includeReports: false,
     });
-    const filtered = rows.filter((row) =>
-      (selectedYear === undefined || row.year === selectedYear) &&
-      (selectedMonth === undefined || row.month === selectedMonth),
-    );
-    const totalCases = filtered.reduce((sum, row) => sum + Number(row.cases || 0), 0);
-    const group = (items, keySelector) => {
+
+    const filtered = rows.filter((row) => {
+      if (!startDate || !endDate) return true;
+
+      const rowDate = new Date(
+        Date.UTC(Number(row.year), Number(row.month) - 1, 1),
+      );
+
+      return rowDate >= startDate && rowDate < endDate;
+    });
+
+    const group = (items, selector) => {
       const totals = new Map();
+
       for (const item of items) {
-        const key = keySelector(item);
-        if (key === undefined || key === null || key === "") continue;
-        totals.set(key, (totals.get(key) || 0) + Number(item.cases || 0));
+        const key = selector(item);
+        if (!key) continue;
+
+        totals.set(
+          key,
+          (totals.get(key) || 0) + Number(item.cases || 0),
+        );
       }
-      return [...totals.entries()].map(([_id, total]) => ({ _id, total }));
+
+      return totals;
     };
-    const districtData = group(filtered, (row) => row.district).sort((a, b) => String(a._id).localeCompare(String(b._id)));
-    const diseaseDistribution = group(filtered, (row) => row.disease).sort((a, b) => b.total - a.total).slice(0, 7);
-    const topDistrict = [...districtData].sort((a, b) => b.total - a.total)[0]?._id || "N/A";
-    const topDisease = diseaseDistribution[0]?._id || "N/A";
-    const baseYear = selectedYear ?? new Date().getFullYear();
-    const currentYearTotal = rows.filter((row) => row.year === baseYear).reduce((sum, row) => sum + Number(row.cases || 0), 0);
-    const previousYearTotal = rows.filter((row) => row.year === baseYear - 1).reduce((sum, row) => sum + Number(row.cases || 0), 0);
-    const growth = previousYearTotal > 0 ? ((currentYearTotal - previousYearTotal) / previousYearTotal) * 100 : 0;
-    const trendData = group(filtered, (row) => selectedYear === undefined ? row.year : row.month).sort((a, b) => Number(a._id) - Number(b._id));
+
+    const districtTotals = group(filtered, (row) => row.district);
+    const diseaseTotals = group(filtered, (row) => row.disease);
+
+    const districts = [
+      "District 1",
+      "District 2",
+      "District 3",
+      "District 4",
+      "District 5",
+      "District 6",
+    ];
+
+    const districtData = districts.map((district) => ({
+      _id: district,
+      total: districtTotals.get(district) || 0,
+    }));
+
+    const diseaseDistribution = [...diseaseTotals.entries()]
+      .map(([_id, total]) => ({ _id, total }))
+      .sort((a, b) => b.total - a.total);
 
     return res.json({
-      totalCases,
-      topDistrict,
-      topDisease,
+      period,
+      totalCases: filtered.reduce(
+        (sum, row) => sum + Number(row.cases || 0),
+        0,
+      ),
       districtData,
       diseaseDistribution,
-      trendData,
-      growth: growth.toFixed(1),
-      caseDefinition: "Confirmed cases from authoritative CESU uploads only.",
     });
   } catch (error) {
     logRequestError(error, req, "ANALYTICS_SERVICE_ERROR");
-    return res.status(500).json({ message: "Server error" });
+
+    return res.status(500).json({
+      code: "ANALYTICS_SERVICE_ERROR",
+      message: "Analytics data could not be loaded.",
+    });
   }
 };

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../services/api_service.dart';
 
 class InsightsScreen extends StatefulWidget {
   final VoidCallback onProfilePressed;
@@ -15,26 +16,156 @@ class InsightsScreen extends StatefulWidget {
 class _InsightsScreenState extends State<InsightsScreen> {
   String selectedPeriod = '1Y';
   String _districtPeriod = 'Last month';
-  String _symptomPeriod = 'Last month';
+  String _diseasePeriod = 'Last month';
 
-  final List<Map<String, dynamic>> districtData = [
-    {'name': 'Tondo', 'cases': 6185},
-    {'name': 'Binondo', 'cases': 4763},
-    {'name': 'Sta. Cruz', 'cases': 3931},
-    {'name': 'Sampaloc', 'cases': 3377},
-    {'name': 'San Miguel', 'cases': 2470},
-    {'name': 'Malate', 'cases': 1688},
+  String _trendDistrict = 'All districts';
+  String _trendDisease = 'All diseases';
+
+  final _trendDistricts = [
+    'All districts',
+    'District 1',
+    'District 2',
+    'District 3',
+    'District 4',
+    'District 5',
+    'District 6',
   ];
 
-  final List<Map<String, dynamic>> symptomData = [
-    {'name': 'Diarrhea', 'cases': 7862, 'color': Colors.orange},
-    {'name': 'Vomiting', 'cases': 6174, 'color': Colors.red},
-    {'name': 'Nausea', 'cases': 4990, 'color': Colors.amber},
-    {'name': 'Stomach Pain', 'cases': 4763, 'color': Colors.blue},
-    {'name': 'Fever', 'cases': 3931, 'color': Colors.deepPurple},
-    {'name': 'Headache', 'cases': 3100, 'color': Colors.cyan},
-    {'name': 'Weakness', 'cases': 2470, 'color': Colors.green},
+  final _trendDiseases = [
+    'All diseases',
+    'Diarrhea',
+    'Vomiting',
+    'Nausea',
+    'Fever',
+    'Headache',
   ];
+
+  List<Map<String, dynamic>> districtData = [];
+  List<Map<String, dynamic>> diseaseData = [];
+
+  bool _isDistrictLoading = true;
+  bool _isDiseaseLoading = true;
+
+  String? _districtError;
+  String? _diseaseError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDistrictData();
+    _loadDiseaseData();
+  }
+
+  String _periodKey(String value) {
+    switch (value) {
+      case 'Last month':
+        return 'last_month';
+      case 'Last year':
+        return 'last_year';
+      default:
+        return 'total_cumulative';
+    }
+  }
+
+  int _safeInt(dynamic value) {
+    if (value is int) return value;
+
+    if (value is num) {
+      return value.isFinite ? value.round() : 0;
+    }
+
+    final parsed = double.tryParse(value?.toString() ?? '');
+    return parsed != null && parsed.isFinite ? parsed.round() : 0;
+  }
+
+  Future<void> _loadDistrictData() async {
+    setState(() {
+      _isDistrictLoading = true;
+      _districtError = null;
+    });
+
+    try {
+      final result = await ApiService.getInsightsDistribution(
+        period: _periodKey(_districtPeriod),
+      );
+
+      final rows = result['districtData'];
+      final parsed = rows is List
+          ? rows.whereType<Map>().map((row) {
+              return {
+                'name': row['_id']?.toString() ?? 'Unknown',
+                'cases': _safeInt(row['total']),
+              };
+            }).toList()
+          : <Map<String, dynamic>>[];
+
+      if (!mounted) return;
+
+      setState(() {
+        districtData = parsed;
+        _isDistrictLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        districtData = [];
+        _districtError = 'Unable to load district data.';
+        _isDistrictLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadDiseaseData() async {
+    setState(() {
+      _isDiseaseLoading = true;
+      _diseaseError = null;
+    });
+
+    try {
+      final result = await ApiService.getInsightsDistribution(
+        period: _periodKey(_diseasePeriod),
+      );
+
+      final rows = result['diseaseDistribution'];
+      const colors = [
+        Colors.orange,
+        Colors.red,
+        Colors.amber,
+        Colors.blue,
+        Colors.deepPurple,
+        Colors.cyan,
+        Colors.green,
+      ];
+
+      final parsed = rows is List
+          ? rows.asMap().entries.map((entry) {
+              final row = entry.value as Map;
+
+              return {
+                'name': row['_id']?.toString() ?? 'Unknown',
+                'cases': _safeInt(row['total']),
+                'color': colors[entry.key % colors.length],
+              };
+            }).toList()
+          : <Map<String, dynamic>>[];
+
+      if (!mounted) return;
+
+      setState(() {
+        diseaseData = parsed;
+        _isDiseaseLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        diseaseData = [];
+        _diseaseError = 'Unable to load disease data.';
+        _isDiseaseLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +194,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
                     const SizedBox(height: 24),
 
-                    _buildSymptomSection(),
+                    _buildDiseaseSection(),
                   ],
                 ),
               ),
@@ -180,7 +311,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
           _overviewRow(
             icon: Icons.medical_services_outlined,
-            label: 'Top Symptom',
+            label: 'Top Disease',
             value: 'Diarrhea',
             trailing: '7,862 reports',
             trailingColor: Colors.grey,
@@ -365,6 +496,33 @@ class _InsightsScreenState extends State<InsightsScreen> {
               _divider(),
 
               Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Row(
+                  children: [
+                    _trendFilterButton(
+                      icon: LucideIcons.mapPin,
+                      label: _trendDistrict,
+                      options: _trendDistricts,
+                      selectedValue: _trendDistrict,
+                      onSelected: (value) {
+                        setState(() => _trendDistrict = value);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    _trendFilterButton(
+                      icon: LucideIcons.activity,
+                      label: _trendDisease,
+                      options: _trendDiseases,
+                      selectedValue: _trendDisease,
+                      onSelected: (value) {
+                        setState(() => _trendDisease = value);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+
+              Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -526,7 +684,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
         margin: const EdgeInsets.only(right: 4),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEFF6FF) : Colors.transparent,
+          color: selected ? const Color(0xFFEFF6FF) : const Color(0xFFF9FAFB),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
@@ -568,132 +726,65 @@ class _InsightsScreenState extends State<InsightsScreen> {
   // ------------------------------------------------------------
 
   Widget _buildDistrictSection() {
-    final maxCases = districtData.first['cases'];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Cases by District',
-          style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-
-        const SizedBox(height: 10),
-
-        Container(
-          decoration: _cardDecoration(),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-                child: Row(
-                  children: [
-                    _periodButton(
-                      period: 'Last month',
-                      selectedPeriod: _districtPeriod,
-                      onSelected: (value) => _districtPeriod = value,
-                    ),
-                    _periodButton(
-                      period: 'Last year',
-                      selectedPeriod: _districtPeriod,
-                      onSelected: (value) => _districtPeriod = value,
-                    ),
-                    _periodButton(
-                      period: 'Total cumulative',
-                      selectedPeriod: _districtPeriod,
-                      onSelected: (value) => _districtPeriod = value,
-                    ),
-                  ],
-                ),
-              ),
-
-              _divider(),
-
-              ...List.generate(districtData.length, (index) {
-                final district = districtData[index];
-                final cases = district['cases'] as int;
-                final percentage = cases / maxCases;
-
-                return Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 70,
-                            child: Text(
-                              district['name'],
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF374151),
-                              ),
-                            ),
-                          ),
-
-                          Expanded(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: LinearProgressIndicator(
-                                value: percentage,
-                                minHeight: 8,
-                                backgroundColor: const Color(0xFFF3F4F6),
-                                valueColor: const AlwaysStoppedAnimation(
-                                  Color(0xFF3B82F6),
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(width: 10),
-
-                          SizedBox(
-                            width: 42,
-                            child: Text(
-                              _formatNumber(cases),
-                              textAlign: TextAlign.right,
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF374151),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    if (index < districtData.length - 1) _divider(),
-                  ],
-                );
-              }),
-
-              const SizedBox(height: 6),
-            ],
-          ),
-        ),
-      ],
+    return _buildDistributionSection(
+      title: 'Case Distribution by District',
+      period: _districtPeriod,
+      data: districtData,
+      isLoading: _isDistrictLoading,
+      errorMessage: _districtError,
+      onPeriodChanged: (value) {
+        _districtPeriod = value;
+        _loadDistrictData();
+      },
+      showColors: false,
     );
   }
 
   // ------------------------------------------------------------
-  // SYMPTOMS
+  // DISEASES
   // ------------------------------------------------------------
 
-  Widget _buildSymptomSection() {
-    final maxCases = symptomData.first['cases'];
+  Widget _buildDiseaseSection() {
+    return _buildDistributionSection(
+      title: 'Disease Distribution',
+      period: _diseasePeriod,
+      data: diseaseData,
+      isLoading: _isDiseaseLoading,
+      errorMessage: _diseaseError,
+      onPeriodChanged: (value) {
+        _diseasePeriod = value;
+        _loadDiseaseData();
+      },
+      showColors: true,
+    );
+  }
+
+  Widget _buildDistributionSection({
+    required String title,
+    required String period,
+    required List<Map<String, dynamic>> data,
+    required bool isLoading,
+    required String? errorMessage,
+    required ValueChanged<String> onPeriodChanged,
+    required bool showColors,
+  }) {
+    final maxCases = data.isEmpty
+        ? 1
+        : data
+            .map((item) => item['cases'] as int)
+            .fold<int>(0, (max, value) => value > max ? value : max);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Symptom Distribution',
-          style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
+          title,
+          style: GoogleFonts.inter(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-
         const SizedBox(height: 10),
-
         Container(
           decoration: _cardDecoration(),
           child: Column(
@@ -704,99 +795,125 @@ class _InsightsScreenState extends State<InsightsScreen> {
                   children: [
                     _periodButton(
                       period: 'Last month',
-                      selectedPeriod: _symptomPeriod,
-                      onSelected: (value) => _symptomPeriod = value,
+                      selectedPeriod: period,
+                      onSelected: onPeriodChanged,
                     ),
                     _periodButton(
                       period: 'Last year',
-                      selectedPeriod: _symptomPeriod,
-                      onSelected: (value) => _symptomPeriod = value,
+                      selectedPeriod: period,
+                      onSelected: onPeriodChanged,
                     ),
                     _periodButton(
                       period: 'Total cumulative',
-                      selectedPeriod: _symptomPeriod,
-                      onSelected: (value) => _symptomPeriod = value,
+                      selectedPeriod: period,
+                      onSelected: onPeriodChanged,
                     ),
                   ],
                 ),
               ),
-
               _divider(),
+              if (isLoading)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: CircularProgressIndicator(
+                    color: Color(0xFF2563EB),
+                  ),
+                )
+              else if (errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Text(
+                    errorMessage,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: Colors.red,
+                    ),
+                  ),
+                )
+              else if (data.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Text(
+                    'No data available for this period.',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: Color(0xFF9CA3AF),
+                    ),
+                  ),
+                )
+              else
+                ...data.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final item = entry.value;
+                  final cases = item['cases'] as int;
+                  final percentage = maxCases > 0 ? cases / maxCases : 0.0;
+                  final color =
+                      item['color'] as Color? ?? const Color(0xFF3B82F6);
 
-              ...symptomData.toList().asMap().entries.map((entry) {
-                final index = entry.key;
-                final symptom = entry.value;
-                final cases = symptom['cases'] as int;
-                final percentage = cases / maxCases;
-                final color = symptom['color'] as Color;
-
-                return Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              color: color,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-
-                          const SizedBox(width: 8),
-
-                          SizedBox(
-                            width: 90,
-                            child: Text(
-                              symptom['name'],
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF374151),
+                  return Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                        child: Row(
+                          children: [
+                            if (showColors) ...[
+                              Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  shape: BoxShape.circle,
+                                ),
                               ),
-                            ),
-                          ),
-
-                          Expanded(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: LinearProgressIndicator(
-                                value: percentage,
-                                minHeight: 8,
-                                backgroundColor: const Color(0xFFF3F4F6),
-                                valueColor: AlwaysStoppedAnimation(
-                                  color.withOpacity(.75),
+                              const SizedBox(width: 8),
+                            ],
+                            SizedBox(
+                              width: showColors ? 90 : 80,
+                              child: Text(
+                                item['name'].toString(),
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: const Color(0xFF374151),
                                 ),
                               ),
                             ),
-                          ),
-
-                          const SizedBox(width: 10),
-
-                          SizedBox(
-                            width: 42,
-                            child: Text(
-                              _formatNumber(cases),
-                              textAlign: TextAlign.right,
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF374151),
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: LinearProgressIndicator(
+                                  value: percentage,
+                                  minHeight: 8,
+                                  backgroundColor: const Color(0xFFF3F4F6),
+                                  valueColor: AlwaysStoppedAnimation(
+                                    showColors
+                                        ? color.withOpacity(.75)
+                                        : const Color(0xFF3B82F6),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 10),
+                            SizedBox(
+                              width: 42,
+                              child: Text(
+                                _formatNumber(cases),
+                                textAlign: TextAlign.right,
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: const Color(0xFF374151),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-
-                    if (index < symptomData.length - 1) _divider(),
-                  ],
-                );
-              }),
-
-              const SizedBox(height: 6),
+                      if (index < data.length - 1) _divider(),
+                    ],
+                  );
+                }),
+              if (!isLoading && data.isNotEmpty) const SizedBox(height: 6),
             ],
           ),
         ),
@@ -838,9 +955,9 @@ class _InsightsScreenState extends State<InsightsScreen> {
               ),
 
               _infoRow(
-                title: 'Symptom Trends',
+                title: 'Disease Trends',
                 description:
-                    'Tracking symptom frequency helps detect outbreaks early and allocate medical resources effectively.',
+                    'Tracking Disease frequency helps detect outbreaks early and allocate medical resources effectively.',
                 showDivider: false,
               ),
             ],
@@ -932,6 +1049,110 @@ class _InsightsScreenState extends State<InsightsScreen> {
     return number.toString().replaceAllMapped(
       RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
       (match) => '${match[1]},',
+    );
+  }
+
+  Widget _trendFilterButton({
+    required IconData icon,
+    required String label,
+    required List<String> options,
+    required String selectedValue,
+    required ValueChanged<String> onSelected,
+  }) {
+    final isSelected = selectedValue != options.first;
+
+    return GestureDetector(
+      onTap: () async {
+        final selected = await showModalBottomSheet<String>(
+          context: context,
+          backgroundColor: Colors.white,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          builder: (context) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD1D5DB),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ...options.map(
+                      (option) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          option,
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        trailing: option == selectedValue
+                            ? const Icon(
+                                Icons.check,
+                                color: Color(0xFF2563EB),
+                              )
+                            : null,
+                        onTap: () => Navigator.pop(context, option),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+
+        if (selected != null) {
+          onSelected(selected);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? const Color(0xFFEFF6FF)
+              : const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected
+                  ? const Color(0xFF2563EB)
+                  : const Color(0xFF9CA3AF),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: isSelected
+                    ? const Color(0xFF2563EB)
+                    : const Color(0xFF9CA3AF),
+              ),
+            ),
+            const SizedBox(width: 3),
+            const Icon(
+              LucideIcons.chevronDown,
+              size: 13,
+              color: Color(0xFF9CA3AF),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
