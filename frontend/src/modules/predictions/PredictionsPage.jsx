@@ -72,10 +72,12 @@ export default function PredictionsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const refreshInFlightRef = useRef(false);
   const [emptyMsg, setEmptyMsg] = useState("");
+  const [refreshJob, setRefreshJob] = useState(null);
   const forecastModel = "prophet";
   const [selectedDisease, setSelectedDisease] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState("");
   const [historyPage, setHistoryPage] = useState(1);
+  const isAutoRefreshing = refreshJob?.status === "running";
 
   useEffect(() => {
     if (!token) return undefined;
@@ -94,6 +96,7 @@ export default function PredictionsPage() {
         if (!isMounted) return;
 
         const refreshJob = response?.refreshJob;
+        setRefreshJob(refreshJob || null);
         const refreshIsRunning = refreshJob?.status === "running";
         if (response?.hasPrediction === false) {
           setRun(null);
@@ -171,6 +174,7 @@ export default function PredictionsPage() {
           forecastHorizonMonths: 1,
         });
         const response = await fetchLatestPredictions(token);
+        setRefreshJob(response?.refreshJob || null);
         if (response?.hasPrediction === false) {
           throw new Error(response.message || "No prediction run was created.");
         }
@@ -305,17 +309,18 @@ export default function PredictionsPage() {
               <button
                 type="button"
                 onClick={onRefresh}
-                disabled={isGenerating || !token}
-                className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                disabled={isGenerating || isAutoRefreshing || !token}
+                className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100"
               >
                 <span aria-hidden="true">↻</span>
                 {isGenerating
                   ? "Refreshing forecast..."
                   : "Refresh Forecast"}
               </button>
-              {isGenerating && (
-                <p role="status" className="max-w-64 text-xs text-gray-500 sm:text-right">
-                  This may take several minutes.
+              {isAutoRefreshing && (
+                <p role="status" className="flex items-center gap-2 text-xs font-medium text-slate-600 sm:justify-end">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500 motion-reduce:animate-none" aria-hidden="true" />
+                  Forecast updating automatically
                 </p>
               )}
             </>
@@ -366,6 +371,15 @@ export default function PredictionsPage() {
 
       {run && (
         <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7">
+          {run.predictionIsStale && isAutoRefreshing && (
+            <div role="status" className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <span className="mt-1 h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-amber-500 motion-reduce:animate-none" aria-hidden="true" />
+              <div>
+                <p className="font-semibold">Showing the latest saved forecast</p>
+                <p className="mt-0.5 text-amber-800">A newer dataset is being processed in the background. This view will update automatically when the new forecast is ready.</p>
+              </div>
+            </div>
+          )}
           <div className="flex flex-col gap-4 border-b border-gray-100 pb-5 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-600">

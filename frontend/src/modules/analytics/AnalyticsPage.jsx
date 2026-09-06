@@ -57,6 +57,10 @@ export default function Analytics() {
     () => buildReportVolumeRows(reportRows),
     [reportRows],
   );
+  const officialCoverage = useMemo(() => ({
+    coverageStart: dataset?.analyticalCoverageStart || dataset?.coverageStart,
+    coverageEnd: dataset?.analyticalCoverageEnd || dataset?.coverageEnd,
+  }), [dataset]);
 
   const selectedRows = useMemo(
     () => {
@@ -70,14 +74,18 @@ export default function Analytics() {
   );
 
   const vm = useMemo(
-    () => buildAnalyticsCasesViewModel(selectedRows),
-    [selectedRows],
+    () => buildAnalyticsCasesViewModel(
+      selectedRows,
+      selectedCaseStatus === "reported" ? {} : officialCoverage,
+    ),
+    [officialCoverage, selectedCaseStatus, selectedRows],
   );
   const allStatusTimelineData = useMemo(
     () => buildMonthlyTimelineData(
       selectedCaseStatus === "reported" ? reportVolumeRows : officialCaseRows,
+      selectedCaseStatus === "reported" ? {} : officialCoverage,
     ),
-    [officialCaseRows, reportVolumeRows, selectedCaseStatus],
+    [officialCaseRows, officialCoverage, reportVolumeRows, selectedCaseStatus],
   );
   const selectedStatusLabel =
     selectedCaseStatus === ALL_ANALYTICS_STATUSES

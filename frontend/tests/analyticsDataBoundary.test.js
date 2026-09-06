@@ -25,3 +25,29 @@ test("validated and classified citizen records remain reported-volume rows", () 
   assert.ok(rows.every((row) => row.caseClassification === "reported"));
   assert.ok(rows.every((row) => row.sourceType === "citizen_report"));
 });
+
+test("declared official coverage supplies zero months before the first valid case row", () => {
+  const view = buildAnalyticsCasesViewModel(
+    [{
+      year: 2022,
+      month: 2,
+      district: "District 1",
+      disease: "Cholera",
+      caseClassification: "confirmed",
+      cases: 2,
+    }],
+    {
+      coverageStart: "2022-01-01T00:00:00.000Z",
+      coverageEnd: "2022-03-31T23:59:59.999Z",
+    },
+  );
+
+  assert.deepEqual(
+    view.monthlyTimelineData.map(({ date, confirmedCases }) => ({ date, confirmedCases })),
+    [
+      { date: "2022-01-01", confirmedCases: 0 },
+      { date: "2022-02-01", confirmedCases: 2 },
+      { date: "2022-03-01", confirmedCases: 0 },
+    ],
+  );
+});

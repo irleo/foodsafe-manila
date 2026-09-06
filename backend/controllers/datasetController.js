@@ -37,22 +37,34 @@ function predictionRefreshTimeoutMs() {
 }
 
 async function startDatasetPredictionRefresh(datasetId) {
+  if (!mongoose.Types.ObjectId.isValid(datasetId)) {
+    logServerError(new Error("Prediction refresh received an invalid dataset ID."), {
+      code: "PREDICTION_JOB_INVALID_DATASET_ID",
+      route: "dataset:upload",
+    });
+    return;
+  }
+
+  // Mongoose preserves strings assigned to Mixed fields. Normalize this once so
+  // the worker's ObjectId-scoped update can match the durable running job.
+  const normalizedDatasetId = new mongoose.Types.ObjectId(datasetId);
   let job;
   try {
     job = await PredictionRun.create({
       model: "prophet",
       granularity: PREDICTION_GRANULARITY,
-      datasetScope: datasetId,
-      basisDatasetId: datasetId,
+      datasetScope: normalizedDatasetId,
+      basisDatasetId: normalizedDatasetId,
       trigger: "official_upload",
       status: "running",
       startedAt: new Date(),
+      forecastHorizonMonths: 1,
     });
   } catch (error) {
     if (error?.code === 11000) {
       console.log(
         "Prediction refresh already active for datasetId:",
-        String(datasetId),
+        String(normalizedDatasetId),
       );
       return;
     }
@@ -74,7 +86,7 @@ async function startDatasetPredictionRefresh(datasetId) {
 
   void refreshMonthlyDistrictPredictions({
     trigger: "official_upload",
-    datasetId,
+    datasetId: normalizedDatasetId,
     predictionRunId: job._id,
     horizonMonths: 1,
     force: true,
@@ -160,17 +172,34 @@ export const uploadDataset = async (req, res) => {
     const reportingFrequency = String(req.body.reportingFrequency || "weekly")
       .trim()
       .toLowerCase();
-    let districtCoverage = [];
-    try {
-      districtCoverage = req.body.districtCoverage
-        ? JSON.parse(req.body.districtCoverage)
-        : [];
-    } catch {
-      return res.status(400).json({ message: "District coverage must be valid JSON." });
+    const coverageStartText = String(req.body.coverageStart || "").trim();
+    const coverageEndText = String(req.body.coverageEnd || "").trim();
+    const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateOnlyPattern.test(coverageStartText) || !dateOnlyPattern.test(coverageEndText)) {
+      return res.status(400).json({ message: "Coverage start and end dates are required." });
     }
-    if (!Array.isArray(districtCoverage)) {
-      return res.status(400).json({ message: "District coverage must be a list." });
+    const coverageStart = new Date(`${coverageStartText}T00:00:00.000Z`);
+    const coverageEnd = new Date(`${coverageEndText}T23:59:59.999Z`);
+    if (
+      Number.isNaN(coverageStart.getTime())
+      || Number.isNaN(coverageEnd.getTime())
+      || coverageStart.toISOString().slice(0, 10) !== coverageStartText
+      || coverageEnd.toISOString().slice(0, 10) !== coverageEndText
+      || coverageStart > coverageEnd
+    ) {
+      return res.status(400).json({ message: "Coverage end must be on or after coverage start." });
     }
+    const todayEnd = new Date();
+    todayEnd.setUTCHours(23, 59, 59, 999);
+    if (coverageEnd > todayEnd) {
+      return res.status(400).json({ message: "Coverage end cannot be in the future." });
+    }
+    const districtCoverage = Array.from({ length: 6 }, (_, index) => ({
+      district: `District ${index + 1}`,
+      coverageStart,
+      coverageEnd,
+      verifiedComplete: true,
+    }));
     if (!req.file)
       return res.status(400).json({ message: "No file uploaded." });
     if (!name) {
@@ -223,6 +252,8 @@ export const uploadDataset = async (req, res) => {
       storageProvider: "r2",
       storageKey,
       districtCoverage,
+      declaredCoverageStart: coverageStart,
+      declaredCoverageEnd: coverageEnd,
       beforePersist: async () => {
         await uploadDatasetObject({
           storageKey,

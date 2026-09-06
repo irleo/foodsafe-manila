@@ -9,8 +9,6 @@ import { delay } from "../utils/delay.js";
 import { notify } from "../../../utils/toast.js";
 import { getErrorMessage } from "../../../utils/errors.js";
 
-const MANILA_DISTRICTS = Array.from({ length: 6 }, (_, index) => `District ${index + 1}`);
-
 export default function OfficialDatasetsTab() {
   const fileInputRef = useRef(null);
   const uploadInFlightRef = useRef(false);
@@ -23,6 +21,8 @@ export default function OfficialDatasetsTab() {
 
   const [datasetName, setDatasetName] = useState("");
   const [reportingFrequency, setReportingFrequency] = useState("weekly");
+  const [coverageStart, setCoverageStart] = useState("");
+  const [coverageEnd, setCoverageEnd] = useState("");
   const [coverageVerified, setCoverageVerified] = useState(false);
 
   const [validating, setValidating] = useState(false);
@@ -49,9 +49,10 @@ export default function OfficialDatasetsTab() {
   const canValidate = useMemo(() => {
     if (!file) return false;
     if (!datasetName.trim()) return false;
+    if (!coverageStart || !coverageEnd || coverageStart > coverageEnd) return false;
     if (!coverageVerified) return false;
     return true;
-  }, [file, datasetName, coverageVerified]);
+  }, [file, datasetName, coverageEnd, coverageStart, coverageVerified]);
 
   const resetMessages = () => {
     setErrorMsg("");
@@ -109,10 +110,8 @@ export default function OfficialDatasetsTab() {
           file,
           name: datasetName.trim(),
           reportingFrequency,
-          districtCoverage: MANILA_DISTRICTS.map((district) => ({
-            district,
-            verifiedComplete: true,
-          })),
+          coverageStart,
+          coverageEnd,
         }),
         {
           success: (res) =>
@@ -133,6 +132,9 @@ export default function OfficialDatasetsTab() {
 
       setStatusMsg(`Imported: ${result.formatType} (${result.insertedRows} records)`);
       setFile(null);
+      setCoverageStart("");
+      setCoverageEnd("");
+      setCoverageVerified(false);
       await fetchRecent();
     } catch (err) {
       setErrorMsg(getErrorMessage(err, "The file could not be processed."));
@@ -246,12 +248,57 @@ export default function OfficialDatasetsTab() {
               />
             </div>
 
+            <fieldset className="rounded-lg border border-blue-200 bg-blue-50/60 p-4">
+              <legend className="px-1 text-sm font-semibold text-blue-950">
+                Official reporting coverage
+              </legend>
+              <p className="text-xs text-blue-700">
+                Enter the complete period represented by CESU. These dates establish coverage independently of the earliest and latest valid case rows in the workbook.
+              </p>
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="text-sm text-gray-700">
+                  Coverage start
+                  <input
+                    required
+                    type="date"
+                    value={coverageStart}
+                    max={coverageEnd || undefined}
+                    onChange={(event) => {
+                      setCoverageStart(event.target.value);
+                      setCoverageVerified(false);
+                    }}
+                    className="mt-1 min-h-11 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm"
+                  />
+                </label>
+                <label className="text-sm text-gray-700">
+                  Coverage end
+                  <input
+                    required
+                    type="date"
+                    value={coverageEnd}
+                    min={coverageStart || undefined}
+                    max={new Date().toISOString().slice(0, 10)}
+                    onChange={(event) => {
+                      setCoverageEnd(event.target.value);
+                      setCoverageVerified(false);
+                    }}
+                    className="mt-1 min-h-11 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm"
+                  />
+                </label>
+              </div>
+              {coverageStart && coverageEnd && coverageStart > coverageEnd ? (
+                <p className="mt-2 text-xs font-medium text-red-700">
+                  Coverage end must be on or after coverage start.
+                </p>
+              ) : null}
+            </fieldset>
+
             <label className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
               <input type="checkbox" className="mt-0.5 h-4 w-4" checked={coverageVerified} onChange={(event) => setCoverageVerified(event.target.checked)} />
-              <span>I confirm that reporting was complete for each included district throughout the period detected from the workbook. Covered weeks without a case row may therefore be encoded as zero.</span>
+              <span>I confirm that CESU reporting was complete for all six Manila districts throughout the selected coverage dates. Covered periods without a case row may therefore be encoded as zero.</span>
             </label>
             <p className="text-xs text-gray-500">
-              Each district uses its own earliest and latest valid record dates. Without this confirmation, missing rows cannot safely be interpreted as zero.
+              Rows outside the selected coverage dates will cause validation to fail. Missing periods inside confirmed coverage are treated as zero; periods outside it remain missing.
             </p>
 
             <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-4">

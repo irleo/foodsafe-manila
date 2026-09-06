@@ -146,6 +146,53 @@ function minMaxYearMonth(records) {
   return { coverageStart, coverageEnd };
 }
 
+function exactRecordBounds(records) {
+  const dates = records
+    .map((record) => {
+      const exact = record?.surveillanceDate || record?.weekStartDate;
+      if (exact) return new Date(exact);
+      if (Number.isInteger(record?.year) && Number.isInteger(record?.month)) {
+        return new Date(Date.UTC(record.year, record.month - 1, 1));
+      }
+      return null;
+    })
+    .filter((date) => date && !Number.isNaN(date.getTime()));
+  if (!dates.length) return { start: null, end: null };
+  return {
+    start: new Date(Math.min(...dates.map((date) => date.getTime()))),
+    end: new Date(Math.max(...dates.map((date) => date.getTime()))),
+  };
+}
+
+function validateDeclaredCoverage(records, coverageStart, coverageEnd) {
+  const start = coverageStart ? new Date(coverageStart) : null;
+  const end = coverageEnd ? new Date(coverageEnd) : null;
+  if (
+    !start
+    || !end
+    || Number.isNaN(start.getTime())
+    || Number.isNaN(end.getTime())
+    || start > end
+  ) {
+    return { ok: false, reason: "Valid declared coverage dates are required." };
+  }
+
+  const observed = exactRecordBounds(records);
+  if (observed.start && (observed.start < start || observed.end > end)) {
+    return {
+      ok: false,
+      reason: "The selected coverage dates must include every valid case date in the workbook.",
+      validationErrors: [{
+        sheet: null,
+        row: null,
+        field: "coverage",
+        message: `Valid workbook records span ${observed.start.toISOString().slice(0, 10)} through ${observed.end.toISOString().slice(0, 10)}.`,
+      }],
+    };
+  }
+  return { ok: true, coverageStart: start, coverageEnd: end };
+}
+
 export function districtCoverageFromRecords(records, suppliedCoverage = []) {
   const normalizedSupplied = new Map(
     (Array.isArray(suppliedCoverage) ? suppliedCoverage : []).map((entry) => [
@@ -305,6 +352,8 @@ export async function importOfficialCasesXlsx({
   storageKey,
   fileSize = 0,
   districtCoverage = [],
+  declaredCoverageStart,
+  declaredCoverageEnd,
   beforePersist,
 } = {}) {
   if (!Buffer.isBuffer(fileBuffer)) throw new Error("fileBuffer is required");
@@ -411,7 +460,21 @@ export async function importOfficialCasesXlsx({
       };
     }
 
-    const { coverageStart, coverageEnd } = minMaxYearMonth(normalized);
+    const declaredCoverage = validateDeclaredCoverage(
+      normalized,
+      declaredCoverageStart,
+      declaredCoverageEnd,
+    );
+    if (!declaredCoverage.ok) {
+      return {
+        success: false,
+        formatType,
+        reason: declaredCoverage.reason,
+        validationErrors: declaredCoverage.validationErrors || [],
+        validationErrorCount: invalidRowCount,
+      };
+    }
+    const { coverageStart, coverageEnd } = declaredCoverage;
     const resolvedDistrictCoverage = districtCoverageFromRecords(
       normalized,
       districtCoverage,
@@ -556,7 +619,21 @@ export async function importOfficialCasesXlsx({
       };
     }
 
-    const { coverageStart, coverageEnd } = minMaxYearMonth(normalized);
+    const declaredCoverage = validateDeclaredCoverage(
+      normalized,
+      declaredCoverageStart,
+      declaredCoverageEnd,
+    );
+    if (!declaredCoverage.ok) {
+      return {
+        success: false,
+        formatType,
+        reason: declaredCoverage.reason,
+        validationErrors: declaredCoverage.validationErrors || [],
+        validationErrorCount: invalidRowCount,
+      };
+    }
+    const { coverageStart, coverageEnd } = declaredCoverage;
     const resolvedDistrictCoverage = districtCoverageFromRecords(
       normalized,
       districtCoverage,

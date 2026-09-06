@@ -2,7 +2,9 @@ import mongoose from "mongoose";
 import PredictionRun from "../models/PredictionRun.js";
 import Dataset from "../models/Dataset.js";
 import {
+  FORECAST_SCHEMA_VERSION,
   isMonthlyDistrictPredictionRefreshActive,
+  isUsablePredictionRun,
   refreshMonthlyDistrictPredictions,
 } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
 import { logServerError } from "../utils/serverLogger.js";
@@ -11,6 +13,8 @@ import { isSafePublicMessage } from "../middleware/errorHandler.js";
 const MODEL = "prophet";
 const GRANULARITY = "monthly_disease_district_cases";
 const DEFAULT_REFRESH_TIMEOUT_MS = 12 * 60 * 1000;
+const DEFAULT_FORECAST_HORIZON_MONTHS = 1;
+const MAX_FORECAST_HORIZON_MONTHS = 36;
 
 function positiveInteger(value, fallback) {
   const parsed = Number.parseInt(value, 10);
@@ -22,6 +26,15 @@ function refreshTimeoutMs() {
     process.env.PREDICTION_REFRESH_TIMEOUT_MS,
     DEFAULT_REFRESH_TIMEOUT_MS,
   );
+}
+
+function parseForecastHorizon(value) {
+  const parsed = Number(value ?? DEFAULT_FORECAST_HORIZON_MONTHS);
+  return Number.isInteger(parsed)
+    && parsed >= 1
+    && parsed <= MAX_FORECAST_HORIZON_MONTHS
+    ? parsed
+    : null;
 }
 
 async function resolveDataset(datasetId) {
@@ -99,11 +112,12 @@ export function sanitizePredictionPayload(value, key = "", depth = 0) {
   return value;
 }
 
-async function latestRefresh(datasetScope) {
+async function latestRefresh(datasetScope, horizonMonths) {
   let run = await PredictionRun.findOne({
     model: MODEL,
     granularity: GRANULARITY,
     datasetScope,
+    forecastHorizonMonths: horizonMonths,
   })
     .sort({ startedAt: -1, _id: -1 })
     .select("status startedAt finishedAt createdAt errorMessage basisDatasetId")
@@ -131,6 +145,30 @@ async function latestRefresh(datasetScope) {
   }
 
   return run;
+}
+
+async function latestUsablePrediction(datasetScope, horizonMonths) {
+  const filter = {
+    model: MODEL,
+    granularity: GRANULARITY,
+    status: "success",
+    forecastHorizonMonths: horizonMonths,
+    "payload.schemaVersion": FORECAST_SCHEMA_VERSION,
+    "payload.diseases.0": { $exists: true },
+  };
+  if (datasetScope !== undefined) filter.datasetScope = datasetScope;
+
+  const candidates = await PredictionRun.find(filter)
+    .sort({ generatedAt: -1, _id: -1 })
+    .limit(20)
+    .select(
+      "_id granularity basisDatasetId basisYear basisMonth forecastTargetYear forecastTargetMonth forecastHorizonMonths generatedAt trigger status payload startedAt finishedAt createdAt errorMessage",
+    )
+    .lean();
+
+  return candidates.find((candidate) => (
+    isUsablePredictionRun(candidate, { horizonMonths })
+  )) || null;
 }
 
 function launchRefreshWorker({ job, datasetId, horizonMonths, trigger, req }) {
@@ -185,27 +223,29 @@ function launchRefreshWorker({ job, datasetId, horizonMonths, trigger, req }) {
 
 export const getPredictions = async (req, res) => {
   try {
+    const horizonMonths = parseForecastHorizon(req.query.forecastHorizonMonths);
+    if (!horizonMonths) {
+      return res.status(400).json({
+        message: `Forecast horizon must be a whole number from 1 to ${MAX_FORECAST_HORIZON_MONTHS}.`,
+      });
+    }
     const dataset = await resolveDataset(req.query.datasetId);
     const datasetScope = dataset?._id || "all";
-    const refreshRun = await latestRefresh(datasetScope);
+    const refreshRun = await latestRefresh(datasetScope, horizonMonths);
 
-    const run = await PredictionRun.findOne({
-      model: MODEL,
-      granularity: GRANULARITY,
-      datasetScope,
-      status: "success",
-    })
-      .sort({ generatedAt: -1 })
-      .select(
-        "_id granularity basisDatasetId basisYear basisMonth forecastTargetYear forecastTargetMonth forecastHorizonMonths generatedAt trigger status payload",
-      )
-      .lean();
+    const currentRun = await latestUsablePrediction(datasetScope, horizonMonths);
+    const showingPreviousRun = !currentRun && refreshRun?.status === "running";
+    const run = currentRun || (
+      showingPreviousRun
+        ? await latestUsablePrediction(undefined, horizonMonths)
+        : null
+    );
 
     if (!run) {
       return res.json({
         success: true,
         hasPrediction: false,
-        message: "No saved monthly forecast is available yet.",
+        message: "No current, renderable monthly forecast is available. Refresh the forecast to replace any outdated or incomplete saved record.",
         refreshJob: publicRefreshJob(refreshRun),
       });
     }
@@ -213,6 +253,7 @@ export const getPredictions = async (req, res) => {
     return res.json({
       success: true,
       hasPrediction: true,
+      predictionIsStale: showingPreviousRun,
       predictionRunId: String(run._id),
       granularity: run.granularity,
       basisDatasetId: run.basisDatasetId ? String(run.basisDatasetId) : null,
@@ -244,7 +285,12 @@ export const getPredictions = async (req, res) => {
 
 export const refreshPredictions = async (req, res) => {
   try {
-    const horizonMonths = Number(req.body?.forecastHorizonMonths ?? 1);
+    const horizonMonths = parseForecastHorizon(req.body?.forecastHorizonMonths);
+    if (!horizonMonths) {
+      return res.status(400).json({
+        message: `Forecast horizon must be a whole number from 1 to ${MAX_FORECAST_HORIZON_MONTHS}.`,
+      });
+    }
     const dataset = await resolveDataset(req.body?.datasetId);
     if (!dataset?._id) {
       return res.status(422).json({
@@ -254,7 +300,7 @@ export const refreshPredictions = async (req, res) => {
     }
 
     const datasetId = dataset._id;
-    const existing = await latestRefresh(datasetId);
+    const existing = await latestRefresh(datasetId, horizonMonths);
     if (existing?.status === "running") {
       const workerIsActive = isMonthlyDistrictPredictionRefreshActive({
         datasetId,
@@ -264,7 +310,7 @@ export const refreshPredictions = async (req, res) => {
         launchRefreshWorker({
           job: existing,
           datasetId,
-          horizonMonths: Number.isFinite(horizonMonths) ? horizonMonths : 1,
+          horizonMonths,
           trigger: "manual",
           req,
         });
@@ -279,17 +325,7 @@ export const refreshPredictions = async (req, res) => {
         refreshJob: publicRefreshJob(existing),
       });
     }
-    const savedRun = existing?.status === "success"
-      ? existing
-      : await PredictionRun.findOne({
-        model: MODEL,
-        granularity: GRANULARITY,
-        datasetScope: datasetId,
-        status: "success",
-      })
-        .sort({ generatedAt: -1 })
-        .select("status startedAt finishedAt createdAt errorMessage basisDatasetId")
-        .lean();
+    const savedRun = await latestUsablePrediction(datasetId, horizonMonths);
     if (savedRun) {
       return res.status(200).json({
         success: true,
@@ -310,6 +346,7 @@ export const refreshPredictions = async (req, res) => {
         trigger: "manual",
         status: "running",
         startedAt: new Date(),
+        forecastHorizonMonths: horizonMonths,
       });
     } catch (error) {
       if (error?.code !== 11000) throw error;
@@ -331,7 +368,7 @@ export const refreshPredictions = async (req, res) => {
     launchRefreshWorker({
       job,
       datasetId,
-      horizonMonths: Number.isFinite(horizonMonths) ? horizonMonths : 1,
+      horizonMonths,
       trigger: "manual",
       req,
     });

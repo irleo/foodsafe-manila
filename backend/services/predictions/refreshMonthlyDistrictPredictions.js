@@ -21,9 +21,60 @@ const MIN_COMPARABLE_OBSERVATIONS = 3;
 const BACKTEST_MONTHS = 19;
 const AGGREGATE_INTERVAL_COVERAGE = 0.95;
 const MIN_AGGREGATE_INTERVAL_OBSERVATIONS = 19;
-const FORECAST_SCHEMA_VERSION = 9;
+export const FORECAST_SCHEMA_VERSION = 9;
 const GRANULARITY = "monthly_disease_district_cases";
 const DISTRICTS = Object.freeze(Array.from({ length: 6 }, (_, index) => `District ${index + 1}`));
+
+function isUsableForecastPoint(point) {
+  return Boolean(
+    point
+    && point.year !== null
+    && point.year !== undefined
+    && point.month !== null
+    && point.month !== undefined
+    && point.predictedCases !== null
+    && point.predictedCases !== undefined
+    && Number.isInteger(Number(point.year))
+    && Number.isInteger(Number(point.month))
+    && Number(point.month) >= 1
+    && Number(point.month) <= 12
+    && Number.isFinite(Number(point.predictedCases)),
+  );
+}
+
+function scopeHasUsableForecast(scope) {
+  if (scope?.status !== "success") return false;
+  if (isUsableForecastPoint(scope?.nextForecast)) return true;
+  return Array.isArray(scope?.forecast)
+    && scope.forecast.some(isUsableForecastPoint);
+}
+
+export function isUsablePredictionRun(run, { horizonMonths } = {}) {
+  const payload = run?.payload;
+  const expectedHorizon = Number(horizonMonths);
+  if (Number(payload?.schemaVersion) !== FORECAST_SCHEMA_VERSION) return false;
+  if (
+    Number.isInteger(expectedHorizon)
+    && (
+      Number(run?.forecastHorizonMonths) !== expectedHorizon
+      || Number(payload?.forecastHorizonMonths) !== expectedHorizon
+    )
+  ) {
+    return false;
+  }
+
+  const diseases = Array.isArray(payload?.diseases) ? payload.diseases : [];
+  if (!diseases.length) return false;
+
+  return diseases.some((disease) => {
+    const hasDistrictForecast = Array.isArray(disease?.districts)
+      && disease.districts.some((district) => (
+        scopeHasUsableForecast(district)
+        || scopeHasUsableForecast(district?.models?.prophet)
+      ));
+    return hasDistrictForecast || scopeHasUsableForecast(disease?.wholeManila);
+  });
+}
 
 function periodKey(year, month) { return `${Number(year)}-${Number(month)}`; }
 function addMonths(year, month, amount) {
@@ -383,7 +434,9 @@ async function refreshMonthlyDistrictPredictionsImpl({ trigger = "manual", datas
     })
       .sort({ generatedAt: -1 })
       .lean();
-    if (saved) return { ...saved, alreadyUpToDate: true };
+    if (isUsablePredictionRun(saved, { horizonMonths })) {
+      return { ...saved, alreadyUpToDate: true };
+    }
   }
   const previousSuccessfulRun = await PredictionRun.findOne({
     model: "prophet",
@@ -451,7 +504,8 @@ async function refreshMonthlyDistrictPredictionsImpl({ trigger = "manual", datas
     && Number(existing?.basisMonth) === Number(basis?.month)
     && Number(existing?.forecastTargetYear) === Number(target?.year)
     && Number(existing?.forecastTargetMonth) === Number(target?.month)
-    && Number(existing?.forecastHorizonMonths) === Number(horizonMonths);
+    && Number(existing?.forecastHorizonMonths) === Number(horizonMonths)
+    && isUsablePredictionRun(existing, { horizonMonths });
   if (canReuse) return { ...existing, alreadyUpToDate: true };
   const now = new Date();
   const payload = { schemaVersion: FORECAST_SCHEMA_VERSION, generatedAt: now.toISOString(), model: "prophet_with_seasonal_naive_benchmark", granularity: GRANULARITY, datasetScope: String(datasetScope), basisYear: basis?.year || null, basisMonth: basis?.month || null, forecastTargetYear: target?.year || null, forecastTargetMonth: target?.month || null, forecastHorizonMonths: horizonMonths, diseases: diseaseOutputs, methodology: { sourceProcessing: "Authoritative official surveillance uploads only; citizen reports remain separate early-warning and audit records.", comparisonPeriod: "Calendar-month totals", operationalModel: "Prophet is the sole operational district forecasting method. A district is reported as unavailable when Prophet cannot produce a forecast; no fallback model is substituted.", benchmark: "Seasonal Naive (the same calendar month one year earlier) is retained only as a historical performance benchmark and never supplies an operational forecast.", districtPredictionIntervals: "District-level 95% prediction intervals are Prophet posterior-predictive intervals.", wholeManilaPointForecast: "The Whole-Manila point forecast is the coherent bottom-up sum of all six district Prophet point forecasts.", wholeManilaPredictionInterval: `When at least ${MIN_AGGREGATE_INTERVAL_OBSERVATIONS} common rolling-origin aggregate errors are available, the Whole-Manila 95% prediction interval is calibrated from the corrected empirical quantile of absolute errors from the same bottom-up Prophet pipeline. Bounds are not calculated when calibration history is insufficient.`, rollingOriginReuse: "A prior rolling-origin result is reused only when its complete historical series is an exact prefix of the current series. Its prior target forecast then becomes the backtest prediction for the newly observed month. Any historical revision triggers full rolling-origin recomputation.", zeroHandling: "A complete covered month with no eligible official case row is counted as zero.", missingHandling: "Partial months and periods outside verified district coverage remain missing.", forecastScope: "One run includes every supported disease and all six districts." } };

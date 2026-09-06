@@ -33,16 +33,16 @@ export async function uploadDataset({
   file,
   name,
   reportingFrequency,
-  districtCoverage,
+  coverageStart,
+  coverageEnd,
   token,
 }) {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("name", name);
   formData.append("reportingFrequency", reportingFrequency);
-  if (Array.isArray(districtCoverage)) {
-    formData.append("districtCoverage", JSON.stringify(districtCoverage));
-  }
+  formData.append("coverageStart", coverageStart);
+  formData.append("coverageEnd", coverageEnd);
 
   const res = await fetch(`${API_BASE}/api/datasets/upload`, {
     method: "POST",

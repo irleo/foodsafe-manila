@@ -10,13 +10,13 @@ import {
   buildYoYCaseStatsFromCases,
 } from "./statisticsCaseBuilders";
 
-export function buildAnalyticsCasesViewModel(caseRows = []) {
-  const monthlyTimelineData = buildMonthlyTimelineData(caseRows);
+export function buildAnalyticsCasesViewModel(caseRows = [], coverage = {}) {
+  const monthlyTimelineData = buildMonthlyTimelineData(caseRows, coverage);
   const diseaseData = buildDiseaseDistributionComparison(caseRows);
   const districtData = buildDistrictDataFromCases(caseRows);
   const districtStats = buildDistrictStatisticsFromCases(caseRows);
   const yoy = buildYoYCaseStatsFromCases(caseRows);
-  const diseaseTrend = buildDiseaseTrendByMonth(caseRows, 5, 60);
+  const diseaseTrend = buildDiseaseTrendByMonth(caseRows, 5, 60, coverage);
 
   const topDistrict = districtStats[0]?.district ?? "—";
   const topDisease = diseaseData[0]?.disease ?? "—";

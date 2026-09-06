@@ -1,4 +1,10 @@
-export function buildMonthlyTimelineData(casesRows = []) {
+function monthIndexFromCoverageDate(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return null;
+  return date.getUTCFullYear() * 12 + date.getUTCMonth();
+}
+
+export function buildMonthlyTimelineData(casesRows = [], coverage = {}) {
   const map = {};
 
   const ensureMonthBucket = (year, month) => {
@@ -38,16 +44,17 @@ export function buildMonthlyTimelineData(casesRows = []) {
   }
 
   const buckets = Object.values(map);
-  if (!buckets.length) return [];
-
   const monthIndices = buckets
     .map((b) => b.year * 12 + b.month - 1)
     .filter((v) => Number.isFinite(v))
     .sort((a, b) => a - b);
-  if (!monthIndices.length) return [];
+  const coverageStart = monthIndexFromCoverageDate(coverage?.coverageStart);
+  const coverageEnd = monthIndexFromCoverageDate(coverage?.coverageEnd);
+  if (!monthIndices.length && (coverageStart === null || coverageEnd === null)) return [];
 
-  const start = monthIndices[0];
-  const end = monthIndices[monthIndices.length - 1];
+  const start = coverageStart ?? monthIndices[0];
+  const end = coverageEnd ?? monthIndices[monthIndices.length - 1];
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) return [];
   const byMonthKey = new Map(buckets.map((b) => [`${b.year}-${b.month}`, b]));
   const rows = [];
   for (let idx = start; idx <= end; idx += 1) {
@@ -257,7 +264,12 @@ export function buildDiseaseTrendByYear(caseRows = [], topN = 5, yearsBack = 10)
   return { data: rows, keys, startYear, endYear };
 }
 
-export function buildDiseaseTrendByMonth(caseRows = [], topN = 5, monthsBack = 60) {
+export function buildDiseaseTrendByMonth(
+  caseRows = [],
+  topN = 5,
+  monthsBack = 60,
+  coverage = {},
+) {
   const safeRows = Array.isArray(caseRows) ? caseRows : [];
   const validRows = safeRows.filter((row) => {
     const year = Number(row?.year);
@@ -279,8 +291,10 @@ export function buildDiseaseTrendByMonth(caseRows = [], topN = 5, monthsBack = 6
   const monthIndices = validRows.map(
     (row) => Number(row.year) * 12 + Number(row.month) - 1,
   );
-  const endIndex = Math.max(...monthIndices);
-  const firstIndex = Math.min(...monthIndices);
+  const coverageStart = monthIndexFromCoverageDate(coverage?.coverageStart);
+  const coverageEnd = monthIndexFromCoverageDate(coverage?.coverageEnd);
+  const endIndex = coverageEnd ?? Math.max(...monthIndices);
+  const firstIndex = coverageStart ?? Math.min(...monthIndices);
   const startIndex = monthsBack
     ? Math.max(firstIndex, endIndex - (monthsBack - 1))
     : firstIndex;

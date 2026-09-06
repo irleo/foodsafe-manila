@@ -26,12 +26,15 @@ async function fetchJson(url, options = {}) {
  */
 export async function fetchLatestPredictions(
   token,
-  { datasetId, districtKey, district } = {},
+  { datasetId, districtKey, district, forecastHorizonMonths } = {},
 ) {
   const qs = new URLSearchParams();
   if (datasetId) qs.set("datasetId", datasetId);
   if (districtKey) qs.set("districtKey", districtKey);
   if (district) qs.set("district", district);
+  if (forecastHorizonMonths) {
+    qs.set("forecastHorizonMonths", String(forecastHorizonMonths));
+  }
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   const { res, body: j } = await fetchJson(`${API_BASE}/api/predictions${suffix}`, {
     headers: { Authorization: token ? `Bearer ${token}` : "" },
@@ -86,6 +89,7 @@ export async function refreshPredictions(
     await new Promise((resolve) => setTimeout(resolve, 3000));
     const latest = await fetchLatestPredictions(token, {
       datasetId: pollDatasetId,
+      forecastHorizonMonths,
     });
     const refreshJob = latest?.refreshJob;
     if (!refreshJob || refreshJob.status === "idle") {
