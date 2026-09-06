@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowUpDown, CheckCircle2, Inbox, Search } from "lucide-react";
+import { CheckCircle2, Inbox, Search } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 import { useReports } from "../hooks/useReports.js";
 import ReportsLogList from "./ReportsLogList";
@@ -9,7 +9,6 @@ const STATUS_OPTIONS = [
   { value: "reported", label: "Reported" },
   { value: "suspected", label: "Suspected" },
   { value: "probable", label: "Probable" },
-  { value: "not_validated", label: "Not Confirmed" },
   { value: "ruled_out", label: "Ruled Out" },
   { value: "confirmed", label: "Confirmed" },
 ];
@@ -29,7 +28,15 @@ export default function ReportLogsTab() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [sortOrder, setSortOrder] = useState("desc");
-  const { reports, pagination, permissions, loading, errorMsg, fetchReports } =
+  const {
+    reports,
+    pagination,
+    summary,
+    permissions,
+    loading,
+    errorMsg,
+    fetchReports,
+  } =
     useReports(token, { autoFetch: false });
 
   const [onlyCounted] = useState(false);
@@ -62,6 +69,27 @@ export default function ReportLogsTab() {
 
   return (
     <div className="space-y-5">
+      <section
+        aria-label="Citizen report summary"
+        className="grid grid-cols-1 gap-4 sm:grid-cols-3"
+      >
+        {[
+          ["Total Reports Received", summary.totalReports],
+          ["Ongoing Reports", summary.ongoingReports],
+          ["Confirmed Reports", summary.confirmedReports],
+        ].map(([label, value]) => (
+          <article
+            key={label}
+            className="rounded-xl border border-blue-200 bg-white px-5 py-4 shadow-sm"
+          >
+            <p className="text-sm text-slate-600">{label}</p>
+            <p className="mt-2 text-3xl font-semibold tabular-nums text-slate-950">
+              {loading ? "—" : value.toLocaleString()}
+            </p>
+          </article>
+        ))}
+      </section>
+
       <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between p-2">
           <div className="min-w-0">
@@ -99,7 +127,7 @@ export default function ReportLogsTab() {
           </div>
         </div>
 
-        <div className="mt-2 pt-3 px-2">
+        <div className="mt-2 pt-3 px-1">
           <div>
             <label className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
               <Search className="h-3.5 w-3.5" />
@@ -110,48 +138,14 @@ export default function ReportLogsTab() {
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               placeholder="Report ID or location"
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-lg border border-gray-300 bg-gray-100/50 px-3 py-2.5 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
         <p className="mt-3 ms-2 text-xs text-gray-500">
           Needs review includes Reported, Suspected, and Probable cases.
-          Resolved includes Confirmed, Not Confirmed, and Ruled Out outcomes.
+          Resolved includes Confirmed and Ruled Out outcomes.
         </p>
-      </div>
-      <div className="flex gap-3 items-center">
-        <div>
-          <label className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
-            Status
-          </label>
-          <select
-            value={status}
-            onChange={(event) => {
-              setStatus(event.target.value);
-              if (event.target.value) setQueue("");
-            }}
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {STATUS_OPTIONS.map((option) => (
-              <option key={option.value || "all"} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-            Reported date
-          </label>
-          <select
-            value={sortOrder}
-            onChange={(event) => setSortOrder(event.target.value)}
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="desc">Newest first</option>
-            <option value="asc">Oldest first</option>
-          </select>
-        </div>
       </div>
 
       {errorMsg ? (
@@ -168,6 +162,14 @@ export default function ReportLogsTab() {
         onPageChange={(page) => loadReports({ page })}
         token={token}
         canAccessPatientIdentity={permissions.canAccessPatientIdentity}
+        status={status}
+        statusOptions={STATUS_OPTIONS}
+        onStatusChange={(value) => {
+          setStatus(value);
+          if (value) setQueue("");
+        }}
+        sortOrder={sortOrder}
+        onSortOrderChange={setSortOrder}
         emptyTitle={
           search || status
             ? "No reports match these filters"

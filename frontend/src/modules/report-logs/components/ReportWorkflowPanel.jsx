@@ -561,7 +561,6 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
                 <option value="probable">Probable</option>
               )}
               <option value="confirmed">Confirmed</option>
-              <option value="not_validated">Not Confirmed</option>
             </select>
           </Field>
           <Field label="Supporting findings">
@@ -646,15 +645,13 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
           </Field>
           <button
             disabled={Boolean(busyAction)}
-            className={`min-h-11 rounded-lg px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 ms-auto ${validation.result === "confirmed" ? "bg-red-600 hover:bg-red-700" : validation.result === "probable" ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-600 hover:bg-emerald-700"}`}
+            className={`min-h-11 rounded-lg px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 ms-auto ${validation.result === "confirmed" ? "bg-red-600 hover:bg-red-700" : "bg-amber-600 hover:bg-amber-700"}`}
           >
             {busyAction === "validation"
               ? "Saving…"
               : validation.result === "confirmed"
                 ? "Mark as Confirmed"
-                : validation.result === "probable"
-                  ? "Mark as Probable"
-                  : "Mark as Not Confirmed"}
+                : "Mark as Probable"}
           </button>
         </form>
       )}

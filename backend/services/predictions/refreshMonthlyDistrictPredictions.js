@@ -5,7 +5,7 @@ import PredictionRun from "../../models/PredictionRun.js";
 import SurveillanceThresholdConfig from "../../models/SurveillanceThresholdConfig.js";
 import { normalizeDistrictKey } from "../../constants/manilaDistrictCoords.js";
 import { SURVEILLANCE_DISEASES, includedStatusesForDisease } from "../../constants/surveillanceMethodology.js";
-import { getAnalyticalCaseRows } from "../analyticalCaseService.js";
+import { assertOfficialCaseRows, getAnalyticalCaseRows } from "../analyticalCaseService.js";
 import { loadOfficialCaseSource } from "../officialCaseSourceReader.js";
 import { resolveCumulativeDatasetContext } from "../cumulativeOfficialCaseService.js";
 import { calculateSurveillanceThreshold, classifyThresholdValue } from "../surveillanceThresholdService.js";
@@ -411,8 +411,8 @@ async function refreshMonthlyDistrictPredictionsImpl({ trigger = "manual", datas
       datasetId: dataset._id,
       disease,
       statuses,
-      includeReports: false,
     });
+    assertOfficialCaseRows(rows);
     const districts = [];
     const previousDisease = previousDiseases.get(disease);
     for (const district of DISTRICTS) {

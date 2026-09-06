@@ -100,7 +100,7 @@ function workflowHint(value) {
   if (status === "probable") return "Needs confirmation decision";
   if (status === "confirmed") return "Confirmed outcome recorded";
   if (status === "ruled_out") return "Review completed — ruled out";
-  if (status === "not_validated") return "Review completed — not confirmed";
+  if (status === "not_validated") return "Legacy review outcome";
   return "Open report workflow";
 }
 
@@ -112,6 +112,11 @@ export default function ReportsLogList({
   onPageChange,
   token,
   canAccessPatientIdentity,
+  status,
+  statusOptions = [],
+  onStatusChange,
+  sortOrder,
+  onSortOrderChange,
   emptyTitle = "No reports in this queue",
   emptyDescription = "New reports will appear here when they match this view.",
 }) {
@@ -250,14 +255,39 @@ export default function ReportsLogList({
             </p>
           </div>
 
-          <button
-            onClick={() => onRefresh?.()}
-            disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            {loading ? "Refreshing..." : "Refresh"}
-          </button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-end">
+            <label className="text-xs font-medium uppercase tracking-wide text-gray-500 me-1">
+              Status
+              <select
+                value={status}
+                onChange={(event) => onStatusChange?.(event.target.value)}
+                className="mt-1 block min-h-11 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-normal normal-case tracking-normal text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-44"
+              >
+                {statusOptions.map((option) => (
+                  <option key={option.value || "all"} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs font-medium uppercase tracking-wide text-gray-500 me-2">
+              Reported date
+              <select
+                value={sortOrder}
+                onChange={(event) => onSortOrderChange?.(event.target.value)}
+                className="mt-1 block min-h-11 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-normal normal-case tracking-normal text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-40"
+              >
+                <option value="desc">Newest first</option>
+                <option value="asc">Oldest first</option>
+              </select>
+            </label>
+            <button
+              onClick={() => onRefresh?.()}
+              disabled={loading}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              {loading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
         </div>
 
         {loading ? (

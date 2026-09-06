@@ -12,7 +12,7 @@ const REPORT_ACTIVITY_TITLES = {
   report_ruled_out: "Citizen report ruled out",
   case_confirmed: "Citizen report classified as confirmed",
   case_marked_probable: "Citizen report classified as probable",
-  case_not_validated: "Citizen report not validated",
+  case_not_validated: "Legacy citizen report outcome",
 };
 
 function humanize(value) {

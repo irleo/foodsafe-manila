@@ -584,7 +584,7 @@ class MapScreenState extends State<MapScreen> {
                         ? selectedCaseClassification
                         : 'confirmed',
                     items: _classificationOptions.isEmpty
-                        ? const ['confirmed', 'suspected', 'reported', 'not_validated']
+                        ? const ['confirmed', 'suspected', 'probable']
                         : _classificationOptions,
                     formatItem: _formatFilterItem,
                     onChanged: (value) {

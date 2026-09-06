@@ -206,14 +206,12 @@ class ApiService {
     String? year,
     String? month,
     String? caseClassification,
-    bool includeReports = true,
   }) async {
     final query = <String, String>{
       if (year != null && year != 'all') 'year': year,
       if (month != null && month != 'all') 'month': month,
       if (caseClassification != null && caseClassification != 'all')
         'caseClassification': caseClassification,
-      if (!includeReports) 'includeReports': 'false',
     };
 
     final response = await ApiClient.get(

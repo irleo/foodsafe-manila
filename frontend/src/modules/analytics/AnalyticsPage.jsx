@@ -8,6 +8,8 @@ import AnalyticsGrid from "./components/AnalyticsGrid";
 import DataCoverageNotice from "../../components/common/DataCoverageNotice";
 import { buildMonthlyTimelineData } from "./utils/analyticsCaseBuilders";
 import { formatStatusLabel } from "../../utils/formatStatusLabel";
+import { useReports } from "../report-logs/hooks/useReports";
+import { buildReportVolumeRows } from "./utils/reportAnalyticsBuilders";
 
 const ALL_ANALYTICS_STATUSES = "all";
 const CASE_STATUS_OPTIONS = [
@@ -25,16 +27,21 @@ export default function Analytics() {
   const { datasetId, dataset } = useLatestDatasetId(token);
   const {
     items: officialItems,
-    loading,
-    errorMsg,
+    loading: officialLoading,
+    errorMsg: officialErrorMsg,
   } = useOfficialCases({
     token,
     datasetId,
-    caseClassification: ["reported", "suspected", "probable", "confirmed"],
+    caseClassification: ["suspected", "probable", "confirmed"],
     limit: 5000,
   });
+  const {
+    reports: reportRows,
+    loading: reportsLoading,
+    errorMsg: reportsErrorMsg,
+  } = useReports(token, { fetchAll: true });
 
-  const caseRows = useMemo(() => {
+  const officialCaseRows = useMemo(() => {
     const safe = Array.isArray(officialItems) ? officialItems : [];
     return safe.map((r) => ({
       city: r.city ?? "Manila",
@@ -46,15 +53,20 @@ export default function Analytics() {
       cases: Number(r.cases),
     }));
   }, [officialItems]);
+  const reportVolumeRows = useMemo(
+    () => buildReportVolumeRows(reportRows),
+    [reportRows],
+  );
 
   const selectedRows = useMemo(
-    () =>
-      selectedCaseStatus === ALL_ANALYTICS_STATUSES
-        ? caseRows
-        : caseRows.filter(
-            (row) => row.caseClassification === selectedCaseStatus,
-          ),
-    [caseRows, selectedCaseStatus],
+    () => {
+      if (selectedCaseStatus === "reported") return reportVolumeRows;
+      if (selectedCaseStatus === ALL_ANALYTICS_STATUSES) return officialCaseRows;
+      return officialCaseRows.filter(
+        (row) => row.caseClassification === selectedCaseStatus,
+      );
+    },
+    [officialCaseRows, reportVolumeRows, selectedCaseStatus],
   );
 
   const vm = useMemo(
@@ -62,14 +74,18 @@ export default function Analytics() {
     [selectedRows],
   );
   const allStatusTimelineData = useMemo(
-    () => buildMonthlyTimelineData(caseRows),
-    [caseRows],
+    () => buildMonthlyTimelineData(
+      selectedCaseStatus === "reported" ? reportVolumeRows : officialCaseRows,
+    ),
+    [officialCaseRows, reportVolumeRows, selectedCaseStatus],
   );
-
   const selectedStatusLabel =
     selectedCaseStatus === ALL_ANALYTICS_STATUSES
       ? "All Included"
       : formatStatusLabel(selectedCaseStatus);
+  const isReportView = selectedCaseStatus === "reported";
+  const analyticsLoading = isReportView ? reportsLoading : officialLoading;
+  const analyticsErrorMsg = isReportView ? reportsErrorMsg : officialErrorMsg;
 
   const handleExportPdf = () => {
     window.print();
@@ -81,7 +97,7 @@ export default function Analytics() {
         <div>
           <h1 className="text-2xl font-bold">Analytics</h1>
           <p className="mt-1 text-gray-600">
-            Explore status-specific case patterns across all analytics views
+            Explore official CESU cases and citizen reports as separate data sources
           </p>
         </div>
         {/* EXPORT */}
@@ -124,10 +140,15 @@ export default function Analytics() {
             </label>
             <p className="mt-1 text-sm text-gray-600">
               This selection updates every statistic, chart, and district summary below.
+              {isReportView && (
+                <span className="mt-1 block text-emerald-700">
+                  Reported shows citizen-report volume. Reports remain reported here even after they are reviewed, validated, or assigned a workflow classification.
+                </span>
+              )}
               {selectedCaseStatus === ALL_ANALYTICS_STATUSES && (
                 <span className="mt-1 block text-amber-700">
-                  All statuses is a descriptive sum of reported, suspected,
-                  probable, and confirmed records—not a formal epidemiological
+                  All statuses is a descriptive sum of suspected, probable,
+                  and confirmed official records—not a formal epidemiological
                   case definition.
                 </span>
               )}
@@ -150,23 +171,27 @@ export default function Analytics() {
         </div>
       </section>
 
-      {errorMsg && (
+      {analyticsErrorMsg && (
         <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
-          {errorMsg}
+          {isReportView ? "Citizen reports" : "Official CESU cases"} could not be loaded: {analyticsErrorMsg}
         </div>
       )}
 
-      {loading ? (
+      {analyticsLoading ? (
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <p className="text-sm text-gray-600">Loading analytics...</p>
+          <p className="text-sm text-gray-600">
+            Loading {isReportView ? "citizen report" : "official CESU"} analytics...
+          </p>
         </div>
       ) : (
         <>
           <AnalyticsStats
             caseStatusLabel={selectedStatusLabel}
+            dataIdentity={isReportView ? "report" : "official"}
             latestYear={vm.latestYear}
             latestYearCases={vm.latestYearCases}
             previousYear={vm.previousYear}
+            previousYearCases={vm.previousYearCases}
             topDistrict={vm.topDistrict}
             topDisease={vm.topDisease}
             districtsCovered={vm.districtsCovered}
@@ -176,6 +201,7 @@ export default function Analytics() {
           <AnalyticsGrid
             caseStatusLabel={selectedStatusLabel}
             caseStatus={selectedCaseStatus}
+            dataIdentity={isReportView ? "report" : "official"}
             monthlyTimelineData={allStatusTimelineData}
             districtData={vm.districtData}
             diseaseTrendData={vm.diseaseTrendData}

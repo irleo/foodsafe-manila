@@ -16,6 +16,7 @@ import {
   normalizeSurveillanceDisease,
   validateProbableClassification,
 } from "../constants/surveillanceMethodology.js";
+import { getReportLogSummary } from "../services/reportAnalyticsService.js";
 
 const REPORT_LIST_FIELDS = [
   "_id",
@@ -473,7 +474,6 @@ export const getReports = async (req, res) => {
       "suspected",
       "probable",
       "confirmed",
-      "not_validated",
       "ruled_out",
     ]);
     const queueStatuses = {
@@ -579,7 +579,7 @@ export const getReports = async (req, res) => {
       REPORT_LIST_FIELDS.split(" ").map((field) => [field, 1]),
     );
 
-    const [rawReports, total] = await Promise.all([
+    const [rawReports, total, summary] = await Promise.all([
       Report.aggregate([
         { $match: query },
         { $addFields: { _statusPriority: statusPriority } },
@@ -589,6 +589,7 @@ export const getReports = async (req, res) => {
         { $project: projection },
       ]),
       Report.countDocuments(query),
+      getReportLogSummary(),
     ]);
     const populatePaths = [
       { path: "investigation.personnelIds", select: "username" },
@@ -603,6 +604,10 @@ export const getReports = async (req, res) => {
 
     // Back-compat: ensure caseClassification exists for old docs
     return res.json({
+      sourceDefinition: {
+        includes: ["citizen_report"],
+        excludes: ["official_upload"],
+      },
       items: reports.map((obj) => {
         const restrictedWorkflow = canAccessPatientIdentity
           ? {}
@@ -650,6 +655,7 @@ export const getReports = async (req, res) => {
         };
       }),
       pagination: paginationMeta({ page, limit, total }),
+      summary,
       permissions: { canAccessPatientIdentity },
     });
   } catch (error) {
@@ -858,8 +864,8 @@ export const ruleOutReport = async (req, res) => {
 export const validateReport = async (req, res) => {
   try {
     const result = String(req.body?.result || "").trim();
-    if (!["probable", "confirmed", "not_validated"].includes(result)) {
-      return res.status(400).json({ message: "Classification result must be Probable, Confirmed, or Not Confirmed." });
+    if (!["probable", "confirmed"].includes(result)) {
+      return res.status(400).json({ message: "Classification result must be Probable or Confirmed." });
     }
     const supportingFindings = requireText(req.body?.supportingFindings, "Supporting findings");
     if (supportingFindings.error) return res.status(400).json({ message: supportingFindings.error });
@@ -902,9 +908,7 @@ export const validateReport = async (req, res) => {
     report.classificationEvidence = {
       evidenceType: result === "probable"
         ? evidenceType
-        : result === "confirmed"
-          ? "confirmatory_laboratory_result"
-          : "supporting_findings",
+        : "confirmatory_laboratory_result",
       details: String(
         req.body?.evidenceDetails || req.body?.laboratoryEvidence || supportingFindings.value,
       ).trim(),
@@ -935,9 +939,7 @@ export const validateReport = async (req, res) => {
       actorId: req.user.id,
       action: result === "confirmed"
         ? "case_confirmed"
-        : result === "probable"
-          ? "case_marked_probable"
-          : "case_not_validated",
+        : "case_marked_probable",
       previousStatus,
       newStatus: result,
       details: { condition: disease, evidenceType: evidenceType || undefined },

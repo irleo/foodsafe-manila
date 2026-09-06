@@ -6,6 +6,7 @@ import DistrictThresholdOverview from "./DistrictThresholdOverview.jsx";
 export default function AnalyticsGrid({
   caseStatusLabel,
   caseStatus,
+  dataIdentity = "official",
   monthlyTimelineData,
   districtData,
   diseaseTrendData,
@@ -13,18 +14,19 @@ export default function AnalyticsGrid({
   token,
   datasetId,
 }) {
+  const isReportData = dataIdentity === "report";
+  const entityLabel = isReportData ? "Citizen Reports" : "Official Cases";
   return (
     <div className="space-y-6 analytics-print-grid">
       <div className="analytics-print-block">
         <SwitchableYearlyChart
-          title="Cases Over Time"
+          title={`${entityLabel} Over Time`}
           data={monthlyTimelineData}
           movingAverageStatus={caseStatus}
         />
         <p className="print-only mt-2 text-sm text-gray-700">
-          This comparison graph shows reported, suspected, probable, and
-          confirmed case volume by month, with 3-month and 6-month moving
-          averages for the selected status.
+          This graph shows {isReportData ? "citizen-report" : "official case"}
+          volume by month, with 3-month and 6-month moving averages.
         </p>
       </div>
 
@@ -33,7 +35,7 @@ export default function AnalyticsGrid({
           <DiseaseTrendStackedAreaChart
             data={diseaseTrendData}
             keys={diseaseTrendKeys}
-            title={`Monthly Disease Trends — ${caseStatusLabel} Cases`}
+            title={`Monthly Disease Trends — ${entityLabel}`}
             height={320}
           />
           <p className="print-only mt-2 text-sm text-gray-700">
@@ -45,17 +47,20 @@ export default function AnalyticsGrid({
         <div className="analytics-print-block lg:col-span-2">
           <DistrictBarChart
             data={districtData}
-            title={`${caseStatusLabel} Case Distribution by District`}
+            title={`${entityLabel} by District`}
+            unitLabel={isReportData ? "reports" : "cases"}
           />
           <p className="print-only mt-2 text-sm text-gray-700">
-            This graph compares districts by {caseStatusLabel.toLowerCase()} case
+            This graph compares districts by {isReportData ? "citizen-report" : `${caseStatusLabel.toLowerCase()} official case`}
             count, helping identify areas with the highest observed concentration.
           </p>
         </div>
       </div>
-      <div className="analytics-print-block">
-        <DistrictThresholdOverview token={token} datasetId={datasetId} />
-      </div>
+      {!isReportData && (
+        <div className="analytics-print-block">
+          <DistrictThresholdOverview token={token} datasetId={datasetId} />
+        </div>
+      )}
     </div>
   );
 }

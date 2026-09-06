@@ -11,14 +11,14 @@ import {
 
 const numberFormatter = new Intl.NumberFormat("en-PH");
 
-function DistrictTooltip({ active, payload }) {
+function DistrictTooltip({ active, payload, unitLabel = "cases" }) {
   if (!active || !payload?.length) return null;
   const item = payload.at(0).payload;
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
       <p className="text-sm font-semibold text-gray-900">{item.district}</p>
       <p className="mt-1 text-xs text-gray-600">
-        {numberFormatter.format(item.cases)} cases · {item.share}% of total
+        {numberFormatter.format(item.cases)} {unitLabel} · {item.share}% of total
       </p>
     </div>
   );
@@ -27,6 +27,7 @@ function DistrictTooltip({ active, payload }) {
 export default function DistrictBarChart({
   data = [],
   title = "Case Distribution by District",
+  unitLabel = "cases",
   headerRight = null,
 }) {
   const safeData = Array.isArray(data) ? data : [];
@@ -34,6 +35,12 @@ export default function DistrictBarChart({
     (sum, item) => sum + Math.max(0, Number(item?.cases) || 0),
     0,
   );
+  const districtCount = safeData.filter(
+    (item) => String(item?.district || "").trim().length > 0,
+  ).length;
+  const averagePerDistrict = districtCount > 0
+    ? totalCases / districtCount
+    : 0;
   const chartData = [...safeData]
     .filter((item) => Number(item?.cases) > 0)
     .sort((a, b) => (b.cases || 0) - (a.cases || 0))
@@ -44,11 +51,11 @@ export default function DistrictBarChart({
     }));
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+    <div className="flex h-full flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="font-semibold text-gray-900">{title}</h2>
-          <p className="mt-1 text-xs text-gray-500">District contribution to total cases</p>
+          <p className="mt-1 text-xs text-gray-500">District contribution to total {unitLabel}</p>
         </div>
         {headerRight}
       </div>
@@ -69,7 +76,10 @@ export default function DistrictBarChart({
                   tickLine={false}
                   tick={{ fill: "#374151", fontSize: 12 }}
                 />
-                <Tooltip cursor={{ fill: "#eff6ff" }} content={<DistrictTooltip />} />
+                <Tooltip
+                  cursor={{ fill: "#eff6ff" }}
+                  content={<DistrictTooltip unitLabel={unitLabel} />}
+                />
                 <Bar dataKey="cases" fill="#2563eb" radius={[0, 6, 6, 0]} maxBarSize={30}>
                   <LabelList
                     dataKey="share"
@@ -83,6 +93,20 @@ export default function DistrictBarChart({
             </ResponsiveContainer>
           </div>
       )}
+
+      {chartData.length > 0 ? (
+        <div className="mt-auto border-t border-slate-200 pt-5">
+          <p className="text-sm text-slate-600">Average per district</p>
+          <div className="mt-1 flex items-end justify-between gap-4">
+            <p className="text-3xl font-semibold tabular-nums text-slate-950">
+              {numberFormatter.format(Number(averagePerDistrict.toFixed(1)))}
+            </p>
+            <p className="pb-1 text-right text-xs text-slate-500">
+              {unitLabel} across {districtCount} represented district{districtCount === 1 ? "" : "s"}
+            </p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

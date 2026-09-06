@@ -39,11 +39,9 @@ export const listCasesByDataset = async (req, res) => {
     if (req.query.disease) filters.disease = String(req.query.disease).trim();
 
     const allowedStatuses = new Set([
-      "reported",
       "suspected",
       "probable",
       "confirmed",
-      "not_validated",
     ]);
     const selectedStatuses = String(
       req.query.caseClassification || "confirmed",

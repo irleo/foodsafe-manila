@@ -25,6 +25,7 @@ export function buildAnalyticsCasesViewModel(caseRows = []) {
     latestYear: yoy?.thisYear ?? null,
     latestYearCases: yoy?.thisYearCases ?? 0,
     previousYear: yoy?.lastYear ?? null,
+    previousYearCases: yoy?.lastYearCases ?? 0,
     topDistrict,
     topDisease,
     districtsCovered: districtStats.length,

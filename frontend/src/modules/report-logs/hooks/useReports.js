@@ -6,6 +6,11 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 export function useReports(token, { fetchAll = false, autoFetch = true } = {}) {
   const [reports, setReports] = useState([]);
   const [pagination, setPagination] = useState(null);
+  const [summary, setSummary] = useState({
+    totalReports: 0,
+    ongoingReports: 0,
+    confirmedReports: 0,
+  });
   const [permissions, setPermissions] = useState({ canAccessPatientIdentity: false });
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
@@ -72,6 +77,11 @@ export function useReports(token, { fetchAll = false, autoFetch = true } = {}) {
         }
         setReports(items);
         setPagination(first?.pagination || null);
+        setSummary({
+          totalReports: Number(first?.summary?.totalReports || 0),
+          ongoingReports: Number(first?.summary?.ongoingReports || 0),
+          confirmedReports: Number(first?.summary?.confirmedReports || 0),
+        });
         setPermissions(first?.permissions || { canAccessPatientIdentity: false });
       } catch (err) {
         setErrorMsg(getErrorMessage(err, "Reports could not be loaded."));
@@ -101,5 +111,13 @@ export function useReports(token, { fetchAll = false, autoFetch = true } = {}) {
     };
   }, [autoFetch, token, fetchReports]);
 
-  return { reports, pagination, permissions, loading, errorMsg, fetchReports };
+  return {
+    reports,
+    pagination,
+    summary,
+    permissions,
+    loading,
+    errorMsg,
+    fetchReports,
+  };
 }

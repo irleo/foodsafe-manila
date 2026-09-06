@@ -1,5 +1,4 @@
 import ReportLogsTab from "./components/ReportLogsTab";
-import DataCoverageNotice from "../../components/common/DataCoverageNotice";
 
 export default function ReportLogsPage() {
   return (
@@ -10,7 +9,6 @@ export default function ReportLogsPage() {
           Investigate citizen reports, classify suspected cases, and record confirmation outcomes.
         </p>
       </div>
-      <DataCoverageNotice fallbackText="Citizen report logs show submissions received by FoodSafe Manila and do not establish coverage outside the dates represented in the selected dataset." />
       <ReportLogsTab />
     </div>
   );

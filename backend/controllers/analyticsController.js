@@ -19,7 +19,6 @@ export async function getAnalyticsSummary(req, res) {
     const caseRows = await getAnalyticalCaseRows({
       datasetId,
       statuses: ["confirmed"],
-      includeReports: false,
     });
 
     const yearRange = getYearRange(caseRows);
@@ -91,6 +90,7 @@ export async function getAnalyticsSummary(req, res) {
         totalDefinition: "Confirmed cases from authoritative CESU uploads only",
         selectedCaseStatus: "confirmed",
         sourcePolicy: "authoritative_cesu_uploads_only",
+        includes: ["official_upload"],
         yearRange,
         baseYear,
         previousYear,

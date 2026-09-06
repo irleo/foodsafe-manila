@@ -136,7 +136,6 @@ export async function calculateSurveillanceThreshold({ datasetId, disease: reque
     statuses: includedStatuses,
     district: district || undefined,
     disease,
-    includeReports: false,
   });
   const eligibleRows = rows.filter((row) => includedStatuses.includes(row.caseClassification) && Number.isInteger(Number(row.year)) && Number.isInteger(Number(row.month)));
   const years = [];

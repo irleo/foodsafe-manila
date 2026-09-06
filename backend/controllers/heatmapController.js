@@ -3,7 +3,7 @@ import { normalizeDistrictKey } from "../constants/manilaDistrictCoords.js";
 import { getAnalyticalCaseRows } from "../services/analyticalCaseService.js";
 import { logRequestError } from "../utils/serverLogger.js";
 
-const ALLOWED_STATUSES = new Set(["reported", "suspected", "probable", "confirmed", "not_validated"]);
+const ALLOWED_STATUSES = new Set(["suspected", "probable", "confirmed"]);
 
 function getBarangayNo(value, fallback) {
   const direct = Number(value);
@@ -49,7 +49,6 @@ export const getDistrictHeatmap = async (req, res) => {
       year: selectedYear,
       month: selectedMonth,
       disease: disease ? String(disease).trim() : undefined,
-      includeReports: false,
     });
 
     const barangayTotals = new Map();
@@ -109,7 +108,6 @@ export const getDistrictHeatmap = async (req, res) => {
     const optionRows = await getAnalyticalCaseRows({
       datasetId,
       statuses: [...ALLOWED_STATUSES],
-      includeReports: false,
     });
 
     return res.json({

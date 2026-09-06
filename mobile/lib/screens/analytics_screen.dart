@@ -385,8 +385,6 @@ class AnalyticsScreenState extends State<AnalyticsScreen> {
     final result = await ApiService.getOfficialAnalytics(
       year: trendsYear,
       caseClassification: trendsClassification,
-      includeReports:
-          trendsClassification == 'all' || trendsClassification == 'suspected',
     );
 
     setState(() {
@@ -402,9 +400,6 @@ class AnalyticsScreenState extends State<AnalyticsScreen> {
       month: districtMonth,
       year: districtYear,
       caseClassification: districtClassification,
-      includeReports:
-          districtClassification == 'all' ||
-          districtClassification == 'suspected',
     );
 
     setState(() {
@@ -421,9 +416,6 @@ class AnalyticsScreenState extends State<AnalyticsScreen> {
       month: diseaseMonth,
       year: diseaseYear,
       caseClassification: diseaseClassification,
-      includeReports:
-          diseaseClassification == 'all' ||
-          diseaseClassification == 'suspected',
     );
 
     setState(() {

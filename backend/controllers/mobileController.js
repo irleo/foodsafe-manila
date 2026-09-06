@@ -36,7 +36,6 @@ function riskCacheTtlMs() {
 async function aggregateOfficialByBarangay(since, barangayNo = null) {
   const rows = await getAnalyticalCaseRows({
     statuses: ["confirmed"],
-    includeReports: false,
   });
   const sinceKey = since
     ? since.getUTCFullYear() * 12 + since.getUTCMonth()
@@ -260,13 +259,10 @@ export const getMobileOfficialAnalytics = async (req, res) => {
 
     const rows = await getAnalyticalCaseRows({
       statuses: [
-        "reported",
         "suspected",
         "probable",
         "confirmed",
-        "not_validated",
       ],
-      includeReports: false,
     });
 
     const filtered = rows.filter((row) => {
