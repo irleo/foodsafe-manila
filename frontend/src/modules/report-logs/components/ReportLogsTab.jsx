@@ -63,7 +63,7 @@ export default function ReportLogsTab() {
   return (
     <div className="space-y-5">
       <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between p-2">
           <div className="min-w-0">
             <h2 className="text-xl font-semibold text-gray-900">
               Citizen report logs
@@ -99,62 +99,59 @@ export default function ReportLogsTab() {
           </div>
         </div>
 
-        <div className="mt-5 border-t border-slate-100 pt-4">
-          <div className="grid w-full gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_190px_190px]">
-            <div>
-              <label className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-                <Search className="h-3.5 w-3.5" />
-                Search
-              </label>
-              <input
-                type="search"
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                placeholder="Report ID or location"
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
-                Status
-              </label>
-              <select
-                value={status}
-                onChange={(event) => {
-                  setStatus(event.target.value);
-                  if (event.target.value) setQueue("");
-                }}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {STATUS_OPTIONS.map((option) => (
-                  <option key={option.value || "all"} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-                <ArrowUpDown className="h-3.5 w-3.5" />
-                Reported date
-              </label>
-              <select
-                value={sortOrder}
-                onChange={(event) => setSortOrder(event.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="desc">Newest first</option>
-                <option value="asc">Oldest first</option>
-              </select>
-            </div>
+        <div className="mt-2 pt-3 px-2">
+          <div>
+            <label className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+              <Search className="h-3.5 w-3.5" />
+              Search
+            </label>
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder="Report ID or location"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
         </div>
-        <p className="mt-3 text-xs text-gray-500">
+        <p className="mt-3 ms-2 text-xs text-gray-500">
           Needs review includes Reported, Suspected, and Probable cases.
           Resolved includes Confirmed, Not Confirmed, and Ruled Out outcomes.
         </p>
+      </div>
+      <div className="flex gap-3 items-center">
+        <div>
+          <label className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
+            Status
+          </label>
+          <select
+            value={status}
+            onChange={(event) => {
+              setStatus(event.target.value);
+              if (event.target.value) setQueue("");
+            }}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {STATUS_OPTIONS.map((option) => (
+              <option key={option.value || "all"} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+            Reported date
+          </label>
+          <select
+            value={sortOrder}
+            onChange={(event) => setSortOrder(event.target.value)}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="desc">Newest first</option>
+            <option value="asc">Oldest first</option>
+          </select>
+        </div>
       </div>
 
       {errorMsg ? (
