@@ -64,6 +64,13 @@ const reportSchema = new mongoose.Schema(
       index: { name: "reportsExposureBarangayNo" },
     },
 
+    exposureDescription: {
+      type: String,
+      default: null,
+      trim: true,
+      maxlength: 500,
+    },
+
     symptoms: {
       type: [String],
       required: true,

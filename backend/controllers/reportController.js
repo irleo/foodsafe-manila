@@ -25,6 +25,7 @@ const REPORT_LIST_FIELDS = [
   "location.barangay",
   "exposureDistrict",
   "exposureBarangay",
+  "exposureDescription",
   "symptoms",
   "caseCount",
   "foodSource",
@@ -96,6 +97,7 @@ export const createReport = async (req, res) => {
       exposureDistrict, // reported at district A but suspect exposure at district B
       exposureBarangay,
       exposureBarangayNo,
+      exposureDescription,
       symptoms,
       caseCount,
       foodSource,
@@ -260,6 +262,9 @@ export const createReport = async (req, res) => {
         Number.isFinite(parsedExposureBarangayNo) && parsedExposureBarangayNo >= 1
           ? parsedExposureBarangayNo
           : null,
+      exposureDescription: exposureDescription
+          ? String(exposureDescription).trim()
+          : null,
       symptoms: normalizedSymptoms,
       caseCount: clampedCaseCount,
       foodSource: foodSource ? String(foodSource).trim() : null,
@@ -350,14 +355,20 @@ export const getUserReports = async (req, res) => {
 
     const { page, limit, skip } = parsePagination(req.query);
     const query = { reportedBy: userId };
-    const [reports, total] = await Promise.all([
+    const [reports, total, confirmedReports] = await Promise.all([
       Report.find(query)
         .sort({ reportedAt: -1 })
         .skip(skip)
         .limit(limit)
         .select(REPORT_LIST_FIELDS)
         .lean(),
+
       Report.countDocuments(query),
+
+      Report.countDocuments({
+        ...query,
+        currentStatus: "confirmed",
+      }),
     ]);
 
     const formattedReports = reports.map((report) => {
@@ -385,6 +396,7 @@ export const getUserReports = async (req, res) => {
 
     return res.json({
       items: formattedReports,
+      confirmedReports,
       pagination: paginationMeta({ page, limit, total }),
     });
   } catch (error) {
