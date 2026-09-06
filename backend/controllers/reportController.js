@@ -442,6 +442,7 @@ export const getReports = async (req, res) => {
       from,
       to,
       status,
+      queue,
       search,
       sortOrder = "desc",
     } = req.query;
@@ -463,12 +464,23 @@ export const getReports = async (req, res) => {
       "not_validated",
       "ruled_out",
     ]);
+    const queueStatuses = {
+      needs_review: ["reported", "suspected", "probable"],
+      resolved: ["confirmed", "not_validated", "ruled_out"],
+    };
+    if (queue && !queueStatuses[String(queue).trim().toLowerCase()]) {
+      return res.status(400).json({ message: "Invalid report queue." });
+    }
     if (status) {
       const normalizedStatus = String(status).trim().toLowerCase();
       if (!allowedStatuses.has(normalizedStatus)) {
         return res.status(400).json({ message: "Invalid report status." });
       }
       query.currentStatus = normalizedStatus;
+    } else if (queue) {
+      query.currentStatus = {
+        $in: queueStatuses[String(queue).trim().toLowerCase()],
+      };
     }
 
     if (!["asc", "desc"].includes(String(sortOrder).toLowerCase())) {

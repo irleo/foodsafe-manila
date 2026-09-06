@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { ChevronDownIcon } from "@heroicons/react/24/outline";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDownIcon, CircleStackIcon } from "@heroicons/react/24/outline";
 
 import { useAuth } from "../context/AuthContext";
 import { notify } from "../utils/toast";
@@ -76,14 +76,14 @@ function EvaluationTable({ evaluation }) {
   const naiveWins = evaluation.bestHistoricalModel === "seasonal_naive";
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+    <div className="overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[560px]">
-          <thead className="bg-gray-50 text-sm text-gray-600">
+        <table className="w-full min-w-140">
+          <thead className="bg-gray-200 text-sm text-gray-600">
             <tr>
               <th className="p-4 text-left font-medium">Metric</th>
               <th
-                className="bg-blue-50 p-4 text-right font-medium text-blue-800"
+                className="bg-blue-200 p-4 text-right font-medium text-blue-800"
               >
                 Operational: Trend-based method (Prophet){" "}
                 {prophetWins && (
@@ -102,7 +102,7 @@ function EvaluationTable({ evaluation }) {
             {rows.map((row) => (
               <tr
                 key={row.key}
-                className={`border-t border-gray-100 ${row.primary ? "bg-blue-50/40 font-semibold" : ""}`}
+                className={`border-t border-gray-200 ${row.primary ? "bg-blue-50/40 font-semibold" : ""}`}
               >
                 <td className="p-4 text-sm text-gray-700">
                   {row.label}
@@ -174,6 +174,7 @@ export default function Predictions() {
   const [run, setRun] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const refreshInFlightRef = useRef(false);
   const [emptyMsg, setEmptyMsg] = useState("");
   const forecastModel = "prophet";
   const [selectedDisease, setSelectedDisease] = useState("");
@@ -260,12 +261,14 @@ export default function Predictions() {
   }, [canRefresh, token]);
 
   const onRefresh = () => {
+    if (refreshInFlightRef.current) return;
     const refresh = async () => {
       if (!token) throw new Error("Sign in to refresh predictions.");
       if (!canRefresh)
         throw new Error(
           "System Administrator or Data Manager access is required to refresh.",
         );
+      refreshInFlightRef.current = true;
       setIsGenerating(true);
       try {
         const refreshResult = await refreshPredictions(token, {
@@ -284,6 +287,7 @@ export default function Predictions() {
           alreadyUpToDate: refreshResult?.alreadyUpToDate === true,
         };
       } finally {
+        refreshInFlightRef.current = false;
         setIsGenerating(false);
       }
     };
@@ -439,9 +443,17 @@ export default function Predictions() {
         </p>
       )}
       {token && !loading && !run && emptyMsg && (
-        <p className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700">
-          {emptyMsg}
-        </p>
+        <section role="status" className="rounded-2xl border border-[#d7e1ec] bg-[#f7f9fb] px-6 py-10 text-center shadow-sm">
+          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-[#e1ebf7] text-[#134c8c]">
+            <CircleStackIcon className="h-7 w-7" />
+          </span>
+          <h2 className="mt-3 font-semibold text-slate-900">Forecast history is still developing</h2>
+          <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-slate-600">{emptyMsg}</p>
+          <span className="mt-4 inline-flex rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#0c3a6b] ring-1 ring-inset ring-[#d7e1ec]">
+            Expected data state
+          </span>
+          <p className="mt-3 text-xs text-slate-500">The forecast will appear automatically after enough verified history is available and processing finishes.</p>
+        </section>
       )}
 
       {run &&
@@ -563,15 +575,30 @@ export default function Predictions() {
               />
             </div>
           ) : (
-            <p className="mt-6 rounded-xl bg-gray-50 p-5 text-sm text-gray-600">
-              No district forecast is available for this disease.
-            </p>
+            <div role="status" className="mt-6 rounded-xl border border-[#d7e1ec] bg-[#f7f9fb] px-6 py-8 text-center">
+              <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-[#e1ebf7] text-[#134c8c]">
+                <CircleStackIcon className="h-6 w-6" />
+              </span>
+              <p className="mt-3 font-semibold text-slate-800">Not enough history to forecast this selection</p>
+              <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">
+                Prophet did not produce a defensible result for this district and disease. FoodSafe leaves it unavailable instead of substituting a weaker method.
+              </p>
+              <span className="mt-4 inline-flex rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#0c3a6b] ring-1 ring-inset ring-[#d7e1ec]">
+                Expected data state
+              </span>
+            </div>
           )}
         </section>
       )}
 
       {run && (
         <details className="group rounded-xl border border-gray-200 bg-white shadow-sm">
+          <YearlyPredictionErrorBarChart
+            title={`Prediction Error by Period`}
+            data={selectedRows}
+            mode="signed"
+            description="Each bar is a rolling one-step Prophet error for the selected district. Seasonal Naive benchmark errors are excluded from this operational chart."
+          /> 
           <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 px-5 py-3.5 [&::-webkit-details-marker]:hidden">
             <span className="font-semibold text-gray-900">Model performance</span>
             <span className="min-w-0 flex-1 text-sm text-gray-600 sm:text-right">
@@ -579,23 +606,16 @@ export default function Predictions() {
             </span>
             <ChevronDownIcon className="h-5 w-5 shrink-0 text-gray-400 transition-transform group-open:rotate-180" />
           </summary>
-          <div className="border-t border-gray-100 p-5">
-            <p className="mb-4 text-sm text-gray-600">
-              Prophet is checked against the same-month-last-year benchmark on shared historical months. This comparison monitors trust; it never switches the operational model.
-            </p>
+          <div className="px-5 py-4">
             <EvaluationTable evaluation={evaluation} />
           </div>
+          
         </details>
       )}
 
       {run && selectedScope && (
         <>
-          <YearlyPredictionErrorBarChart
-            title={`Prediction Error by Period — ${modelLabel(selectedScope?.resolvedModel)} (${selectedLabel})`}
-            data={selectedRows}
-            mode="signed"
-            description="Each bar is a rolling one-step Prophet error for the selected district. Seasonal Naive benchmark errors are excluded from this operational chart."
-          />
+          
 
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">

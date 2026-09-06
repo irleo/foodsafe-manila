@@ -16,23 +16,6 @@ function timeAgo(input) {
   return `${days} day${days > 1 ? "s" : ""} ago`;
 }
 
-const typeDotClass = (type) => {
-  if (type === "dataset_uploaded") return "bg-blue-500";
-  if (type === "dataset_validated") return "bg-cyan-500";
-  if (type === "prediction_generated") return "bg-purple-500";
-  if (type === "user_approved") return "bg-green-500";
-  if (type === "user_rejected") return "bg-red-500";
-  if (type === "password_reset") return "bg-green-500";
-  if (type === "report_submitted") return "bg-yellow-500";
-  if (type === "investigation_recorded") return "bg-blue-500";
-  if (type === "marked_suspected") return "bg-amber-500";
-  if (type === "report_ruled_out" || type === "case_not_validated") return "bg-gray-500";
-  if (type === "case_confirmed") return "bg-green-500";
-  if (type === "case_marked_probable") return "bg-cyan-500";
-  if (type === "analytics_exported") return "bg-indigo-500";
-  return "bg-gray-400";
-};
-
 export default function RecentActivityCard({
   items = [],
   title = "Recent Activity",
@@ -56,7 +39,7 @@ export default function RecentActivityCard({
               key={item.id}
               className="flex items-start gap-3 border-b border-gray-100 py-3 first:pt-1 last:border-0 last:pb-0"
             >
-              <div className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${typeDotClass(item.type)}`} />
+              <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-violet-500" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900">{item.title}</p>
 

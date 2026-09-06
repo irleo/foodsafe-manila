@@ -73,14 +73,14 @@ const STATUS_SERIES = {
   probable: {
     dataKey: "probableCases",
     label: "Probable Cases",
-    stroke: "#8b5cf6",
-    fill: "#a78bfa",
+    stroke: "#d97706",
+    fill: "#f59e0b",
   },
   confirmed: {
     dataKey: "confirmedCases",
     label: "Confirmed Cases",
-    stroke: "#10b981",
-    fill: "#34d399",
+    stroke: "#dc2626",
+    fill: "#ef4444",
   },
 };
 

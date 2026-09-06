@@ -15,7 +15,7 @@ import axios from "axios";
 import { notify } from "../utils/toast";
 import { getErrorMessage, logClientError } from "../utils/errors";
 
-export default function Sidebar({ isOpen, onClose }) {
+export default function Sidebar({ isOpen, onClose, isCollapsed = false }) {
   const { auth, setAuth } = useAuth();
   const navigate = useNavigate();
 
@@ -79,18 +79,19 @@ export default function Sidebar({ isOpen, onClose }) {
       aria-label="Primary navigation"
       className={`
         fixed left-0 top-16 z-20 h-[calc(100dvh-4rem)] w-64 overflow-y-auto border-r border-gray-200 bg-white
-        transition-transform duration-300 lg:sticky lg:shrink-0
+        transition-[transform,width] duration-300 lg:sticky lg:shrink-0
         ${isOpen ? "translate-x-0" : "-translate-x-full"}
         lg:translate-x-0
+        ${isCollapsed ? "lg:w-20" : "lg:w-64"}
       `}
     >
       <div className="flex flex-col h-full">
-        <nav className="space-y-5 p-4">
+        <nav className={`space-y-5 p-4 ${isCollapsed ? "lg:p-3" : ""}`}>
           {navigationGroups.map((group) => (
             <section key={group.label} aria-labelledby={`nav-${group.label.replaceAll(" ", "-").toLowerCase()}`}>
               <h2
                 id={`nav-${group.label.replaceAll(" ", "-").toLowerCase()}`}
-                className="mb-2 px-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400"
+                className={`mb-2 px-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400 ${isCollapsed ? "lg:hidden" : ""}`}
               >
                 {group.label}
               </h2>
@@ -101,9 +102,11 @@ export default function Sidebar({ isOpen, onClose }) {
                     to={path}
                     end={end}
                     onClick={onClose}
+                    title={isCollapsed ? name : undefined}
                     className={({ isActive }) =>
                       [
                         "flex items-center gap-3 rounded-lg px-4 py-3 transition-colors",
+                        isCollapsed ? "lg:justify-center lg:px-0" : "",
                         isActive
                           ? "border border-blue-200 bg-blue-50 font-medium text-blue-700"
                           : "text-gray-700 hover:bg-gray-100",
@@ -118,7 +121,7 @@ export default function Sidebar({ isOpen, onClose }) {
                             isActive ? "text-blue-700" : "text-gray-500",
                           ].join(" "),
                         })}
-                        <span className="flex-1">{name}</span>
+                        <span className={`flex-1 ${isCollapsed ? "lg:hidden" : ""}`}>{name}</span>
                       </>
                     )}
                   </NavLink>
@@ -129,13 +132,14 @@ export default function Sidebar({ isOpen, onClose }) {
         </nav>
 
         {auth?.accessToken && (
-          <div className="mt-auto border-t border-gray-200 px-4 py-2">
+          <div className={`mt-auto border-t border-gray-200 py-2 ${isCollapsed ? "lg:px-3" : "px-4"}`}>
             <button
               onClick={handleLogout}
-              className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-red-600 hover:bg-red-100"
+              title={isCollapsed ? "Logout" : undefined}
+              className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-red-600 hover:bg-red-100 ${isCollapsed ? "lg:justify-center lg:px-0" : ""}`}
             >
               <ArrowLeftStartOnRectangleIcon className="h-5 w-5 shrink-0" />
-              <span>Logout</span>
+              <span className={isCollapsed ? "lg:hidden" : ""}>Logout</span>
             </button>
           </div>
         )}

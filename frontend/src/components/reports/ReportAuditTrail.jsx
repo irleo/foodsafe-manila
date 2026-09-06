@@ -51,7 +51,7 @@ export default function ReportAuditTrail({ reportId, token }) {
           <ol className="space-y-2.5">
             {items.map((item) => (
               <li key={item._id} className="flex gap-2 text-xs text-gray-700">
-                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-500" />
+                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-violet-500" />
                 <span>
                   <strong>{formatStatusLabel(item.action)}</strong> by {item.actorId?.username || "authorized user"}
                   <span className="mt-0.5 block text-[11px] text-gray-500">

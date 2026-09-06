@@ -63,7 +63,7 @@ function periodIndex(row) {
 export default function YearlyPredictionErrorBarChart({
   title = "Prediction Error by Period (Actual - Predicted)",
   data = [],
-  height = 350,
+  height = 330,
   mode = "signed",
   defaultRangeMonths = 6,
   controls = null,
@@ -117,7 +117,7 @@ export default function YearlyPredictionErrorBarChart({
   const dataKey = mode === "absolute" ? "absError" : "error";
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <div className="px-6 py-4 border-t border-gray-200">
       <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-semibold text-lg">{title}</h2>
@@ -155,7 +155,7 @@ export default function YearlyPredictionErrorBarChart({
       ) : (
         <div style={{ height }} className="w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} barCategoryGap="20%">
+            <BarChart data={chartData} barCategoryGap="15%">
               <CartesianGrid strokeDasharray="3 3" />
 
               <XAxis dataKey="label" tick={{ fontSize: 12 }} minTickGap={20} />
@@ -224,7 +224,7 @@ export default function YearlyPredictionErrorBarChart({
         </div>
       )}
 
-      <p className="text-xs text-gray-500 mt-3">
+      <p className="text-xs text-gray-500">
         Positive error means actual cases exceeded predicted cases. Negative
         error means predicted cases exceeded actual cases.
       </p>

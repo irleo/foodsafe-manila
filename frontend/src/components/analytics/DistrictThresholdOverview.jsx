@@ -37,6 +37,10 @@ export default function DistrictThresholdOverview({ token, datasetId }) {
   const [thresholdResults, setThresholdResults] = useState({});
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const developingDistricts = MANILA_DISTRICTS.map((district) => ({
+    district,
+    result: thresholdResults[district] || null,
+  })).filter(({ result }) => result?.insufficiencyReason);
 
   useEffect(() => {
     if (!token || !datasetId) {
@@ -124,7 +128,7 @@ export default function DistrictThresholdOverview({ token, datasetId }) {
                     <td className="px-5 py-4 text-gray-600">
                       {loading && !result ? "Calculating…" : formatThresholdPeriod(result)}
                     </td>
-                    <td className="px-5 py-4 text-right font-medium text-gray-900">{result?.observedConfirmedCases ?? "—"}</td>
+                    <td className="px-5 py-4 text-right font-medium text-gray-900">{result?.observedCases ?? result?.observedConfirmedCases ?? "—"}</td>
                     <td className="px-5 py-4 text-right text-gray-600">{result ? `${result.baselinePeriods?.length || 0} / 5` : "—"}</td>
                     <td className="px-5 py-4 text-right text-gray-600">{formatThresholdValue(result?.baselineMean)}</td>
                     <td className="px-5 py-4 text-right text-gray-600">{formatThresholdValue(result?.alertThreshold)}</td>
@@ -132,7 +136,11 @@ export default function DistrictThresholdOverview({ token, datasetId }) {
                     <td className="px-5 py-4">
                       {result ? (
                         <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${thresholdStatusClass(result.outcome)}`}>
-                          {formatStatusLabel(result.outcome)}
+                          {result.outcome === "no_data"
+                            ? "No verified data"
+                            : result.insufficiencyReason
+                              ? "Baseline developing"
+                              : formatStatusLabel(result.outcome)}
                         </span>
                       ) : (
                         <span className="text-xs text-gray-400">{loading ? "Calculating…" : "Unavailable"}</span>
@@ -143,6 +151,35 @@ export default function DistrictThresholdOverview({ token, datasetId }) {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {!loading && !errorMessage && developingDistricts.length > 0 && (
+        <div className="border-t border-[#d7e1ec] bg-[#f7f9fb] p-5">
+          <div className="max-w-3xl">
+            <p className="text-sm font-semibold text-slate-950">Coverage is still developing</p>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              These districts are valid surveillance states, not calculation errors. Threshold status will appear once enough verified observations exist for the same calendar month.
+            </p>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {developingDistricts.map(({ district, result }) => (
+              <article key={district} className="rounded-xl border border-[#d7e1ec] bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-950">{district}</p>
+                    <p className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-[#6b7684]">
+                      {result.outcome === "no_data" ? "No verified observations" : "Baseline incomplete"}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-[#e1ebf7] px-2.5 py-1 text-xs font-semibold text-[#0c3a6b]">
+                    {result.baselinePeriods?.length || 0} of 5 years
+                  </span>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{result.insufficiencyReason}</p>
+              </article>
+            ))}
+          </div>
         </div>
       )}
 

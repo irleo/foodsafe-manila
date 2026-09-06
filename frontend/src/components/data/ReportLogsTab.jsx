@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { ArrowUpDown, Search } from "lucide-react";
+import { ArrowUpDown, CheckCircle2, Inbox, Search } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useReports } from "../../hooks/useReports.js";
 import ReportsLogList from "../reports/ReportsLogList";
 
 const STATUS_OPTIONS = [
-  { value: "", label: "All statuses" },
+  { value: "", label: "Any status in queue" },
   { value: "reported", label: "Reported" },
   { value: "suspected", label: "Suspected" },
   { value: "probable", label: "Probable" },
@@ -14,11 +14,18 @@ const STATUS_OPTIONS = [
   { value: "confirmed", label: "Confirmed" },
 ];
 
+const QUEUE_OPTIONS = [
+  { value: "needs_review", label: "Needs review" },
+  { value: "resolved", label: "Resolved" },
+  { value: "", label: "All reports" },
+];
+
 export default function ReportLogsTab() {
   const { auth } = useAuth();
   const token = auth?.accessToken;
 
   const [status, setStatus] = useState("");
+  const [queue, setQueue] = useState("needs_review");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [sortOrder, setSortOrder] = useState("desc");
@@ -34,6 +41,7 @@ export default function ReportLogsTab() {
     await fetchReports({
       onlyCounted: counted,
       status: status || undefined,
+      queue: status ? undefined : queue || undefined,
       search: search || undefined,
       sortOrder,
       page,
@@ -50,7 +58,7 @@ export default function ReportLogsTab() {
     if (!token) return;
     loadReports();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, status, search, sortOrder, onlyCounted]);
+  }, [token, status, queue, search, sortOrder, onlyCounted]);
 
   return (
     <div className="space-y-5">
@@ -61,11 +69,35 @@ export default function ReportLogsTab() {
               Citizen report logs
             </h2>
             <p className="mt-1 text-sm text-gray-600">
-              Review reports submitted from the mobile application.
+              Work from unresolved citizen reports toward documented outcomes.
             </p>
           </div>
 
-          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-[minmax(260px,1fr)_190px_190px]">
+          <div className="flex w-full flex-wrap gap-2 xl:w-auto">
+            {QUEUE_OPTIONS.map((option) => {
+              const active = !status && queue === option.value;
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  onClick={() => {
+                    setStatus("");
+                    setQueue(option.value);
+                  }}
+                  className={`inline-flex min-h-11 items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition ${active ? "border-[#134c8c] bg-[#134c8c] text-white" : "border-slate-300 bg-white text-slate-600 hover:bg-blue-50"}`}
+                >
+                  {option.value === "needs_review" ? <Inbox className="h-4 w-4" /> : null}
+                  {option.value === "resolved" ? <CheckCircle2 className="h-4 w-4" /> : null}
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-5 border-t border-slate-100 pt-4">
+          <div className="grid w-full gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_190px_190px]">
+
             <div>
               <label className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
                 <Search className="h-3.5 w-3.5" />
@@ -86,7 +118,10 @@ export default function ReportLogsTab() {
               </label>
               <select
                 value={status}
-                onChange={(event) => setStatus(event.target.value)}
+                onChange={(event) => {
+                  setStatus(event.target.value);
+                  if (event.target.value) setQueue("");
+                }}
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {STATUS_OPTIONS.map((option) => (
@@ -111,54 +146,15 @@ export default function ReportLogsTab() {
                 <option value="asc">Oldest first</option>
               </select>
             </div>
-
-            {/* Visibility */}
-            {/* <div>
-              <div className="mb-1 flex items-center gap-4  text-xs font-medium uppercase tracking-wide text-gray-500">
-                Visibility
-                <div className="group relative">
-                  <Info className="h-3.5 w-3.5 cursor-help text-gray-500" />
-                  <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 hidden w-64 -translate-x-1/2 rounded-lg border border-gray-200 bg-white p-3 text-xs normal-case tracking-normal text-gray-600 shadow-lg group-hover:block">
-                    <b>"Counted"</b> means reports currently counted in dashboard
-                    totals, maps, and risk calculations.
-                  </div>
-                </div>
-              </div>
-
-              <div className="inline-flex rounded-lg border border-gray-300 bg-gray-50 p-1">
-                <button
-                  type="button"
-                  onClick={() => setOnlyCounted(false)}
-                  className={`rounded-md px-4 py-1 text-sm font-medium transition ${
-                    !onlyCounted
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "text-gray-600 hover:bg-white"
-                  }`}
-                >
-                  All 
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOnlyCounted(true)}
-                  className={`rounded-md px-3 py-1 text-sm font-medium transition ${
-                    onlyCounted
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "text-gray-600 hover:bg-white"
-                  }`}
-                >
-                  Counted
-                </button>
-              </div>
-            </div> */}
           </div>
         </div>
         <p className="mt-3 text-xs text-gray-500">
-          Reports requiring review appear first. Date order is applied within each status, while Confirmed reports remain at the end.
+          Needs review includes Reported, Suspected, and Probable cases. Resolved includes Confirmed, Not Confirmed, and Ruled Out outcomes.
         </p>
       </div>
 
       {errorMsg ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {errorMsg}
         </div>
       ) : null}
@@ -171,6 +167,22 @@ export default function ReportLogsTab() {
         onPageChange={(page) => loadReports({ page })}
         token={token}
         canAccessPatientIdentity={permissions.canAccessPatientIdentity}
+        emptyTitle={
+          search || status
+            ? "No reports match these filters"
+            : queue === "needs_review"
+              ? "Review queue is clear"
+              : queue === "resolved"
+                ? "No resolved reports yet"
+                : "No citizen reports yet"
+        }
+        emptyDescription={
+          search || status
+            ? "Adjust the search or choose another status to broaden the results."
+            : queue === "needs_review"
+              ? "There are currently no Reported, Suspected, or Probable cases awaiting a decision."
+              : "Reports will appear here as the surveillance workflow progresses."
+        }
       />
     </div>
   );

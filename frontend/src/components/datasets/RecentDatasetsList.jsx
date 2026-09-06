@@ -15,6 +15,7 @@ export default function RecentDatasetsList({
   onRefresh,
   onPageChange,
   onDownload,
+  downloadingId,
   showFailed,
   onShowFailedChange,
 }) {
@@ -165,9 +166,13 @@ export default function RecentDatasetsList({
                   <button
                     className="p-2.5 hover:bg-gray-100 rounded-lg disabled:opacity-50"
                     onClick={() => onDownload(d._id)}
-                    disabled={d.status !== "validated"}
+                    disabled={d.status !== "validated" || downloadingId === d._id}
                     title={
-                      d.status !== "validated" ? "Unavailable" : "Download"
+                      d.status !== "validated"
+                        ? "Unavailable"
+                        : downloadingId === d._id
+                          ? "Preparing download"
+                          : "Download"
                     }
                   >
                     <ArrowDownTrayIcon className="w-5 h-5 text-gray-700" />

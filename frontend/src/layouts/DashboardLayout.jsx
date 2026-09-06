@@ -6,7 +6,9 @@ import { Outlet } from "react-router-dom";
 
 export default function DashboardLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const toggleSidebar = () => setIsSidebarOpen((prev) => !prev);
+  const toggleSidebarCollapsed = () => setIsSidebarCollapsed((current) => !current);
   const closeSidebar = () => setIsSidebarOpen(false);
 
   useEffect(() => {
@@ -27,11 +29,13 @@ export default function DashboardLayout() {
         <Navbar
           isSidebarOpen={isSidebarOpen}
           toggleSidebar={toggleSidebar}
+          isSidebarCollapsed={isSidebarCollapsed}
+          toggleSidebarCollapsed={toggleSidebarCollapsed}
         />
 
         <div className="flex min-w-0 flex-1">
           {/* Sidebar */}
-          <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} />
+          <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} isCollapsed={isSidebarCollapsed} />
           {isSidebarOpen && (
             <button
               type="button"

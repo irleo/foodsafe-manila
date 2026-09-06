@@ -13,6 +13,8 @@ const MANILA_DISTRICTS = Array.from({ length: 6 }, (_, index) => `District ${ind
 
 export default function OfficialDatasetsTab() {
   const fileInputRef = useRef(null);
+  const uploadInFlightRef = useRef(false);
+  const downloadInFlightRef = useRef(new Set());
   const { auth } = useAuth();
   const token = auth?.accessToken;
 
@@ -25,6 +27,8 @@ export default function OfficialDatasetsTab() {
 
   const [validating, setValidating] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [downloadingId, setDownloadingId] = useState("");
+  const [templateDownloading, setTemplateDownloading] = useState(false);
 
   const [statusMsg, setStatusMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -93,6 +97,8 @@ export default function OfficialDatasetsTab() {
   };
 
   const validateAndUpload = async () => {
+    if (uploadInFlightRef.current) return;
+    uploadInFlightRef.current = true;
     resetMessages();
     setUploading(true);
     setValidating(true);
@@ -131,6 +137,7 @@ export default function OfficialDatasetsTab() {
     } catch (err) {
       setErrorMsg(getErrorMessage(err, "The file could not be processed."));
     } finally {
+      uploadInFlightRef.current = false;
       setUploading(false);
       setValidating(false);
     }
@@ -139,6 +146,9 @@ export default function OfficialDatasetsTab() {
   };
 
   const downloadDataset = async (datasetId) => {
+    if (downloadInFlightRef.current.has(datasetId)) return;
+    downloadInFlightRef.current.add(datasetId);
+    setDownloadingId(datasetId);
     resetMessages();
     try {
       const { blob, filename } = await download(datasetId);
@@ -152,10 +162,17 @@ export default function OfficialDatasetsTab() {
       window.URL.revokeObjectURL(url);
     } catch {
       notify.error("Dataset is not available.");
+    } finally {
+      downloadInFlightRef.current.delete(datasetId);
+      setDownloadingId((current) => current === datasetId ? "" : current);
     }
   };
 
   const handleDownloadTemplate = async () => {
+    const operationKey = "template";
+    if (downloadInFlightRef.current.has(operationKey)) return;
+    downloadInFlightRef.current.add(operationKey);
+    setTemplateDownloading(true);
     resetMessages();
     try {
       const { blob, filename } = await downloadTemplate();
@@ -169,6 +186,9 @@ export default function OfficialDatasetsTab() {
       window.URL.revokeObjectURL(url);
     } catch {
       notify.error("Template is not available.");
+    } finally {
+      downloadInFlightRef.current.delete(operationKey);
+      setTemplateDownloading(false);
     }
   };
 
@@ -182,10 +202,11 @@ export default function OfficialDatasetsTab() {
             <button
               type="button"
               onClick={handleDownloadTemplate}
+              disabled={templateDownloading}
               className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 sm:w-auto"
             >
               <Download size={16} />
-              Download template
+              {templateDownloading ? "Preparing template…" : "Download template"}
             </button>
           </div>
 
@@ -295,6 +316,7 @@ export default function OfficialDatasetsTab() {
           onRefresh={fetchRecent}
           onPageChange={fetchRecent}
           onDownload={downloadDataset}
+          downloadingId={downloadingId}
           showFailed={showFailed}
           onShowFailedChange={setShowFailed}
         />

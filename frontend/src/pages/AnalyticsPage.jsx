@@ -177,7 +177,6 @@ export default function Analytics() {
             caseStatusLabel={selectedStatusLabel}
             caseStatus={selectedCaseStatus}
             monthlyTimelineData={allStatusTimelineData}
-            diseaseData={vm.diseaseData}
             districtData={vm.districtData}
             diseaseTrendData={vm.diseaseTrendData}
             diseaseTrendKeys={vm.diseaseTrendKeys}

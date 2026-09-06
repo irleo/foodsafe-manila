@@ -18,6 +18,7 @@ export function useReports(token, { fetchAll = false, autoFetch = true } = {}) {
       from,
       to,
       status,
+      queue,
       search,
       sortOrder,
       page = 1,
@@ -46,6 +47,7 @@ export function useReports(token, { fetchAll = false, autoFetch = true } = {}) {
           if (from) params.set("from", from);
           if (to) params.set("to", to);
           if (status) params.set("status", status);
+          if (queue) params.set("queue", queue);
           if (search) params.set("search", search);
           if (sortOrder) params.set("sortOrder", sortOrder);
 

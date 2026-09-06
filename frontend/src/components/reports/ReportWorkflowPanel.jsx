@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { formatStatusLabel } from "../../utils/formatStatusLabel";
 import { getErrorMessage } from "../../utils/errors";
@@ -23,6 +23,7 @@ const inputClass =
 
 export default function ReportWorkflowPanel({ report, token, onUpdated }) {
   const [busyAction, setBusyAction] = useState("");
+  const requestInFlightRef = useRef(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [investigation, setInvestigation] = useState({
@@ -51,6 +52,8 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
   });
 
   const submit = async (action, path, body) => {
+    if (requestInFlightRef.current) return;
+    requestInFlightRef.current = true;
     try {
       setBusyAction(action);
       setError("");
@@ -70,6 +73,7 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
     } catch (requestError) {
       setError(getErrorMessage(requestError, "The report could not be updated."));
     } finally {
+      requestInFlightRef.current = false;
       setBusyAction("");
     }
   };
@@ -89,6 +93,7 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
   };
 
   const submitInvestigationDecision = async (decision) => {
+    if (requestInFlightRef.current) return;
     if (decision === "ruled-out" && !ruleOutReason) {
       setError("Select a reason for ruling out the report.");
       return;
@@ -98,6 +103,7 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
       return;
     }
 
+    requestInFlightRef.current = true;
     try {
       setBusyAction(decision);
       setError("");
@@ -119,6 +125,7 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
       setError(getErrorMessage(requestError, "The investigation decision could not be recorded."));
       await onUpdated?.();
     } finally {
+      requestInFlightRef.current = false;
       setBusyAction("");
     }
   };
@@ -144,7 +151,7 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
         </p>
         <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
           <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">Investigation: {formatStatusLabel(report.investigationStatus || "not_started")}</span>
-          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">Confirmation: {formatStatusLabel(validationLabel)}</span>
+          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">Confirmation: {formatStatusLabel(validationLabel)}</span>
         </div>
       </div>
 
@@ -166,12 +173,12 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
       )}
 
       {report.validation?.validatedAt && (
-        <details open className="group overflow-hidden rounded-xl border border-emerald-200 bg-white text-sm text-gray-700">
-          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between bg-emerald-50 px-4 py-3 font-semibold text-emerald-950 marker:content-none hover:bg-emerald-100/70">
+        <details open className={`group overflow-hidden rounded-xl border bg-white text-sm text-gray-700 ${report.validation.result === "confirmed" ? "border-red-200" : "border-emerald-200"}`}>
+          <summary className={`flex min-h-12 cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold marker:content-none ${report.validation.result === "confirmed" ? "bg-red-50 text-red-950 hover:bg-red-100/70" : "bg-emerald-50 text-emerald-950 hover:bg-emerald-100/70"}`}>
             Confirmation record
-            <ChevronDown className="h-4 w-4 text-emerald-700 transition group-open:rotate-180" />
+            <ChevronDown className={`h-4 w-4 transition group-open:rotate-180 ${report.validation.result === "confirmed" ? "text-red-700" : "text-emerald-700"}`} />
           </summary>
-          <div className="space-y-1 border-t border-emerald-100 px-4 py-4">
+          <div className={`space-y-1 border-t px-4 py-4 ${report.validation.result === "confirmed" ? "border-red-100" : "border-emerald-100"}`}>
             <p>Recorded {new Date(report.validation.validatedAt).toLocaleString()} by {report.validation.validatedBy?.username || "authorized personnel"}.</p>
             <p><span className="font-medium">Result:</span> {formatStatusLabel(report.validation.result)}</p>
             <p><span className="font-medium">Supporting findings:</span> {report.validation.supportingFindings || "—"}</p>
@@ -293,7 +300,7 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
       )}
 
       {canValidate && (
-        <form className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4" onSubmit={(event) => { event.preventDefault(); submit("validation", "validation", validation); }}>
+        <form className="space-y-3 rounded-xl border border-blue-200 bg-blue-50/40 p-4" onSubmit={(event) => { event.preventDefault(); submit("validation", "validation", validation); }}>
           <h5 className="font-semibold text-gray-900">
             {status === "probable" ? "Complete probable-case confirmation" : "Classify suspected case"}
           </h5>
@@ -331,7 +338,7 @@ export default function ReportWorkflowPanel({ report, token, onUpdated }) {
           <Field label="Remarks">
             <textarea rows={2} className={inputClass} value={validation.remarks} onChange={(e) => setValidation((v) => ({ ...v, remarks: e.target.value }))} />
           </Field>
-          <button disabled={Boolean(busyAction)} className="min-h-11 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 ms-auto">
+          <button disabled={Boolean(busyAction)} className={`min-h-11 rounded-lg px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 ms-auto ${validation.result === "confirmed" ? "bg-red-600 hover:bg-red-700" : validation.result === "probable" ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-600 hover:bg-emerald-700"}`}>
             {busyAction === "validation"
               ? "Saving…"
               : validation.result === "confirmed"

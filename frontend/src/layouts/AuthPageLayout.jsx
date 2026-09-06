@@ -1,6 +1,6 @@
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
-import logo from "../../../mobile/assets/foodsafe_logo.png";
+import logo from "../assets/foodsafe_logo_nav.png";
 
 export default function AuthPageLayout({
   children,

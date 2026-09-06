@@ -1,4 +1,4 @@
-import { createElement, useEffect, useState } from "react";
+import { createElement, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Bell,
@@ -12,7 +12,10 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-import logo from "../../../mobile/assets/foodsafe_logo.png";
+import logo from "../assets/foodsafe_logo_nav.png";
+
+const ANDROID_DOWNLOAD_URL = import.meta.env.VITE_ANDROID_DOWNLOAD_URL || "";
+const DOWNLOAD_COOLDOWN_MS = 5000;
 
 const activityCards = [
   {
@@ -166,6 +169,25 @@ function ActivityStack() {
 }
 
 export default function LandingPage() {
+  const downloadLockRef = useRef(false);
+  const downloadTimerRef = useRef(null);
+  const [downloadCoolingDown, setDownloadCoolingDown] = useState(false);
+
+  useEffect(() => () => {
+    if (downloadTimerRef.current) window.clearTimeout(downloadTimerRef.current);
+  }, []);
+
+  const handleAndroidDownload = () => {
+    if (!ANDROID_DOWNLOAD_URL || downloadLockRef.current) return;
+    downloadLockRef.current = true;
+    setDownloadCoolingDown(true);
+    window.location.assign(ANDROID_DOWNLOAD_URL);
+    downloadTimerRef.current = window.setTimeout(() => {
+      downloadLockRef.current = false;
+      setDownloadCoolingDown(false);
+    }, DOWNLOAD_COOLDOWN_MS);
+  };
+
   return (
     <div className="min-h-[100dvh] bg-[#eef3f9] text-[#0e1b2a]">
       <header className="sticky top-0 z-50 border-b border-blue-950/30 bg-[#0c3a6b]/95 text-white shadow-sm backdrop-blur">
@@ -205,11 +227,12 @@ export default function LandingPage() {
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <button
                 type="button"
-                aria-disabled="true"
-                title="Android download coming soon"
-                className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[#134c8c] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0c3a6b]"
+                onClick={handleAndroidDownload}
+                disabled={!ANDROID_DOWNLOAD_URL || downloadCoolingDown}
+                title={ANDROID_DOWNLOAD_URL ? undefined : "Android download coming soon"}
+                className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[#134c8c] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0c3a6b] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Download for Android
+                {downloadCoolingDown ? "Download started" : "Download for Android"}
               </button>
               <Link
                 to="/request-access"
