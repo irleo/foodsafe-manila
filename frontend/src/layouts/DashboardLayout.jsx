@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import Navbar from "../components/Navbar";
-import Sidebar from "../components/Sidebar";
-import SettingsShortcut from "../components/SettingsShortcut";
+import Navbar from "../components/navigation/Navbar";
+import Sidebar from "../components/navigation/Sidebar";
+import SettingsShortcut from "../components/navigation/SettingsShortcut";
 import { Outlet } from "react-router-dom";
 
 export default function DashboardLayout() {

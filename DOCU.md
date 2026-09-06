@@ -359,7 +359,7 @@ Missing or unclear:
 
 - `README.md` contains mojibake characters around dashes, likely from encoding conversion.
 - The web `AuthContext` calls `axios.get("/api/auth/refresh")`, relying on a dev proxy or same-origin deployment, while many other frontend files use `VITE_API_BASE_URL` or `http://localhost:5000`. This should be standardized.
-- `frontend/src/pages/LoginPage.jsx` displays sample admin/user credentials in the UI.
+- `frontend/src/modules/authentication/LoginPage.jsx` displays sample admin/user credentials in the UI.
 - `mobile/lib/config/api_config.dart` contains a concrete local IP address (`192.168.1.8`), which is environment-specific.
 - `MAX_REPORTS_PER_24H` in `backend/controllers/reportController.js` is set to `Infinity`, so the DB-backed daily report rate limit is effectively disabled.
 - Several development logs remain in backend/frontend code, including auth refresh and report-route logging.
@@ -485,7 +485,6 @@ Missing or unclear:
 - `frontend/README.md`: Default Vite/React readme.
 - `frontend/src/main.jsx`: React entry point.
 - `frontend/src/App.jsx`: App shell with router and toast provider.
-- `frontend/src/App.css`: App-level styles.
 - `frontend/src/index.css`: Global/Tailwind styles.
 - `frontend/src/context/AuthContext.jsx`: Web auth state and refresh-on-load logic.
 - `frontend/src/routes/AppRoutes.jsx`: Public/protected/admin route definitions.
@@ -493,60 +492,36 @@ Missing or unclear:
 - `frontend/src/routes/PublicRoute.jsx`: Redirects authenticated users away from public-only pages.
 - `frontend/src/layouts/DashboardLayout.jsx`: Shared dashboard layout.
 
-### Frontend Pages
+### Frontend Modules
 
-- `frontend/src/pages/AnalyticsPage.jsx`: Dataset analytics dashboard.
-- `frontend/src/pages/DashboardPage.jsx`: Main web dashboard.
-- `frontend/src/pages/DataPage.jsx`: Dataset and report-log tab container.
-- `frontend/src/pages/ForgotPasswordPage.jsx`: Web forgot-password OTP request flow.
-- `frontend/src/pages/HeatmapPage.jsx`: Heatmap dashboard.
-- `frontend/src/pages/LoginPage.jsx`: Web login screen.
-- `frontend/src/pages/PredictionsPage.jsx`: Prophet-only operational forecast dashboard with Seasonal Naïve benchmark evaluation, coherent Whole-Manila totals, calibrated aggregate intervals, and comparison refresh.
-- `frontend/src/pages/RequestAccessPage.jsx`: Web access-request and OTP flow.
-- `frontend/src/pages/ResetPasswordPage.jsx`: Web password reset completion.
-- `frontend/src/pages/UserManagementPage.jsx`: Admin user approval/rejection/deletion page.
-- `frontend/src/pages/WelcomePage.jsx`: Public welcome screen.
+- `frontend/src/modules/analytics/`: Analytics page, chart/stat components, and analytics-specific builders.
+- `frontend/src/modules/authentication/`: Welcome, login, access-request, forgot/reset-password pages, the authentication layout, and password validation.
+- `frontend/src/modules/dashboard/`: Dashboard page, dashboard-only charts/activity UI, and dashboard builders.
+- `frontend/src/modules/data-upload/`: Dataset upload page, upload/list components, dataset hook, and local formatting/delay helpers.
+- `frontend/src/modules/heatmap/`: Heatmap page, map/summary components, hooks, API service, builders, district constants, and GeoJSON data.
+- `frontend/src/modules/predictions/`: Prophet operational forecast page, evaluation and forecast chart components, and prediction view-model helpers.
+- `frontend/src/modules/report-logs/`: Citizen report-log page, workflow/audit/list components, and report loading hook.
+- `frontend/src/modules/settings/`: Surveillance threshold settings page.
+- `frontend/src/modules/user-management/`: Admin user-management page and authenticated Axios hook.
 
-### Frontend API, Hooks, Components, and Utilities
+### Frontend Shared API, Hooks, Components, and Utilities
 
-- `frontend/src/api/datasets.js`: Dataset API functions.
-- `frontend/src/api/heatmap.js`: Heatmap API functions.
-- `frontend/src/api/predictions.js`: Prediction API functions.
-- `frontend/src/hooks/useAxiosPrivate.js`: Authenticated Axios helper hook.
-- `frontend/src/hooks/useDatasets.js`: Dataset fetching hook.
-- `frontend/src/hooks/useHeatmapPoints.js`: Heatmap fetching hook.
-- `frontend/src/hooks/useLatestDatasetId.js`: Latest validated dataset helper hook.
-- `frontend/src/hooks/useOfficialCases.js`: Official case loading hook.
-- `frontend/src/hooks/useReports.js`: Report loading hook.
-- `frontend/src/components/Navbar.jsx`: Top navigation and notifications access.
-- `frontend/src/components/NotificationsDropdown.jsx`: Notification list and read/unread UI.
-- `frontend/src/components/Sidebar.jsx`: Dashboard sidebar navigation.
-- `frontend/src/components/Spinner.jsx`: Loading spinner.
-- `frontend/src/components/analytics/AnalyticsGrid.jsx`: Analytics chart grid.
-- `frontend/src/components/analytics/AnalyticsStats.jsx`: Analytics stat cards.
-- `frontend/src/components/charts/*`: Recharts-based visualizations for districts, diseases, trends, risk, prediction errors, and actual-vs-predicted lines.
-- `frontend/src/components/dashboard/RecentActivityCard.jsx`: Recent activity display.
-- `frontend/src/components/data/OfficialDatasetsTab.jsx`: Dataset upload/list UI tab.
-- `frontend/src/components/data/ReportLogsTab.jsx`: Citizen report logs UI tab.
-- `frontend/src/components/datasets/UploadDropzone.jsx`: Dataset upload control.
-- `frontend/src/components/datasets/RecentDatasetsList.jsx`: Recent dataset list.
-- `frontend/src/components/heatmap/*`: Heatmap controls, map, legend, top districts, top disease, and stats row.
-- `frontend/src/components/reports/ReportsLogList.jsx`: Report list renderer.
-- `frontend/src/components/tables/DistrictStatisticsTable.jsx`: District statistics table.
-- `frontend/src/constants/chartColors.js`: Chart and severity color constants.
-- `frontend/src/constants/manilaDistrictCoords.js`: Manila district coordinate constants.
-- `frontend/src/utils/*`: Frontend builders and helpers for analytics, cases, dashboard cards, date formatting, delay, heatmap, normalization, passwords, prediction chart rows, statistics, toasts, and aggregations.
+- `frontend/src/api/datasets.js`: Dataset API functions shared by dataset selection and upload flows.
+- `frontend/src/api/predictions.js`: Prediction API functions shared by Predictions and Heatmap.
+- `frontend/src/api/thresholds.js`: Threshold API functions shared by Dashboard, Analytics, and Settings.
+- `frontend/src/hooks/useLatestDatasetId.js`: Latest validated dataset helper hook shared across data-driven modules.
+- `frontend/src/hooks/useOfficialCases.js`: Official case loading hook shared by Dashboard and Analytics.
+- `frontend/src/components/common/`: Shared loading, error-boundary, error-state, and data-coverage UI.
+- `frontend/src/components/navigation/`: Top navigation, notification dropdown, sidebar, and settings shortcut.
+- `frontend/src/constants/`: Cross-module chart colors and surveillance methodology constants.
+- `frontend/src/utils/`: Cross-module error, status, threshold, coverage, and toast helpers.
 
 ### Frontend Data and Assets
 
-- `frontend/src/data/districtStatistics.js`: Static district statistics data.
-- `frontend/src/data/manila-barangays-with-legislative-districts.json`: Barangay GeoJSON/features with legislative districts.
-- `frontend/src/data/manila-legislative-districts.json`: District geometry data.
-- `frontend/src/data/mockOfficialCases.js`: Mock official case fixture data.
-- `frontend/src/data/mockReports.js`: Mock report fixture data.
-- The official template is not bundled with the frontend; the authenticated backend streams `templates/FoodSafe_Template.xlsx` from private R2.
-- `frontend/public/vite.svg`: Default Vite asset.
-- `frontend/src/assets/react.svg`: Default React asset.
+- `frontend/src/modules/heatmap/data/manila-barangays-with-legislative-districts.json`: Barangay GeoJSON/features with legislative districts, colocated with Heatmap.
+- `frontend/src/assets/foodsafe_logo_nav.png`: FoodSafe navigation and authentication logo.
+- The official template is not bundled with the frontend; the authenticated backend streams it from private R2.
+- `frontend/public/vite.svg`: Current browser icon asset.
 
 ### Mobile App Source
 

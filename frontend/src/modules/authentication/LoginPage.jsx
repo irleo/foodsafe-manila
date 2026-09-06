@@ -1,0 +1,207 @@
+import axios from "axios";
+import { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import { notify } from "../../utils/toast";
+import AuthPageLayout from "./components/AuthPageLayout";
+import { getErrorMessage, logClientError } from "../../utils/errors";
+
+import { Eye, EyeOff } from "lucide-react";
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const REMEMBER_EMAIL_KEY = "foodsafe.rememberedEmail";
+
+const LoginPage = () => {
+  const { setAuth } = useAuth();
+  const navigate = useNavigate();
+  const rememberedEmail =
+    typeof window !== "undefined"
+      ? window.localStorage.getItem(REMEMBER_EMAIL_KEY) || ""
+      : "";
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const [form, setForm] = useState({ email: rememberedEmail, password: "" });
+  const [rememberMe, setRememberMe] = useState(Boolean(rememberedEmail));
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      const res = await axios.post("/api/auth/login", form, {
+        withCredentials: true,
+      });
+
+      await delay(600);
+
+      setAuth({
+        accessToken: res.data.accessToken,
+        role: res.data.user.role,
+        username: res.data.user.username,
+        canAccessPatientIdentity:
+          res.data.user.canAccessPatientIdentity === true,
+      });
+
+      await notify.promise(Promise.resolve(res), {
+        loading: "Logging you in…",
+        success: "Login succesful!",
+        error: (error) => getErrorMessage(error, "Login failed."),
+      });
+
+      if (rememberMe) {
+        window.localStorage.setItem(REMEMBER_EMAIL_KEY, form.email.trim());
+      } else {
+        window.localStorage.removeItem(REMEMBER_EMAIL_KEY);
+      }
+
+      navigate("/dashboard");
+    } catch (err) {
+      const msg = getErrorMessage(
+        err,
+        "Login failed. Please check your credentials.",
+      );
+
+      notify?.error?.(msg);
+      logClientError("Login failed", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <AuthPageLayout
+      title="Welcome back"
+      description="Sign in to continue to the FoodSafe dashboard."
+      backTo="/"
+      backLabel="Back to home"
+      contentWidth="comfortable"
+      centerContent
+    >
+            {error && (
+              <div className="mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm">
+                {error}
+              </div>
+            )}
+
+            <form
+              className="space-y-6"
+              onSubmit={handleLogin}
+              autoComplete="on"
+            >
+              <div>
+                <label
+                  htmlFor="email"
+                  className="block mb-2 text-sm text-gray-700"
+                >
+                  Email / Username
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  placeholder="user@sample.com"
+                  required
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  disabled={loading}
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="password"
+                  className="block mb-2 text-sm text-gray-700"
+                >
+                  Password
+                </label>
+
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all pr-12"
+                    placeholder="Enter your password"
+                    required
+                    value={form.password}
+                    onChange={(e) =>
+                      setForm({ ...form, password: e.target.value })
+                    }
+                    disabled={loading}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
+                    disabled={loading}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading && (
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                )}
+                {loading ? "Logging in..." : "Login"}
+              </button>
+
+              <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                <label className="inline-flex items-center gap-2 text-gray-700">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    disabled={loading}
+                  />
+                  <span>Remember me</span>
+                </label>
+                <Link
+                  to="/forgot-password"
+                  className="text-blue-600 hover:text-blue-700 text-sm"
+                >
+                  Forgot Password?
+                </Link>
+              </div>
+            </form>
+
+            <div className="mt-8 pt-6 border-t border-gray-200">
+              <p className="text-center text-sm text-gray-600 mb-4">
+                Don't have an account?
+              </p>
+
+              <Link
+                to="/request-access"
+                className="block w-full text-center px-4 py-3 border-2 border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+              >
+                Request for Access
+              </Link>
+            </div>
+
+            {/* <div className="mt-6 text-center text-sm text-gray-600">
+              <p>Demo Credentials:</p>
+              <p className="mt-2">Admin: admin@sample.com / @Password1</p>
+              <p>User: user@sample.com / @Password2</p>
+            </div> */}
+    </AuthPageLayout>
+  );
+};
+
+export default LoginPage;
