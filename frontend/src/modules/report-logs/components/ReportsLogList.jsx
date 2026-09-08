@@ -64,7 +64,7 @@ function classificationBadge(caseClassification) {
         {label}
       </span>
     );
-  if (v === "reported" || v === "not_validated" || v === "probable")
+  if (v === "reported" || v === "probable")
     return (
       <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-sm font-medium text-amber-700">
         {label}
@@ -81,7 +81,6 @@ function isResolvedStatus(value) {
   return [
     "confirmed",
     "validated_confirmed",
-    "not_validated",
     "ruled_out",
     "not_suspected",
   ].includes(
@@ -100,7 +99,6 @@ function workflowHint(value) {
   if (status === "probable") return "Needs confirmation decision";
   if (status === "confirmed") return "Confirmed outcome recorded";
   if (status === "ruled_out") return "Review completed — ruled out";
-  if (status === "not_validated") return "Legacy review outcome";
   return "Open report workflow";
 }
 

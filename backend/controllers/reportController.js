@@ -17,6 +17,12 @@ import {
   validateProbableClassification,
 } from "../constants/surveillanceMethodology.js";
 import { getReportLogSummary } from "../services/reportAnalyticsService.js";
+import {
+  buildCitizenDuplicateQuery,
+  isWithinManilaBounds,
+  parseManilaReportDate,
+  validateReportedAt,
+} from "../utils/reportPolicy.js";
 
 const REPORT_LIST_FIELDS = [
   "_id",
@@ -144,6 +150,12 @@ export const createReport = async (req, res) => {
         .json({ message: "Location coordinates must be valid numbers." });
     }
 
+    if (!isWithinManilaBounds(lat, lng)) {
+      return res.status(400).json({
+        message: "Location coordinates must be within the City of Manila.",
+      });
+    }
+
     // Validate optional exposureDistrict (food source district)
     let exposureDistrictKey = null;
     if (typeof exposureDistrict !== "undefined" && exposureDistrict !== null && exposureDistrict !== "") {
@@ -175,23 +187,18 @@ export const createReport = async (req, res) => {
     const normalizedCaseCount =
       typeof caseCount === "undefined" ? 1 : Number(caseCount);
 
-    if (!Number.isFinite(normalizedCaseCount) || normalizedCaseCount < 1) {
-      return res.status(400).json({ message: "caseCount must be a positive number." });
+    if (!Number.isInteger(normalizedCaseCount) || normalizedCaseCount < 1) {
+      return res.status(400).json({ message: "caseCount must be a positive integer." });
     }
 
     const clampedCaseCount = Math.min(normalizedCaseCount, 10);
 
-    const parsedReportedAt = reportedAt ? new Date(reportedAt) : new Date();
-    if (Number.isNaN(parsedReportedAt.getTime())) {
-      return res
-        .status(400)
-        .json({ message: "reportedAt must be a valid date if provided." });
-    }
-
     const now = new Date();
-    if (parsedReportedAt.getTime() > now.getTime() + 5 * 60 * 1000) {
-      return res.status(400).json({ message: "reportedAt cannot be in the future." });
+    const reportedAtValidation = validateReportedAt(reportedAt, now);
+    if (reportedAtValidation.error) {
+      return res.status(400).json({ message: reportedAtValidation.error });
     }
+    const parsedReportedAt = reportedAtValidation.reportedAt;
 
     // Rate limit per user (DB-based)
     const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -213,16 +220,12 @@ export const createReport = async (req, res) => {
 
     const dupSince = new Date(now.getTime() - DUPLICATE_WINDOW_HOURS * 60 * 60 * 1000);
 
-    const recentSimilar = await Report.findOne({
+    const recentSimilar = await Report.findOne(buildCitizenDuplicateQuery({
       reportedBy: req.user.id,
-      $or: [
-        { exposureDistrict: countingDistrictKey }, // if they used exposureDistrict before
-        { exposureDistrict: null, "location.district": countingDistrictKey }, // fallback
-      ],
-      reportedAt: { $gte: dupSince },
-      source: "citizen_app",
-    })
-      .sort({ reportedAt: -1 })
+      countingDistrictKey,
+      since: dupSince,
+    }))
+      .sort({ createdAt: -1 })
       .select("symptoms exposureDistrict location.district")
       .lean();
 
@@ -478,7 +481,7 @@ export const getReports = async (req, res) => {
     ]);
     const queueStatuses = {
       needs_review: ["reported", "suspected", "probable"],
-      resolved: ["confirmed", "not_validated", "ruled_out"],
+      resolved: ["confirmed", "ruled_out"],
     };
     if (queue && !queueStatuses[String(queue).trim().toLowerCase()]) {
       return res.status(400).json({ message: "Invalid report queue." });
@@ -545,19 +548,19 @@ export const getReports = async (req, res) => {
       query.reportedAt = {};
 
       if (from) {
-        const fromDate = new Date(from);
-        if (Number.isNaN(fromDate.getTime())) {
+        const fromDate = parseManilaReportDate(from);
+        if (!fromDate) {
           return res.status(400).json({ message: "Invalid from date." });
         }
         query.reportedAt.$gte = fromDate;
       }
 
       if (to) {
-        const toDate = new Date(to);
-        if (Number.isNaN(toDate.getTime())) {
+        const toDate = parseManilaReportDate(to, { exclusiveEnd: true });
+        if (!toDate) {
           return res.status(400).json({ message: "Invalid to date." });
         }
-        query.reportedAt.$lte = toDate;
+        query.reportedAt.$lt = toDate;
       }
     }
 
@@ -567,9 +570,8 @@ export const getReports = async (req, res) => {
           { case: { $eq: ["$currentStatus", "reported"] }, then: 0 },
           { case: { $eq: ["$currentStatus", "suspected"] }, then: 1 },
           { case: { $eq: ["$currentStatus", "probable"] }, then: 2 },
-          { case: { $eq: ["$currentStatus", "not_validated"] }, then: 3 },
-          { case: { $eq: ["$currentStatus", "ruled_out"] }, then: 4 },
-          { case: { $eq: ["$currentStatus", "confirmed"] }, then: 5 },
+          { case: { $eq: ["$currentStatus", "ruled_out"] }, then: 3 },
+          { case: { $eq: ["$currentStatus", "confirmed"] }, then: 4 },
         ],
         default: 6,
       },

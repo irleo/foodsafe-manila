@@ -11,6 +11,7 @@ import {
 import { logActivity } from "../utils/logActivity.js";
 import { validatePassword } from "../utils/passwordValidation.js";
 import { logRequestError } from "../utils/serverLogger.js";
+import { isTokenVersionCurrent } from "../utils/tokenVersion.js";
 
 const RESET_OTP_TTL_MINUTES = 10;
 const RESET_OTP_LENGTH = 6;
@@ -32,10 +33,20 @@ function webSessionCookieOptions() {
   };
 }
 
-function generateOtp(length = RESET_OTP_LENGTH) {
-  const min = 10 ** (length - 1);
-  const max = 10 ** length - 1;
-  return String(Math.floor(min + Math.random() * (max - min + 1)));
+export function generateOtp(length = RESET_OTP_LENGTH) {
+  if (!Number.isInteger(length) || length < 1 || length > 9) {
+    throw new RangeError("OTP length must be an integer between 1 and 9.");
+  }
+  return String(crypto.randomInt(0, 10 ** length)).padStart(length, "0");
+}
+
+function webTokenPayload(user) {
+  return {
+    id: user._id.toString(),
+    role: user.role,
+    accountType: "web",
+    tokenVersion: user.tokenVersion || 0,
+  };
 }
 
 function hashOtp(otp) {
@@ -428,13 +439,13 @@ export const login = async (req, res) => {
     await user.save();
 
     const accessToken = jwt.sign(
-      { id: user._id.toString(), role: user.role },
+      webTokenPayload(user),
       process.env.ACCESS_TOKEN_SECRET,
       { expiresIn: "15m" },
     );
 
     const refreshToken = jwt.sign(
-      { id: user._id.toString(), role: user.role },
+      webTokenPayload(user),
       process.env.REFRESH_TOKEN_SECRET,
       { expiresIn: "7d" },
     );
@@ -484,6 +495,11 @@ export const refreshToken = async (req, res) => {
       return res.status(401).json({ message: "Invalid refresh token" });
     }
 
+    if (!isTokenVersionCurrent(decoded.tokenVersion, user.tokenVersion)) {
+      res.clearCookie(WEB_SESSION_COOKIE, webSessionCookieOptions());
+      return res.status(401).json({ message: "Session has been revoked" });
+    }
+
     // Block refresh if account access changes after the token was issued.
     if (user.status !== "approved") {
       res.clearCookie(WEB_SESSION_COOKIE, webSessionCookieOptions());
@@ -498,7 +514,7 @@ export const refreshToken = async (req, res) => {
     }
 
     const newAccessToken = jwt.sign(
-      { id: user._id.toString(), role: user.role },
+      webTokenPayload(user),
       process.env.ACCESS_TOKEN_SECRET,
       { expiresIn: "15m" },
     );
@@ -680,7 +696,7 @@ export const completePasswordReset = async (req, res) => {
 
   try {
     const user = await User.findOne({ email }).select(
-      "_id username email password resetOtpHash resetOtpExpiresAt resetOtpAttempts",
+      "_id username email password tokenVersion resetOtpHash resetOtpExpiresAt resetOtpAttempts",
     );
     if (!user || !user.resetOtpHash || !user.resetOtpExpiresAt) {
       return res.status(400).json({ message: "Invalid or expired OTP." });
@@ -708,6 +724,7 @@ export const completePasswordReset = async (req, res) => {
     user.resetOtpExpiresAt = null;
     user.resetOtpRequestedAt = null;
     user.resetOtpAttempts = 0;
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save();
 
     const displayName = user.username || user.email || "A user";

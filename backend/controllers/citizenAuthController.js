@@ -10,6 +10,7 @@ import { validatePassword } from "../utils/passwordValidation.js";
 import { consumeMobileOtpVerification } from "../services/mobileOtpService.js";
 import { consumeEmailOtpVerification } from "../services/mobileEmailOtpService.js";
 import { logRequestError } from "../utils/serverLogger.js";
+import { isTokenVersionCurrent } from "../utils/tokenVersion.js";
 
 // POST /api/auth/register
 export const registerCitizen = async (req, res) => {
@@ -83,7 +84,10 @@ export const loginCitizen = async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    const { accessToken, refreshToken } = signCitizenTokens(mobileUser._id);
+    const { accessToken, refreshToken } = signCitizenTokens(
+      mobileUser._id,
+      mobileUser.tokenVersion,
+    );
 
     return res.status(200).json({
       ...sanitizeMobileUser(mobileUser),
@@ -194,6 +198,7 @@ export const resetCitizenPassword = async (req, res) => {
     }
 
     mobileUser.password = await bcrypt.hash(newPassword, 10);
+    mobileUser.tokenVersion = (mobileUser.tokenVersion || 0) + 1;
     await mobileUser.save();
 
     return res.json({ success: true });
@@ -223,7 +228,14 @@ export const refreshCitizenToken = async (req, res) => {
       return res.status(401).json({ message: "Invalid refresh token" });
     }
 
-    const { accessToken, refreshToken } = signCitizenTokens(mobileUser._id);
+    if (!isTokenVersionCurrent(decoded.tokenVersion, mobileUser.tokenVersion)) {
+      return res.status(401).json({ message: "Session has been revoked" });
+    }
+
+    const { accessToken, refreshToken } = signCitizenTokens(
+      mobileUser._id,
+      mobileUser.tokenVersion,
+    );
 
     return res.status(200).json({
       accessToken,

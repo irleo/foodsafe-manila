@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import axios from "axios";
 import { useAuth } from "../../../context/AuthContext";
+import { mergeRefreshedAuth } from "../utils/authRefresh.js";
 
 const axiosPrivate = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "",
@@ -39,11 +40,7 @@ export default function useAxiosPrivate() {
 
             const newAccessToken = refreshRes.data.accessToken;
 
-            setAuth({
-              accessToken: newAccessToken,
-              role: refreshRes.data.user.role,
-              username: refreshRes.data.user.username,
-            });
+            setAuth((current) => mergeRefreshedAuth(current, refreshRes.data));
 
             prevRequest.headers.Authorization = `Bearer ${newAccessToken}`;
             return axiosPrivate(prevRequest);

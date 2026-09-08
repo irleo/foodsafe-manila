@@ -15,6 +15,7 @@ const userSchema = new mongoose.Schema(
       enum: ["cesu", "surveillance_team"],
     },
     canAccessPatientIdentity: { type: Boolean, default: false },
+    tokenVersion: { type: Number, default: 0, min: 0 },
 
     status: {
       type: String,

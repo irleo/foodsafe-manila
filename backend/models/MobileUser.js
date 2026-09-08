@@ -6,6 +6,7 @@ const mobileUserSchema = new mongoose.Schema(
     phoneNumber: { type: String, required: true, trim: true },
     password: { type: String, required: true },
     email: { type: String, default: "", trim: true },
+    tokenVersion: { type: Number, default: 0, min: 0 },
   },
   {
     timestamps: true,

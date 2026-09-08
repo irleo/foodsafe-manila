@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test:errors": "node --test tests/errorDisclosure.test.js",
     "test:analytics-boundary": "node --test tests/analyticsDataBoundary.test.js",
+    "test:auth-refresh": "node --test tests/authRefresh.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

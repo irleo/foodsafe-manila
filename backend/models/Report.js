@@ -81,7 +81,15 @@ const reportSchema = new mongoose.Schema(
       index: { name: "reportsSymptoms" },
     },
 
-    caseCount: { type: Number, default: 1, min: 1 },
+    caseCount: {
+      type: Number,
+      default: 1,
+      min: 1,
+      validate: {
+        validator: Number.isInteger,
+        message: "caseCount must be an integer.",
+      },
+    },
 
     foodSource: { type: String, default: null, trim: true },
 
