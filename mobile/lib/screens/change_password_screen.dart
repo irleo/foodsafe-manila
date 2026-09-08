@@ -14,7 +14,8 @@ import '../widgets/philippine_mobile_prefix.dart';
 import '../widgets/snackbar_widgets.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
-  const ChangePasswordScreen({super.key});
+  final bool isForgot;
+  const ChangePasswordScreen({super.key, this.isForgot = false});
 
   @override
   State<ChangePasswordScreen> createState() => _ChangePasswordScreenState();
@@ -24,6 +25,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _phoneCtrl = TextEditingController(); // NEW
+  final _emailCtrl = TextEditingController();
+  bool _useEmail = false;
   final _otpCtrl = TextEditingController();
   late List<TextEditingController> otpControllers;
   late List<FocusNode> otpFocusNodes;
@@ -47,6 +50,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   int _resendSeconds = 0;
   Timer? _resendTimer;
   String? _verificationToken;
+  bool _otpSent = false;
 
   @override
   void initState() {
@@ -59,6 +63,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   @override
   void dispose() {
     _phoneCtrl.dispose();
+    _emailCtrl.dispose();
     _otpCtrl.dispose();
     _newPassCtrl.dispose();
     _confirmPassCtrl.dispose();
@@ -72,6 +77,25 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
     _resendTimer?.cancel();
     super.dispose();
+  }
+
+  void _handleOtpKey(int index, KeyEvent event) {
+    if (event is! KeyDownEvent) return;
+
+    if (event.logicalKey == LogicalKeyboardKey.backspace) {
+      if (otpControllers[index].text.isEmpty && index > 0) {
+        otpControllers[index - 1].clear();
+
+        FocusScope.of(context).requestFocus(otpFocusNodes[index - 1]);
+      }
+
+      // Always keep the combined OTP updated.
+      _updateOtp();
+    }
+  }
+
+  void _updateOtp() {
+    _otpCtrl.text = otpControllers.map((c) => c.text).join();
   }
 
   void _startResendTimer() {
@@ -93,107 +117,301 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
   Future<bool> _sendOTP({bool forceNew = false}) async {
     setState(() => _loading = true);
+
     try {
-      final phone = toLocalPhilippineMobileNumber(_phoneCtrl.text);
-      await ApiService.sendMobileOtp(phone: phone, purpose: 'password_reset');
+      if (_useEmail) {
+        final email = _emailCtrl.text.trim();
+
+        final exists = await ApiService.checkEmailExists(email);
+
+        if (exists) {
+          await ApiService.sendEmailOtp(
+            email: email,
+            purpose: 'password_reset',
+          );
+        }
+      } else {
+        final phone = toLocalPhilippineMobileNumber(_phoneCtrl.text);
+
+        final exists = await ApiService.checkPhoneExists(phone);
+
+        if (exists) {
+          await ApiService.sendMobileOtp(
+            phone: phone,
+            purpose: 'password_reset',
+          );
+        }
+      }
+
       if (!mounted) return false;
 
       _verificationToken = null;
+      _otpSent = true;
+
       if (forceNew) {
         for (final controller in otpControllers) {
           controller.clear();
         }
+
         _otpCtrl.clear();
       }
 
       _startResendTimer();
-      SnackbarWidgets.success(context, "Verification code sent");
+
       return true;
     } catch (error) {
-      if (mounted) SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+      if (mounted) {
+        SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+      }
+
       return false;
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
-  Future<void> _submit() async {
-    FocusScope.of(context).unfocus();
+  Future<void> _confirmCancelPasswordChange() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          "Cancel password change?",
+          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+        ),
+        content: Text(
+          "Your password change will be cancelled. The verification code will no longer be used. Are you sure?",
+          style: GoogleFonts.inter(),
+        ),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    // Keep changing password
+                    Navigator.pop(context, true);
+                  },
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    side: const BorderSide(color: Color(0xFF2563EB)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: Text(
+                    "Yes",
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF2563EB),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    // Cancel password change
+                    Navigator.pop(context, false);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: Text(
+                    "No",
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
 
-    if (!_formKey.currentState!.validate()) return;
+    if (!mounted || confirm != true) return;
 
-    setState(() => _loading = true);
-
-    try {
-      final phone = toLocalPhilippineMobileNumber(_phoneCtrl.text);
-
-      bool success = await ApiService.updatePassword(
-        phone: phone,
-        newPassword: _newPassCtrl.text,
-        verificationToken: _verificationToken!,
+    if (_useEmail) {
+      await ApiService.cancelEmailOtp(
+        email: _emailCtrl.text.trim(),
+        purpose: 'password_reset',
       );
+    }
 
-      if (!mounted) return;
+    // Dispose/invalidate the current OTP flow locally.
+    _resendTimer?.cancel();
 
-      if (success) {
-        SnackbarWidgets.success(context, "Password updated successfully");
+    for (final controller in otpControllers) {
+      controller.clear();
+    }
 
-        Navigator.pop(context); // return to login
-      }
-    } catch (error) {
-      if (mounted) SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
-    } finally {
-      if (mounted) setState(() => _loading = false);
+    _otpCtrl.clear();
+
+    setState(() {
+      _otpSent = false;
+      _verificationToken = null;
+      _resendSeconds = 0;
+    });
+
+    // Exit the password-change screen.
+    if (mounted) {
+      Navigator.pop(context);
     }
   }
 
   Future<void> _nextStep() async {
+    FocusScope.of(context).unfocus();
+
+    // STEP 0: Phone / Email
     if (_currentStep == 0) {
-      FocusScope.of(context).unfocus();
+      if (!_formKey.currentState!.validate()) return;
+
+      setState(() => _currentStep = 1);
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        FocusScope.of(context).requestFocus(_passFocus);
+      });
+
+      return;
+    }
+
+    // STEP 1: New Password
+    if (_currentStep == 1) {
       if (!_formKey.currentState!.validate()) return;
 
       setState(() => _loading = true);
-      try {
-        final phone = toLocalPhilippineMobileNumber(_phoneCtrl.text);
-        final exists = await ApiService.checkPhoneExists(phone);
-        if (!mounted) return;
 
-        if (!exists) {
-          SnackbarWidgets.error(context, "Phone number is not registered");
-          return;
+      try {
+        // Only send the OTP the first time we enter the OTP step.
+        if (!_otpSent) {
+          if (_useEmail) {
+            final email = _emailCtrl.text.trim();
+
+            final exists = await ApiService.checkEmailExists(email);
+
+            if (exists) {
+              await ApiService.sendEmailOtp(
+                email: email,
+                purpose: 'password_reset',
+              );
+            }
+          } else {
+            final phone = toLocalPhilippineMobileNumber(_phoneCtrl.text);
+
+            final exists = await ApiService.checkPhoneExists(phone);
+
+            if (exists) {
+              await ApiService.sendMobileOtp(
+                phone: phone,
+                purpose: 'password_reset',
+              );
+            }
+          }
+
+          if (!mounted) return;
+
+          _otpSent = true;
+          _verificationToken = null;
+          _startResendTimer();
+
+          SnackbarWidgets.info(
+            context,
+            "We've sent a verification code to your ${_useEmail ? 'email' : 'phone number'}",
+          );
         }
 
-        final sent = await _sendOTP();
-        if (!sent || !mounted) return;
+        if (!mounted) return;
+
+        // Always proceed to OTP.
+        setState(() => _currentStep = 2);
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           FocusScope.of(context).requestFocus(otpFocusNodes[0]);
         });
-
-        setState(() => _currentStep = 1);
       } catch (error) {
-        if (mounted) SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+        if (mounted) {
+          SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+        }
       } finally {
-        if (mounted) setState(() => _loading = false);
+        if (mounted) {
+          setState(() => _loading = false);
+        }
       }
+
       return;
     }
-    if (_currentStep == 1) {
-      setState(() => _loading = true);
-      try {
-        _verificationToken = await ApiService.verifyMobileOtp(
-          phone: toLocalPhilippineMobileNumber(_phoneCtrl.text),
-          purpose: 'password_reset',
-          otp: _otpCtrl.text,
+
+    // STEP 2: OTP
+    if (_currentStep == 2) {
+      if (_otpCtrl.text.length != 6) {
+        SnackbarWidgets.error(
+          context,
+          "Please enter the 6-digit verification code",
         );
-        if (!mounted) return;
-        setState(() => _currentStep = 2);
-      } catch (error) {
-        if (mounted) SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
-      } finally {
-        if (mounted) setState(() => _loading = false);
+        return;
       }
+
+      setState(() => _loading = true);
+
+      try {
+        // Verify OTP
+        if (_useEmail) {
+          _verificationToken = await ApiService.verifyEmailOtp(
+            email: _emailCtrl.text.trim(),
+            purpose: 'password_reset',
+            otp: _otpCtrl.text,
+          );
+        } else {
+          _verificationToken = await ApiService.verifyMobileOtp(
+            phone: toLocalPhilippineMobileNumber(_phoneCtrl.text),
+            purpose: 'password_reset',
+            otp: _otpCtrl.text,
+          );
+        }
+
+        if (!mounted) return;
+
+        // OTP was valid, now update password.
+        final success = await ApiService.updatePassword(
+          email: _useEmail ? _emailCtrl.text.trim() : null,
+          phone: _useEmail
+              ? null
+              : toLocalPhilippineMobileNumber(_phoneCtrl.text),
+          newPassword: _newPassCtrl.text,
+          verificationToken: _verificationToken!,
+        );
+
+        if (!mounted) return;
+
+        if (success) {
+          SnackbarWidgets.success(context, "Password updated successfully");
+
+          Navigator.pop(context);
+        }
+      } catch (error) {
+        if (mounted) {
+          SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _loading = false);
+        }
+      }
+
       return;
     }
   }
@@ -202,76 +420,95 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        top: true,
-        child: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+      body: PopScope(
+        canPop: _currentStep != 2,
+        onPopInvokedWithResult: (didPop, result) async {
+          if (didPop) return;
+
+          if (_currentStep == 2) {
+            await _confirmCancelPasswordChange();
+          }
+        },
+        child: SafeArea(
+          top: true,
+          child: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+              ),
             ),
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-                  child: Column(
-                    children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: InkWell(
-                          onTap: () => Navigator.pop(context),
-                          child: Row(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+                    child: Column(
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: InkWell(
+                            onTap: () async {
+                              if (_currentStep == 2) {
+                                await _confirmCancelPasswordChange();
+                                return;
+                              }
+
+                              Navigator.pop(context);
+                            },
+                            child: Row(
+                              children: [
+                                Icon(
+                                  LucideIcons.chevronLeft,
+                                  color: Colors.white70,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  "Back",
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Image.asset('assets/foodsafe_logo.png'),
+                      ],
+                    ),
+                  ),
+                  // White sheet (but still in SAME scroll)
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(24),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Form(
+                          key: _formKey,
+                          autovalidateMode: AutovalidateMode.onUserInteraction,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(
-                                LucideIcons.chevronLeft,
-                                color: Colors.white70,
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                "Back",
-                                style: GoogleFonts.inter(color: Colors.white70),
-                              ),
+                              const SizedBox(height: 20),
+                              _stepProgressBar(),
+                              const SizedBox(height: 20),
+                              _buildStepContent(),
                             ],
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      Image.asset('assets/foodsafe_logo.png'),
-                    ],
-                  ),
-                ),
-                // White sheet (but still in SAME scroll)
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(24),
+                      ],
                     ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Form(
-                        key: _formKey,
-                        autovalidateMode: AutovalidateMode.onUserInteraction,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 20),
-                            _stepProgressBar(),
-                            const SizedBox(height: 20),
-                            _buildStepContent(),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -305,9 +542,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       case 0:
         return _phoneInfoStep();
       case 1:
-        return _otpStep();
-      case 2:
         return _newPasswordStep();
+      case 2:
+        return _otpStep();
       default:
         return const SizedBox.shrink();
     }
@@ -318,41 +555,120 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "Change password",
+          widget.isForgot ? 'Forgot password?' : 'Change password',
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w800,
-            color: Color(0xFF111827),
+            color: const Color(0xFF111827),
           ),
         ),
-        const SizedBox(height: 6),
+
+        const SizedBox(height: 4),
+
         Text(
-          "Enter your registered phone number and we'll send you a one-time reset code.",
+          _useEmail
+              ? "Enter your recovery email and we'll send you a one-time reset code."
+              : "Enter your registered phone number and we'll send you a one-time reset code.",
           style: GoogleFonts.inter(
             fontSize: 13,
-            color: Color(0xFF4B5563),
+            color: const Color(0xFF4B5563),
           ),
         ),
+
         const SizedBox(height: 14),
-        _LabeledField(
-          label: "Phone Number *",
-          child: TextFormField(
-            controller: _phoneCtrl,
-            keyboardType: TextInputType.number,
-            textInputAction: TextInputAction.done,
-            inputFormatters: const [PhilippineMobileInputFormatter()],
-            validator: validatePhilippineMobileInput,
-            style: GoogleFonts.inter(),
-            decoration: InputDecoration(
-              hintText: philippineMobileHint,
-              hintStyle: GoogleFonts.inter(color: Color(0xFFD1D5DB)),
-              prefixIcon: const PhilippineMobilePrefix(),
-              prefixIconConstraints: const BoxConstraints(minWidth: 88),
+
+        if (_useEmail)
+          _LabeledField(
+            label: "Email Address",
+            child: TextFormField(
+              key: const ValueKey('email-field'),
+              controller: _emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.done,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return "Email is required";
+                }
+
+                final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+                if (!emailRegex.hasMatch(value.trim())) {
+                  return "Enter a valid email address";
+                }
+
+                return null;
+              },
+              style: GoogleFonts.inter(),
+              decoration: InputDecoration(
+                hintText: "Enter your email",
+                hintStyle: GoogleFonts.inter(color: const Color(0xFFD1D5DB)),
+                prefixIcon: const Icon(
+                  LucideIcons.mail,
+                  color: Color(0xFF6B7280),
+                ),
+              ),
+            ),
+          )
+        else
+          _LabeledField(
+            label: "Phone Number",
+            child: TextFormField(
+              key: const ValueKey('phone-field'),
+              controller: _phoneCtrl,
+              keyboardType: TextInputType.phone,
+              textInputAction: TextInputAction.done,
+              inputFormatters: const [PhilippineMobileInputFormatter()],
+              validator: validatePhilippineMobileInput,
+              style: GoogleFonts.inter(),
+              decoration: InputDecoration(
+                hintText: philippineMobileHint,
+                hintStyle: GoogleFonts.inter(color: const Color(0xFFD1D5DB)),
+                prefixIcon: const PhilippineMobilePrefix(),
+                prefixIconConstraints: const BoxConstraints(minWidth: 88),
+              ),
+            ),
+          ),
+
+        const SizedBox(height: 6),
+
+        TextButton(
+          onPressed: _loading
+              ? null
+              : () {
+                  setState(() {
+                    _useEmail = !_useEmail;
+
+                    // The verification target changed,
+                    // so a new OTP flow is required.
+                    _otpSent = false;
+                    _verificationToken = null;
+                    _resendTimer?.cancel();
+                    _resendSeconds = 0;
+
+                    for (final controller in otpControllers) {
+                      controller.clear();
+                    }
+
+                    _otpCtrl.clear();
+                  });
+                },
+          style: TextButton.styleFrom(
+            padding: EdgeInsets.zero,
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: Text(
+            _useEmail ? "Use phone number" : "Use recovery email",
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF2563EB),
             ),
           ),
         ),
-        _helper(philippineMobileHelper),
+
         const SizedBox(height: 20),
+
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
@@ -376,7 +692,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     ),
                   )
                 : Text(
-                    "Send reset code",
+                    "Submit",
                     style: GoogleFonts.inter(fontWeight: FontWeight.w800),
                   ),
           ),
@@ -386,82 +702,96 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   }
 
   Widget _otpStep() {
-    // Autofill _otpCtrl when all 6 digits are entered.
-    void updateOtp() {
-      _otpCtrl.text = otpControllers.map((c) => c.text).join();
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "OTP verification",
+          "Verification code",
           style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w800),
         ),
-        const SizedBox(height: 10),
-        Text("Enter the 6-digit OTP sent to your phone."),
+
+        const SizedBox(height: 4),
+
+        Text(
+          _useEmail
+              ? "Enter the 6-digit OTP sent to your email."
+              : "Enter the 6-digit OTP sent to your phone.",
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            color: const Color(0xFF4B5563),
+          ),
+        ),
+
         const SizedBox(height: 30),
+
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: List.generate(6, (index) {
             return SizedBox(
-              height: 64,
-              width: 44,
-              child: TextFormField(
-                onChanged: (value) {
-                  if (value.length == 1 && index < 5) {
-                    // Move to next field
-                    FocusScope.of(
-                      context,
-                    ).requestFocus(otpFocusNodes[index + 1]);
-                  } else if (value.isEmpty && index > 0) {
-                    // Move back if deleted
-                    FocusScope.of(
-                      context,
-                    ).requestFocus(otpFocusNodes[index - 1]);
-                  }
-                  updateOtp();
-                },
-                style: GoogleFonts.inter(fontWeight: FontWeight.w800),
-                decoration: InputDecoration(
-                  contentPadding: const EdgeInsets.symmetric(vertical: 18),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(
-                      color: Color(0xFF3B82F6),
-                      width: 2,
+              height: 54,
+              width: 50,
+              child: KeyboardListener(
+                focusNode: FocusNode(),
+                onKeyEvent: (event) => _handleOtpKey(index, event),
+                child: TextFormField(
+                  controller: otpControllers[index],
+                  focusNode: otpFocusNodes[index],
+
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.next,
+
+                  textAlign: TextAlign.center,
+                  textAlignVertical: TextAlignVertical.center,
+
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w800),
+
+                  inputFormatters: [
+                    LengthLimitingTextInputFormatter(1),
+                    FilteringTextInputFormatter.digitsOnly,
+                  ],
+
+                  onChanged: (value) {
+                    _updateOtp();
+
+                    if (value.isNotEmpty && index < 5) {
+                      FocusScope.of(
+                        context,
+                      ).requestFocus(otpFocusNodes[index + 1]);
+                    }
+                  },
+
+                  decoration: InputDecoration(
+                    contentPadding: EdgeInsets.zero,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF3B82F6),
+                        width: 2,
+                      ),
+                    ),
+                    errorMaxLines: 2,
+                    errorStyle: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: const Color(0xFFDC2626),
                     ),
                   ),
-                  errorMaxLines: 2,
-                  errorStyle: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: const Color(0xFFDC2626),
-                  ),
                 ),
-                keyboardType: TextInputType.number,
-                controller: otpControllers[index],
-                focusNode: otpFocusNodes[index],
-                textAlign: TextAlign.center,
-                textAlignVertical: TextAlignVertical.center,
-                inputFormatters: [
-                  LengthLimitingTextInputFormatter(1),
-                  FilteringTextInputFormatter.digitsOnly,
-                ],
               ),
             );
           }),
         ),
-        SizedBox(height: 10),
+
+        const SizedBox(height: 16),
+
         Row(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text('Did not receive code?', style: GoogleFonts.inter()),
             TextButton(
@@ -470,7 +800,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   : () {
                       _sendOTP(forceNew: true);
                     },
-              style: ButtonStyle(
+              style: const ButtonStyle(
                 visualDensity: VisualDensity(horizontal: -4, vertical: -4),
               ),
               child: Text(
@@ -487,56 +817,34 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
             ),
           ],
         ),
-        SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () => setState(() => _currentStep--),
-                style: OutlinedButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  side: const BorderSide(color: Color(0xFFD1D5DB)),
-                ),
-                child: Text(
-                  "Back",
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black87,
-                  ),
-                ),
+
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _loading ? null : _nextStep,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
               ),
+              elevation: 0,
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: _loading ? null : _nextStep,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+            child: _loading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: AppLoadingIndicator(
+                      size: 20,
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Text(
+                    "Verify",
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w800),
                   ),
-                  elevation: 0,
-                ),
-                child: _loading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: AppLoadingIndicator(
-                          size: 20,
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        "Submit",
-                        style: GoogleFonts.inter(fontWeight: FontWeight.w800),
-                      ),
-              ),
-            ),
-          ],
+          ),
         ),
       ],
     );
@@ -547,11 +855,11 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionTitle(
-          "Change password",
-          "Set a new password for your account",
+          "Set new password",
+          "Must be at least 8 characters with uppercase, lowercase, numbers, and symbols",
         ),
         _LabeledField(
-          label: "New Password *",
+          label: "New Password",
           child: TextFormField(
             controller: _newPassCtrl,
             focusNode: _passFocus,
@@ -581,14 +889,10 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           ),
         ),
 
-        _helper(
-          'Must be at least 8 characters with uppercase, lowercase, numbers, and symbols',
-        ),
-
         const SizedBox(height: 14),
 
         _LabeledField(
-          label: "Confirm Password *",
+          label: "Confirm Password",
           child: TextFormField(
             controller: _confirmPassCtrl,
             focusNode: _confirmPassFocus,
@@ -641,7 +945,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
             const SizedBox(width: 16),
             Expanded(
               child: ElevatedButton(
-                onPressed: _submit,
+                onPressed: _loading ? null : _nextStep,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF2563EB),
                   foregroundColor: Colors.white,
@@ -661,7 +965,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                         ),
                       )
                     : Text(
-                        "Submit",
+                        "Confirm",
                         style: GoogleFonts.inter(fontWeight: FontWeight.w800),
                       ),
               ),
@@ -690,14 +994,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           ),
         ),
       ],
-    ),
-  );
-
-  Widget _helper(String text) => Padding(
-    padding: const EdgeInsets.only(top: 4),
-    child: Text(
-      text,
-      style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF6B7280)),
     ),
   );
 }

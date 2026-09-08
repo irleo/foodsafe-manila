@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../utils/philippine_mobile_number.dart';
 
@@ -23,7 +24,7 @@ class PhilippineMobilePrefix extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               philippineMobilePrefix,
-              style: TextStyle(color: color, fontWeight: FontWeight.w600),
+              style: GoogleFonts.inter(color: color, fontWeight: FontWeight.w600),
             ),
           ],
         ),

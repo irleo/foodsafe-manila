@@ -10,11 +10,11 @@ class InsightsScreen extends StatefulWidget {
   const InsightsScreen({super.key, required this.onProfilePressed});
 
   @override
-  State<InsightsScreen> createState() => _InsightsScreenState();
+  State<InsightsScreen> createState() => InsightsScreenState();
 }
 
-class _InsightsScreenState extends State<InsightsScreen> {
-  String selectedPeriod = '1Y';
+class InsightsScreenState extends State<InsightsScreen> {
+  String selectedPeriod = '3M';
   String _districtPeriod = 'Last 7 days';
   String _diseasePeriod = 'Last 7 days';
 
@@ -60,6 +60,15 @@ class _InsightsScreenState extends State<InsightsScreen> {
     _loadForecastData();
     _loadDistrictData();
     _loadDiseaseData();
+  }
+
+  Future<void> refreshData() async {
+    await Future.wait([
+      _loadOverviewData(),
+      _loadForecastData(),
+      _loadDistrictData(),
+      _loadDiseaseData(),
+    ]);
   }
 
   String _periodKey(String value) {
@@ -535,33 +544,37 @@ class _InsightsScreenState extends State<InsightsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              // Header
-              _buildHeader(DateTime.now()),
+        child: RefreshIndicator(
+          onRefresh: refreshData,
+          color: const Color(0xFF2563EB),
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                // Header
+                _buildHeader(DateTime.now()),
 
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 30),
-                child: Column(
-                  children: [
-                    _buildOverviewCard(),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 30),
+                  child: Column(
+                    children: [
+                      _buildOverviewCard(title: 'Summary'),
 
-                    const SizedBox(height: 24),
+                      const SizedBox(height: 24),
 
-                    _buildForecast(),
+                      _buildForecast(),
 
-                    const SizedBox(height: 24),
+                      const SizedBox(height: 24),
 
-                    _buildDistrictSection(),
+                      _buildDistrictSection(),
 
-                    const SizedBox(height: 24),
+                      const SizedBox(height: 24),
 
-                    _buildDiseaseSection(),
-                  ],
+                      _buildDiseaseSection(),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -601,7 +614,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
               // Profile button
               Material(
-                color: Colors.white.withOpacity(0.18),
+                color: Colors.white.withValues(alpha: 0.18),
                 shape: const CircleBorder(),
                 child: InkWell(
                   customBorder: const CircleBorder(),
@@ -627,85 +640,112 @@ class _InsightsScreenState extends State<InsightsScreen> {
   // OVERVIEW
   // ------------------------------------------------------------
 
-  Widget _buildOverviewCard() {
+  Widget _buildOverviewCard({
+    required String title,
+  }) {
+    
     final overview = _overview;
     final currentMonthCases = _safeIntNullable(overview?['currentMonthCases']);
     final cumulativeCases = _safeIntNullable(overview?['cumulativeCases']);
     final topDistrict = overview?['topDistrict'];
     final topDisease = overview?['topDisease'];
 
-    return Container(
-      decoration: _cardDecoration(),
-      child: Column(
-        children: [
-          _overviewRow(
-            icon: LucideIcons.flame,
-            label: 'Current Month',
-            value: currentMonthCases == null
-                ? '—'
-                : '${_formatNumber(currentMonthCases)} cases',
-            trailing: _formatSignedPercent(overview?['monthlyChange']),
-            trailingColor: const Color(0xFF9CA3AF),
-            trailingWidget: _buildChangeIndicator(overview?['monthlyChange']),
+    final isLoading = overview == null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          decoration: _cardDecoration(),
+          child: Column(
+            children: [
+              isLoading
+                  ? _overviewSkeletonRow()
+                  : _overviewRow(
+                      icon: LucideIcons.flame,
+                      label: 'Current Month',
+                      value: currentMonthCases == null
+                          ? '—'
+                          : '${_formatNumber(currentMonthCases)} cases',
+                      trailing: _formatSignedPercent(overview['monthlyChange']),
+                      trailingColor: const Color(0xFF9CA3AF),
+                      trailingWidget: _buildChangeIndicator(
+                        overview['monthlyChange'],
+                      ),
+                    ),
+
+              _divider(),
+
+              isLoading
+                  ? _overviewSkeletonRow()
+                  : _overviewRow(
+                      icon: LucideIcons.calendar,
+                      label: 'Forecast',
+                      value: _primaryForecast() == null
+                          ? '—'
+                          : '${_formatNumber(_safeInt(_primaryForecast()?['predicted']))} cases',
+                      trailing: _formatMonthYear(_primaryForecast()),
+                      trailingColor: Colors.grey,
+                    ),
+
+              _divider(),
+
+              isLoading
+                  ? _overviewSkeletonRow()
+                  : _overviewRow(
+                      icon: LucideIcons.activity,
+                      label: 'Total Cumulative',
+                      value: cumulativeCases == null
+                          ? '—'
+                          : '${_formatNumber(cumulativeCases)} cases',
+                      trailing: _formatCoverageRange(
+                        overview['coverageStart'],
+                        overview['coverageEnd'],
+                      ),
+                      trailingColor: Colors.grey,
+                    ),
+
+              _divider(),
+
+              isLoading
+                  ? _overviewSkeletonRow()
+                  : _overviewRow(
+                      icon: LucideIcons.mapPin,
+                      label: 'Most District',
+                      value: topDistrict is Map
+                          ? topDistrict['name']?.toString() ?? '—'
+                          : '—',
+                      trailing: topDistrict is Map
+                          ? '${_formatNumber(_safeInt(topDistrict['cases']))} cases'
+                          : '—',
+                      trailingColor: Colors.grey,
+                    ),
+
+              _divider(),
+
+              isLoading
+                  ? _overviewSkeletonRow(showBottomBorder: false)
+                  : _overviewRow(
+                      icon: LucideIcons.stethoscope,
+                      label: 'Most Disease',
+                      value: topDisease is Map
+                          ? topDisease['name']?.toString() ?? '—'
+                          : '—',
+                      trailing: topDisease is Map
+                          ? '${_formatNumber(_safeInt(topDisease['cases']))} cases'
+                          : '—',
+                      trailingColor: Colors.grey,
+                      showBottomBorder: false,
+                    ),
+            ],
           ),
-
-          _divider(),
-
-          _overviewRow(
-            icon: LucideIcons.calendar,
-            label: 'Forecast',
-            value: _primaryForecast() == null
-                ? '—'
-                : '${_formatNumber(_safeInt(_primaryForecast()?['predicted']))} cases',
-            trailing: _formatMonthYear(_primaryForecast()),
-            trailingColor: Colors.grey,
-          ),
-
-          _divider(),
-
-          _overviewRow(
-            icon: LucideIcons.activity,
-            label: 'Total Cumulative',
-            value: cumulativeCases == null
-                ? '—'
-                : '${_formatNumber(cumulativeCases)} cases',
-            trailing: _formatCoverageRange(
-              overview?['coverageStart'],
-              overview?['coverageEnd'],
-            ),
-            trailingColor: Colors.grey,
-          ),
-
-          _divider(),
-
-          _overviewRow(
-            icon: LucideIcons.mapPin,
-            label: 'Top District',
-            value: topDistrict is Map
-                ? topDistrict['name']?.toString() ?? '—'
-                : '—',
-            trailing: topDistrict is Map
-                ? '${_formatNumber(_safeInt(topDistrict['cases']))} cases'
-                : '—',
-            trailingColor: Colors.grey,
-          ),
-
-          _divider(),
-
-          _overviewRow(
-            icon: LucideIcons.stethoscope,
-            label: 'Top Disease',
-            value: topDisease is Map
-                ? topDisease['name']?.toString() ?? '—'
-                : '—',
-            trailing: topDisease is Map
-                ? '${_formatNumber(_safeInt(topDisease['cases']))} cases'
-                : '—',
-            trailingColor: Colors.grey,
-            showBottomBorder: false,
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -768,6 +808,34 @@ class _InsightsScreenState extends State<InsightsScreen> {
     );
   }
 
+  Widget _overviewSkeletonRow({bool showBottomBorder = true}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      child: Row(
+        children: [
+          _buildSkeleton(width: 36, height: 36, borderRadius: 12),
+
+          const SizedBox(width: 14),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSkeleton(width: 85, height: 12, borderRadius: 4),
+                const SizedBox(height: 6),
+                _buildSkeleton(width: 120, height: 14, borderRadius: 4),
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          _buildSkeleton(width: 75, height: 12, borderRadius: 4),
+        ],
+      ),
+    );
+  }
+
   // ------------------------------------------------------------
   // FORECAST
   // ------------------------------------------------------------
@@ -800,64 +868,97 @@ class _InsightsScreenState extends State<InsightsScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEFF6FF),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        LucideIcons.calendar,
-                        color: Color(0xFF3B82F6),
-                        size: 18,
-                      ),
-                    ),
-
-                    const SizedBox(width: 12),
-
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                child: _isForecastLoading
+                    ? Row(
                         children: [
-                          Row(
-                            children: [
-                              Text(
-                                selectedDistrictLabel,
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: Color(0xFF9CA3AF),
-                                ),
-                              ),
-                              SizedBox(width: 7),
-                              _ForecastBadge(label: forecastDate),
-                            ],
+                          _buildSkeleton(
+                            width: 36,
+                            height: 36,
+                            borderRadius: 12,
                           ),
-                          SizedBox(height: 3),
-                          Text(
-                            forecast == null
-                                ? '—'
-                                : _formatNumber(forecastCases),
-                            style: GoogleFonts.inter(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF111827),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    _buildSkeleton(width: 90, height: 12),
+                                    const SizedBox(width: 7),
+                                    _buildSkeleton(
+                                      width: 55,
+                                      height: 18,
+                                      borderRadius: 6,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                _buildSkeleton(width: 80, height: 24),
+                                const SizedBox(height: 4),
+                                _buildSkeleton(width: 130, height: 11),
+                              ],
                             ),
                           ),
-                          Text(
-                            'predicted eligible cases',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: Color(0xFF9CA3AF),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              LucideIcons.calendar,
+                              color: Color(0xFF3B82F6),
+                              size: 18,
+                            ),
+                          ),
+
+                          const SizedBox(width: 12),
+
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      selectedDistrictLabel,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        color: const Color(0xFF9CA3AF),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 7),
+                                    _ForecastBadge(label: forecastDate),
+                                  ],
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  forecast == null
+                                      ? '—'
+                                      : _formatNumber(forecastCases),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF111827),
+                                  ),
+                                ),
+                                Text(
+                                  'predicted eligible cases',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: const Color(0xFF9CA3AF),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                ),
               ),
 
               _divider(),
@@ -892,7 +993,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
               ),
 
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
                 child: Row(
                   children: [
                     Row(
@@ -927,10 +1028,10 @@ class _InsightsScreenState extends State<InsightsScreen> {
               _buildForecastChart(),
 
               Padding(
-                padding: EdgeInsetsGeometry.fromLTRB(16, 0, 16, 12),
+                padding: EdgeInsetsGeometry.fromLTRB(16, 12, 16, 16),
                 child: Wrap(
                   alignment: WrapAlignment.center,
-                  spacing: 5,
+                  spacing: 4,
                   runSpacing: 8,
                   children: [
                     _legend(
@@ -957,10 +1058,12 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
   Widget _buildForecastChart() {
     if (_isForecastLoading) {
-      return const SizedBox(
-        height: 150,
-        child: Center(
-          child: CircularProgressIndicator(color: Color(0xFF2563EB)),
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: _buildSkeleton(
+          width: double.infinity,
+          height: 150,
+          borderRadius: 8,
         ),
       );
     }
@@ -1113,10 +1216,13 @@ class _InsightsScreenState extends State<InsightsScreen> {
                     child: Text.rich(
                       TextSpan(
                         children: [
-                          TextSpan(text: monthLabels[index]),
+                          TextSpan(
+                            text: monthLabels[index],
+                            style: GoogleFonts.inter(),
+                          ),
                           TextSpan(
                             text: '\n${row['year']}',
-                            style: const TextStyle(fontSize: 8),
+                            style: GoogleFonts.inter(fontSize: 8),
                           ),
                         ],
                       ),
@@ -1331,10 +1437,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
               ),
               _divider(),
               if (isLoading)
-                const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: CircularProgressIndicator(color: Color(0xFF2563EB)),
-                )
+                _buildDistributionSkeleton(showColors: showColors)
               else if (errorMessage != null)
                 Padding(
                   padding: const EdgeInsets.all(20),
@@ -1400,7 +1503,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                                   backgroundColor: const Color(0xFFF3F4F6),
                                   valueColor: AlwaysStoppedAnimation(
                                     showColors
-                                        ? color.withOpacity(.75)
+                                        ? color.withValues(alpha: .75)
                                         : const Color(0xFF3B82F6),
                                   ),
                                 ),
@@ -1431,6 +1534,51 @@ class _InsightsScreenState extends State<InsightsScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildDistributionSkeleton({required bool showColors}) {
+    return Column(
+      children: List.generate(
+        6,
+        (index) => Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: Row(
+                children: [
+                  if (showColors) ...[
+                    _buildSkeleton(width: 10, height: 10, borderRadius: 5),
+                    const SizedBox(width: 8),
+                  ],
+
+                  _buildSkeleton(
+                    width: showColors ? 90 : 80,
+                    height: 12,
+                    borderRadius: 4,
+                  ),
+
+                  const SizedBox(width: 10),
+
+                  Expanded(
+                    child: _buildSkeleton(
+                      width: double.infinity,
+                      height: 8,
+                      borderRadius: 10,
+                    ),
+                  ),
+
+                  const SizedBox(width: 10),
+
+                  _buildSkeleton(width: 42, height: 12, borderRadius: 4),
+                ],
+              ),
+            ),
+
+            if (index < 5) _divider(),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1761,6 +1909,21 @@ class _InsightsScreenState extends State<InsightsScreen> {
     }
 
     return null;
+  }
+
+  Widget _buildSkeleton({
+    required double width,
+    required double height,
+    double borderRadius = 6,
+  }) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(borderRadius),
+      ),
+    );
   }
 }
 

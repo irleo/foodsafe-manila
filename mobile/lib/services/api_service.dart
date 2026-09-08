@@ -70,6 +70,28 @@ class ApiService {
     return data['expiresInSeconds'] as int? ?? 300;
   }
 
+  static Future<int> sendEmailOtp({
+    required String email,
+    required String purpose,
+  }) async {
+    final response = await ApiClient.post(
+      '/auth/email/otp/send',
+      body: {
+        'email': email,
+        'purpose': purpose,
+      },
+      auth: false,
+    );
+
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Failed to send verification code',
+    );
+
+    final data = ApiClient.decodeMap(response);
+    return data['expiresInSeconds'] as int? ?? 300;
+  }
+
   static Future<String> verifyMobileOtp({
     required String phone,
     required String purpose,
@@ -103,22 +125,96 @@ class ApiService {
     return data['exists'] as bool? ?? false;
   }
 
+  static Future<bool> checkEmailExists(String email) async {
+    final response = await ApiClient.get(
+      '/auth/user/email-exists',
+      query: {'email': email},
+      auth: false,
+    );
+
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Failed to check email address',
+    );
+
+    final data = ApiClient.decodeMap(response);
+    return data['exists'] as bool? ?? false;
+  }
+
+  static Future<String> verifyEmailOtp({
+    required String email,
+    required String purpose,
+    required String otp,
+  }) async {
+    final response = await ApiClient.post(
+      '/auth/email/otp/verify',
+      body: {
+        'email': email,
+        'purpose': purpose,
+        'otp': otp,
+      },
+      auth: false,
+    );
+
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Failed to verify code',
+    );
+
+    final data = ApiClient.decodeMap(response);
+    final token = data['verificationToken'] as String?;
+
+    if (token == null || token.isEmpty) {
+      throw ApiException(
+        response.statusCode,
+        'Verification token is missing',
+      );
+    }
+
+    return token;
+  }
+
+  static Future<void> cancelEmailOtp({
+    required String email,
+    required String purpose,
+  }) async {
+    final response = await ApiClient.post(
+      '/auth/email/otp/cancel',
+      body: {
+        'email': email,
+        'purpose': purpose,
+      },
+      auth: false,
+    );
+
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Failed to cancel verification code',
+    );
+  }
+
   static Future<bool> updatePassword({
-    required String phone,
+    String? phone,
+    String? email,
     required String newPassword,
     required String verificationToken,
   }) async {
     final response = await ApiClient.post(
       '/auth/reset-password',
       body: {
-        'phone': phone,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+        if (email != null && email.isNotEmpty) 'email': email,
         'newPassword': newPassword,
         'verificationToken': verificationToken,
       },
       auth: false,
     );
 
-    ApiClient.throwIfError(response, fallback: 'Failed to update password');
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Failed to update password',
+    );
+
     return response.statusCode == 200;
   }
 

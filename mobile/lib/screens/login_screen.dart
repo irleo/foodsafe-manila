@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:foodsafe_manila/screens/change_password_screen.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../widgets/snackbar_widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -99,33 +99,7 @@ class _LogInScreenState extends State<LoginScreen> {
       backgroundColor: Colors.white,
       body: SafeArea(
         top: true,
-        child: PopScope(
-          canPop: false,
-          onPopInvokedWithResult: (didPop, result) async {
-            if (didPop) return;
-
-            if (backPressedOnce) {
-              await SystemNavigator.pop();
-            } else {
-              setState(() {
-                backPressedOnce = true;
-              });
-
-              SnackbarWidgets.error(
-                context,
-                'If you are trying to exit the app, please try again',
-              );
-
-              Future.delayed(const Duration(seconds: 2), () {
-                if (mounted) {
-                  setState(() {
-                    backPressedOnce = false;
-                  });
-                }
-              });
-            }
-          },
-          child: Container(
+        child: Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
@@ -176,14 +150,14 @@ class _LogInScreenState extends State<LoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          "Welcome back",
+                          "Welcome Back!",
                           style: GoogleFonts.inter(
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
                             color: Color(0xFF111827),
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 4),
                         Text(
                           "Sign in to continue to FoodSafe",
                           style: GoogleFonts.inter(
@@ -272,9 +246,9 @@ class _LogInScreenState extends State<LoginScreen> {
                                 children: [
                                   TextButton(
                                     onPressed: () {
-                                      Navigator.pushNamed(
+                                      Navigator.push(
                                         context,
-                                        '/change_password',
+                                        MaterialPageRoute(builder: (context) => ChangePasswordScreen(isForgot: true))
                                       );
                                     },
                                     child: Text(
@@ -316,7 +290,6 @@ class _LogInScreenState extends State<LoginScreen> {
                                       : Text(
                                           "Sign In",
                                           style: GoogleFonts.inter(
-                                            fontSize: 16,
                                             fontWeight: FontWeight.w800,
                                           ),
                                         ),
@@ -368,19 +341,6 @@ class _LogInScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ),
-
-                        const SizedBox(height: 18),
-
-                        Text(
-                          "By signing in, you agree to our Terms of Service and Privacy Policy. "
-                          "Your data is protected under the Data Privacy Act of 2012.",
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: Color(0xFF4B5563),
-                            height: 1.35,
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -388,7 +348,6 @@ class _LogInScreenState extends State<LoginScreen> {
               ),
             ),
           ),
-        ),
       ),
     );
   }

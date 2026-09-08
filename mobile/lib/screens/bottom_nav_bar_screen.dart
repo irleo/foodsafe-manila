@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:foodsafe_manila/screens/alerts_screen.dart';
 import 'package:foodsafe_manila/screens/report_history_screen.dart';
 import 'package:foodsafe_manila/screens/report_form_screen.dart';
@@ -27,9 +28,8 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
     with WidgetsBindingObserver {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final GlobalKey<HomeScreenState> _homeKey = GlobalKey<HomeScreenState>();
-  final GlobalKey<MapScreenState> _mapKey = GlobalKey<MapScreenState>();
-  final GlobalKey<AlertsScreenState> _alertsKey =
-      GlobalKey<AlertsScreenState>();
+  final GlobalKey<InsightsScreenState> _insightsKey =
+      GlobalKey<InsightsScreenState>();
 
   int _selectedIndex = 0;
   final PageController _pageController = PageController();
@@ -75,14 +75,10 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
   void _refreshCurrentTab() {
     switch (_selectedIndex) {
       case 0:
+        _homeKey.currentState?.refreshData();
         break;
       case 1:
-        _mapKey.currentState?.refreshData();
-        break;
-      case 2:
-        break;
-      case 3:
-        _alertsKey.currentState?.refreshData();
+        _insightsKey.currentState?.refreshData();
         break;
     }
   }
@@ -164,21 +160,21 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
               _buildMenuTile(
                 icon: LucideIcons.user,
                 gradientColors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
-                title: "Account information",
+                title: "Account Information",
                 subtitle: "Update your account details",
                 page: const AccountInformationScreen(),
               ),
               _buildMenuTile(
                 icon: LucideIcons.lock,
                 gradientColors: [Color(0xFFEF4444), Color(0xFFDC2626)],
-                title: "Change password",
+                title: "Change Password",
                 subtitle: "Update your account password",
                 page: const ChangePasswordScreen(),
               ),
               _buildMenuTile(
                 icon: LucideIcons.clipboardList,
                 gradientColors: [Color(0xFF10B981), Color(0xFF059669)],
-                title: "My reports",
+                title: "My Reports",
                 subtitle: "View and manage your submitted reports",
                 page: const ReportHistoryScreen(),
               ),
@@ -186,7 +182,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
                 _buildMenuTile(
                   icon: Icons.location_searching,
                   gradientColors: const [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
-                  title: 'Simulate location (debug)',
+                  title: 'Simulate Location (Debug)',
                   subtitle: 'Test reports and alerts from a Manila barangay',
                   page: const DebugLocationScreen(),
                 ),
@@ -375,7 +371,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
       ),
       bottomNavigationBar: SafeArea(
         child: Container(
-          height: 64,
+          height: 64.sp,
           decoration: BoxDecoration(
             color: Colors.white,
             border: Border(
@@ -419,9 +415,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
         child: FloatingActionButton(
           onPressed: () => Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (context) => const ReportFormScreen(),
-            ),
+            MaterialPageRoute(builder: (context) => const ReportFormScreen()),
           ),
           tooltip: 'Submit a report',
           backgroundColor: Colors.transparent,
@@ -431,20 +425,13 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(
-                colors: [
-                  Color(0xFF3B82F6),
-                  Color(0xFF2563EB),
-                ],
+                colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
             ),
             child: const Center(
-              child: Icon(
-                Icons.campaign,
-                color: Colors.white,
-                size: 36,
-              ),
+              child: Icon(Icons.campaign, color: Colors.white, size: 36),
             ),
           ),
         ),
@@ -589,7 +576,11 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
                     ),
                   ),
 
-                  const Icon(LucideIcons.chevronRight, color: Colors.grey, size: 20),
+                  const Icon(
+                    LucideIcons.chevronRight,
+                    color: Colors.grey,
+                    size: 20,
+                  ),
                 ],
               ),
             ),

@@ -426,6 +426,7 @@ class _ReportSheetData {
 
 class HomeScreenState extends State<HomeScreen> {
   late String locationText;
+  bool isLocationLoading = true;
   int? expandedTip;
 
   String _normalizeDistrictLabel(String value) {
@@ -550,27 +551,80 @@ class HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _loadHeaderLocation();
+
     locationText = _composeHeaderLocation(
       LocationService.cachedAddress ?? "Fetching...",
     );
 
-    // Optionally, refresh in background
+    // Load cached/current location
+    _loadHeaderLocation();
+
+    // Refresh in background
     LocationService.getUserAddress(forceRefresh: true).then((updated) {
-      if (mounted) {
-        setState(() {
-          locationText = _composeHeaderLocation(updated);
-        });
-      }
+      if (!mounted) return;
+
+      setState(() {
+        locationText = _composeHeaderLocation(updated);
+        isLocationLoading = false;
+      });
     });
   }
 
   Future<void> _loadHeaderLocation() async {
-    LocationService.getUserAddress().then((address) {
+    try {
+      final address = await LocationService.getUserAddress();
+
+      if (!mounted) return;
+
       setState(() {
         locationText = _composeHeaderLocation(address);
+        isLocationLoading = false;
       });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        isLocationLoading = false;
+      });
+    }
+  }
+
+  Future<void> refreshData() async {
+    setState(() {
+      isLocationLoading = true;
     });
+
+    try {
+      final updated = await LocationService.getUserAddress(forceRefresh: true);
+
+      if (!mounted) return;
+
+      setState(() {
+        locationText = _composeHeaderLocation(updated);
+        isLocationLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        isLocationLoading = false;
+      });
+    }
+  }
+
+  Widget _buildSkeleton({
+    required double width,
+    required double height,
+    double borderRadius = 6,
+  }) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.25),
+        borderRadius: BorderRadius.circular(borderRadius),
+      ),
+    );
   }
 
   @override
@@ -581,26 +635,30 @@ class HomeScreenState extends State<HomeScreen> {
       backgroundColor: const Color(0xFFF9FAFB),
       body: SafeArea(
         bottom: false,
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              _buildHeader(now),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 30),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHowItWorks(),
-                    const SizedBox(height: 24),
-                    _buildWhenToReport(),
-                    const SizedBox(height: 24),
-                    _buildNearbyClinic(),
-                    const SizedBox(height: 24),
-                    _buildFoodSafetyTips(),
-                  ],
+        child: RefreshIndicator(
+          onRefresh: refreshData,
+          color: const Color(0xFF2563EB),
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                _buildHeader(now),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 30),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHowItWorks(),
+                      const SizedBox(height: 24),
+                      _buildWhenToReport(),
+                      const SizedBox(height: 24),
+                      _buildNearbyClinic(),
+                      const SizedBox(height: 24),
+                      _buildFoodSafetyTips(),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -640,7 +698,7 @@ class HomeScreenState extends State<HomeScreen> {
 
               // Profile button
               Material(
-                color: Colors.white.withOpacity(0.18),
+                color: Colors.white.withValues(alpha: 0.18),
                 shape: const CircleBorder(),
                 child: InkWell(
                   customBorder: const CircleBorder(),
@@ -665,35 +723,55 @@ class HomeScreenState extends State<HomeScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.10),
+              color: Colors.white.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withOpacity(0.20)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Icon(LucideIcons.mapPin, color: Colors.white, size: 18),
-                    SizedBox(width: 8),
-                    Text(
-                      locationText,
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                    ),
+                    // Location icon / skeleton
+                    isLocationLoading
+                        ? _buildSkeleton(width: 18, height: 18, borderRadius: 9)
+                        : const Icon(
+                            LucideIcons.mapPin,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+
+                    const SizedBox(width: 8),
+
+                    // Location text / skeleton
+                    isLocationLoading
+                        ? _buildSkeleton(width: 180, height: 22)
+                        : Flexible(
+                            child: Text(
+                              locationText,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                              ),
+                            ),
+                          ),
                   ],
                 ),
+
                 const SizedBox(height: 4),
-                Text(
-                  _formatDate(now),
-                  style: GoogleFonts.inter(
-                    color: Color(0xFFDBEAFE),
-                    fontSize: 12,
-                  ),
-                ),
+
+                // Date / skeleton
+                isLocationLoading
+                    ? _buildSkeleton(width: 180, height: 14)
+                    : Text(
+                        _formatDate(now),
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFFDBEAFE),
+                          fontSize: 12,
+                        ),
+                      ),
               ],
             ),
           ),

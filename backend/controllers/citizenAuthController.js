@@ -8,6 +8,7 @@ import {
 } from "../utils/citizenAuth.js";
 import { validatePassword } from "../utils/passwordValidation.js";
 import { consumeMobileOtpVerification } from "../services/mobileOtpService.js";
+import { consumeEmailOtpVerification } from "../services/mobileEmailOtpService.js";
 import { logRequestError } from "../utils/serverLogger.js";
 
 // POST /api/auth/register
@@ -112,11 +113,28 @@ export const checkPhoneExists = async (req, res) => {
   }
 };
 
+// GET /api/auth/user/email-exists?email=
+export const checkEmailExists = async (req, res) => {
+  const email = String(req.query.email || "").trim().toLowerCase();
+
+  if (!email) {
+    return res.status(400).json({ message: "Email query is required" });
+  }
+
+  try {
+    const exists = await MobileUser.exists({ email });
+    return res.json({ exists: Boolean(exists) });
+  } catch (error) {
+    logRequestError(error, req, "EMAIL_LOOKUP_ERROR");
+    return res.status(500).json({ message: "Failed to check email address" });
+  }
+};
+
 // POST /api/auth/reset-password
 export const resetCitizenPassword = async (req, res) => {
-  const { phone, newPassword, verificationToken } = req.body;
+  const { phone, email, newPassword, verificationToken } = req.body;
 
-  if (!phone || !newPassword || !verificationToken) {
+  if ((!phone && !email) || !newPassword || !verificationToken) {
     return res.status(400).json({ message: "Missing required fields" });
   }
 
@@ -126,6 +144,36 @@ export const resetCitizenPassword = async (req, res) => {
   }
 
   try {
+    if (email) {
+      const normalizedEmail = String(email).trim().toLowerCase();
+
+      const mobileUser = await MobileUser.findOne({
+        email: normalizedEmail,
+      });
+
+      if (!mobileUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // This must call an email verification-token consumer.
+      const verified = await consumeEmailOtpVerification({
+        email: normalizedEmail,
+        purpose: "password_reset",
+        verificationToken,
+      });
+
+      if (!verified) {
+        return res.status(403).json({
+          message: "Email verification is invalid or expired",
+        });
+      }
+
+      mobileUser.password = await bcrypt.hash(newPassword, 10);
+      await mobileUser.save();
+
+      return res.json({ success: true });
+    }
+
     const normalizedPhone = normalizePhone(phone);
     const mobileUser = await MobileUser.findOne({ phoneNumber: normalizedPhone });
 
