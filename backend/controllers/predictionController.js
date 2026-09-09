@@ -55,6 +55,26 @@ async function resolveDataset(datasetId) {
     .lean();
 }
 
+function invalidRequestedDatasetResponse(datasetId, dataset) {
+  if (!datasetId || dataset?._id) return null;
+  if (typeof datasetId !== "string" || !mongoose.Types.ObjectId.isValid(datasetId)) {
+    return {
+      status: 400,
+      body: {
+        code: "INVALID_DATASET_ID",
+        message: "Dataset ID must be a valid MongoDB ObjectId.",
+      },
+    };
+  }
+  return {
+    status: 404,
+    body: {
+      code: "FORECAST_DATASET_NOT_FOUND",
+      message: "The requested validated CESU dataset was not found.",
+    },
+  };
+}
+
 function publicRefreshJob(run) {
   if (!run) {
     return {
@@ -230,16 +250,22 @@ export const getPredictions = async (req, res) => {
       });
     }
     const dataset = await resolveDataset(req.query.datasetId);
+    const datasetError = invalidRequestedDatasetResponse(
+      req.query.datasetId,
+      dataset,
+    );
+    if (datasetError) {
+      return res.status(datasetError.status).json(datasetError.body);
+    }
+
     const datasetScope = dataset?._id || "all";
     const refreshRun = await latestRefresh(datasetScope, horizonMonths);
 
     const currentRun = await latestUsablePrediction(datasetScope, horizonMonths);
-    const showingPreviousRun = !currentRun && refreshRun?.status === "running";
-    const run = currentRun || (
-      showingPreviousRun
-        ? await latestUsablePrediction(undefined, horizonMonths)
-        : null
+    const showingPreviousRun = Boolean(
+      currentRun && refreshRun?.status === "running",
     );
+    const run = currentRun;
 
     if (!run) {
       return res.json({
@@ -291,7 +317,20 @@ export const refreshPredictions = async (req, res) => {
         message: `Forecast horizon must be a whole number from 1 to ${MAX_FORECAST_HORIZON_MONTHS}.`,
       });
     }
+    if (req.body?.force !== undefined && typeof req.body.force !== "boolean") {
+      return res.status(400).json({
+        code: "INVALID_FORCE_VALUE",
+        message: "Force must be a boolean value.",
+      });
+    }
     const dataset = await resolveDataset(req.body?.datasetId);
+    const datasetError = invalidRequestedDatasetResponse(
+      req.body?.datasetId,
+      dataset,
+    );
+    if (datasetError) {
+      return res.status(datasetError.status).json(datasetError.body);
+    }
     if (!dataset?._id) {
       return res.status(422).json({
         message: "A validated CESU dataset is required for forecasting.",
@@ -300,6 +339,7 @@ export const refreshPredictions = async (req, res) => {
     }
 
     const datasetId = dataset._id;
+    const force = req.body?.force === true;
     const existing = await latestRefresh(datasetId, horizonMonths);
     if (existing?.status === "running") {
       const workerIsActive = isMonthlyDistrictPredictionRefreshActive({
@@ -325,7 +365,9 @@ export const refreshPredictions = async (req, res) => {
         refreshJob: publicRefreshJob(existing),
       });
     }
-    const savedRun = await latestUsablePrediction(datasetId, horizonMonths);
+    const savedRun = force
+      ? null
+      : await latestUsablePrediction(datasetId, horizonMonths);
     if (savedRun) {
       return res.status(200).json({
         success: true,

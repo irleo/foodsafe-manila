@@ -6,22 +6,50 @@ import {
   FIXED_THRESHOLD_SETTINGS,
   THRESHOLD_FORMULA,
 } from "../services/surveillanceThresholdService.js";
+import { normalizeSurveillanceDisease } from "../constants/surveillanceMethodology.js";
+
+const MANILA_DISTRICTS = new Set(
+  Array.from({ length: 6 }, (_, index) => `District ${index + 1}`),
+);
 
 function userId(req) {
   return req.user?.id || req.user?._id;
 }
 
-function cleanExcludedPeriods(periods) {
-  if (!Array.isArray(periods)) return [];
-  return periods.map((period) => ({
-    startYear: Number(period.startYear),
-    startMonth: Number(period.startMonth),
-    endYear: Number(period.endYear),
-    endMonth: Number(period.endMonth),
-    disease: period.disease ? String(period.disease).trim() : null,
-    district: period.district ? String(period.district).trim() : null,
-    reason: String(period.reason || "").trim(),
-  }));
+export function normalizeExcludedPeriods(periods) {
+  if (!Array.isArray(periods)) return { value: [] };
+  const value = [];
+  for (const [index, period] of periods.entries()) {
+    const diseaseInput = String(period?.disease || "").trim();
+    const disease = diseaseInput
+      ? normalizeSurveillanceDisease(diseaseInput)
+      : null;
+    if (diseaseInput && !disease) {
+      return {
+        error: `Excluded period ${index + 1} has an unsupported disease.`,
+      };
+    }
+
+    const districtInput = String(period?.district || "").trim();
+    const districtMatch = districtInput.match(/^district\s*([1-6])$/i);
+    const district = districtMatch ? `District ${districtMatch[1]}` : null;
+    if (districtInput && (!district || !MANILA_DISTRICTS.has(district))) {
+      return {
+        error: `Excluded period ${index + 1} must use District 1 through District 6.`,
+      };
+    }
+
+    value.push({
+      startYear: Number(period?.startYear),
+      startMonth: Number(period?.startMonth),
+      endYear: Number(period?.endYear),
+      endMonth: Number(period?.endMonth),
+      disease,
+      district,
+      reason: String(period?.reason || "").trim(),
+    });
+  }
+  return { value };
 }
 
 function invalidPeriod(period) {
@@ -72,7 +100,11 @@ export async function getThresholdSettings(req, res) {
 
 export async function updateThresholdSettings(req, res) {
   try {
-    const excludedPeriods = cleanExcludedPeriods(req.body.excludedPeriods);
+    const normalizedPeriods = normalizeExcludedPeriods(req.body.excludedPeriods);
+    if (normalizedPeriods.error) {
+      return res.status(400).json({ message: normalizedPeriods.error });
+    }
+    const excludedPeriods = normalizedPeriods.value;
     if (excludedPeriods.some(invalidPeriod)) {
       return res.status(400).json({
         message: "Every excluded period requires valid start/end months and a reason",

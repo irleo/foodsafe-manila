@@ -42,7 +42,6 @@ export default function DistrictBarChart({
     ? totalCases / districtCount
     : 0;
   const chartData = [...safeData]
-    .filter((item) => Number(item?.cases) > 0)
     .sort((a, b) => (b.cases || 0) - (a.cases || 0))
     .slice(0, 6)
     .map((item) => ({
@@ -102,7 +101,7 @@ export default function DistrictBarChart({
               {numberFormatter.format(Number(averagePerDistrict.toFixed(1)))}
             </p>
             <p className="pb-1 text-right text-xs text-slate-500">
-              {unitLabel} across {districtCount} represented district{districtCount === 1 ? "" : "s"}
+              {unitLabel} across {districtCount} covered district{districtCount === 1 ? "" : "s"}
             </p>
           </div>
         </div>

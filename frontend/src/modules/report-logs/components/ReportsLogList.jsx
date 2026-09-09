@@ -334,8 +334,8 @@ export default function ReportsLogList({
 
                           {classificationBadge(status)}
                         </div>
-                        <span className="inline-flex items-center align-middle gap-1 text-[10px] text-slate-500">
-                          <Clock3 className="h-3 w-3" />
+                        <span className="inline-flex items-center align-middle gap-1 text-[12px] text-slate-500">
+                          <Clock3 className="h-3.5 w-3.5" />
                           {reportedAt.date} · {reportedAt.time}
                         </span>
                         <p

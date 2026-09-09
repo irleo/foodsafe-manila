@@ -9,7 +9,8 @@
     "indexes:explain": "node scripts/reviewIndexes.js",
     "test:errors": "node --test tests/errorDisclosure.test.js",
     "test:analytics-boundary": "node --test tests/analyticsDataBoundary.test.js",
-    "test:reports-auth": "node --test tests/reportPolicy.test.js tests/authSecurity.test.js tests/emailService.test.js"
+    "test:reports-auth": "node --test tests/reportPolicy.test.js tests/authSecurity.test.js tests/emailService.test.js",
+    "test:p1-defects": "node --test tests/officialCaseNormalizer.test.js tests/p1Defects.test.js"
   },
   "keywords": [],
   "author": "",

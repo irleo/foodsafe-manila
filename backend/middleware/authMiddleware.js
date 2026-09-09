@@ -51,3 +51,19 @@ export const verifyRoles = (...roles) => {
     next();
   };
 };
+
+export const requireInternalRole = (...roles) => {
+  return (req, res, next) => {
+    if (req.user?.accountType !== "web" || !roles.includes(req.user?.role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    return next();
+  };
+};
+
+export const requireCitizenAccount = (req, res, next) => {
+  if (req.user?.accountType !== "citizen" || req.user?.role !== "citizen") {
+    return res.status(403).json({ message: "Citizen account required." });
+  }
+  return next();
+};

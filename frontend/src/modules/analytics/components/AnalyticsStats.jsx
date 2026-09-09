@@ -33,6 +33,8 @@ export default function AnalyticsStats({
   topDisease,
   districtsCovered,
   yoyPct,
+  hasComparablePeriod = true,
+  comparisonIsPartial = false,
 }) {
   const hasYoY = Number.isFinite(yoyPct);
   const isReportData = dataIdentity === "report";
@@ -61,7 +63,7 @@ export default function AnalyticsStats({
                 <ArrowDownRightIcon className="h-4 w-4" />
               )}
               <span>
-                {Math.abs(yoyPct).toFixed(1)}% vs {previousYear}
+                {Math.abs(yoyPct).toFixed(1)}% vs {comparisonIsPartial ? "same period in " : ""}{previousYear}
               </span>
             </>
           ) : (
@@ -69,19 +71,25 @@ export default function AnalyticsStats({
           )}
         </div>
 
-        <div className="mt-auto space-y-3 pt-7">
-          <ComparisonBar
-            label={previousYear}
-            value={previousYearCases}
-            maxValue={maxYearValue}
-          />
-          <ComparisonBar
-            label={latestYear}
-            value={latestYearCases}
-            maxValue={maxYearValue}
-            emphasized
-          />
-        </div>
+        {hasComparablePeriod ? (
+          <div className="mt-auto space-y-3 pt-7">
+            <ComparisonBar
+              label={previousYear}
+              value={previousYearCases}
+              maxValue={maxYearValue}
+            />
+            <ComparisonBar
+              label={latestYear}
+              value={latestYearCases}
+              maxValue={maxYearValue}
+              emphasized
+            />
+          </div>
+        ) : (
+          <p className="mt-auto pt-7 text-sm text-slate-500">
+            The dataset does not cover the matching period in {previousYear}.
+          </p>
+        )}
       </article>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

@@ -21,7 +21,7 @@ const MIN_COMPARABLE_OBSERVATIONS = 3;
 const BACKTEST_MONTHS = 19;
 const AGGREGATE_INTERVAL_COVERAGE = 0.95;
 const MIN_AGGREGATE_INTERVAL_OBSERVATIONS = 19;
-export const FORECAST_SCHEMA_VERSION = 9;
+export const FORECAST_SCHEMA_VERSION = 10;
 const GRANULARITY = "monthly_disease_district_cases";
 const DISTRICTS = Object.freeze(Array.from({ length: 6 }, (_, index) => `District ${index + 1}`));
 
@@ -42,11 +42,32 @@ function isUsableForecastPoint(point) {
   );
 }
 
-function scopeHasUsableForecast(scope) {
+function forecastPointMap(scope) {
+  const points = [
+    ...(Array.isArray(scope?.forecast) ? scope.forecast : []),
+    scope?.nextForecast,
+  ].filter(isUsableForecastPoint);
+  return new Map(points.map((point) => [periodKey(point.year, point.month), point]));
+}
+
+function scopeHasUsableForecast(
+  scope,
+  { horizonMonths, targetYear, targetMonth } = {},
+) {
   if (scope?.status !== "success") return false;
-  if (isUsableForecastPoint(scope?.nextForecast)) return true;
-  return Array.isArray(scope?.forecast)
-    && scope.forecast.some(isUsableForecastPoint);
+  if (
+    !Number.isInteger(horizonMonths)
+    || horizonMonths < 1
+    || !Number.isInteger(targetYear)
+    || !Number.isInteger(targetMonth)
+  ) {
+    return false;
+  }
+
+  const pointsByPeriod = forecastPointMap(scope);
+  return Array.from({ length: horizonMonths }, (_, offset) => (
+    addMonths(targetYear, targetMonth, offset)
+  )).every(({ year, month }) => pointsByPeriod.has(periodKey(year, month)));
 }
 
 export function isUsablePredictionRun(run, { horizonMonths } = {}) {
@@ -66,13 +87,22 @@ export function isUsablePredictionRun(run, { horizonMonths } = {}) {
   const diseases = Array.isArray(payload?.diseases) ? payload.diseases : [];
   if (!diseases.length) return false;
 
+  const targetYear = Number(run?.forecastTargetYear ?? payload?.forecastTargetYear);
+  const targetMonth = Number(run?.forecastTargetMonth ?? payload?.forecastTargetMonth);
+  const expectedForecast = {
+    horizonMonths: expectedHorizon,
+    targetYear,
+    targetMonth,
+  };
+
   return diseases.some((disease) => {
     const hasDistrictForecast = Array.isArray(disease?.districts)
       && disease.districts.some((district) => (
-        scopeHasUsableForecast(district)
-        || scopeHasUsableForecast(district?.models?.prophet)
+        scopeHasUsableForecast(district, expectedForecast)
+        || scopeHasUsableForecast(district?.models?.prophet, expectedForecast)
       ));
-    return hasDistrictForecast || scopeHasUsableForecast(disease?.wholeManila);
+    return hasDistrictForecast
+      || scopeHasUsableForecast(disease?.wholeManila, expectedForecast);
   });
 }
 
@@ -371,10 +401,13 @@ function conformalAggregateInterval(backtestSeries, predictedCases) {
   };
 }
 
-function aggregateWholeManila(districts) {
+export function aggregateWholeManila(districts, horizonMonths) {
   const usable = districts
     .map((district) => ({ district, model: district.models?.prophet }))
-    .filter(({ model }) => model?.status === "success" && primaryForecast(model));
+    .filter(({ model }) => (
+      model?.status === "success"
+      && isUsableForecastPoint(primaryForecast(model))
+    ));
   const historical = new Map();
   const backtest = new Map();
   for (const { district, model } of usable) {
@@ -391,12 +424,52 @@ function aggregateWholeManila(districts) {
   }
   const historicalSeries = [...historical.values()].filter((row) => row.districtCount === DISTRICTS.length).map(({ districtCount, ...row }) => row);
   const backtestSeries = [...backtest.values()].filter((row) => row.districtCount === DISTRICTS.length).map(({ districtCount, ...row }) => withErrors(row));
-  if (usable.length !== DISTRICTS.length) return { status: "incomplete_coverage", operationalModel: "prophet", historicalSeries, backtestSeries, forecast: [], coverage: { totalDistricts: DISTRICTS.length, successfulDistricts: usable.length, completeCityForecast: false }, intervalAggregation: { method: "rolling_origin_absolute_error_conformal", coverage: AGGREGATE_INTERVAL_COVERAGE, status: "unavailable_incomplete_district_forecast", calibrationObservations: backtestSeries.length, minimumRequiredObservations: MIN_AGGREGATE_INTERVAL_OBSERVATIONS } };
-  const first = primaryForecast(usable[0].model);
-  const predictedCases = usable.reduce((sum, item) => sum + Number(primaryForecast(item.model).predictedCases || 0), 0);
-  const rawPredictedCases = usable.reduce((sum, item) => sum + Number(primaryForecast(item.model).rawPredictedCases ?? primaryForecast(item.model).predictedCases ?? 0), 0);
-  const intervalAggregation = conformalAggregateInterval(backtestSeries, predictedCases);
-  return { status: "success", operationalModel: "prophet", historicalSeries, backtestSeries, metrics: metrics(backtestSeries), forecast: [{ year: first.year, month: first.month, date: first.date, predictedCases, rawPredictedCases, lowerBound: intervalAggregation.lowerBound, upperBound: intervalAggregation.upperBound, isPrimaryTarget: true }], coverage: { totalDistricts: DISTRICTS.length, successfulDistricts: usable.length, completeCityForecast: true }, intervalAggregation };
+  const first = primaryForecast(usable[0]?.model);
+  const expectedTargets = first
+    && Number.isInteger(Number(horizonMonths))
+    && Number(horizonMonths) >= 1
+    ? Array.from({ length: Number(horizonMonths) }, (_, offset) => (
+      addMonths(Number(first.year), Number(first.month), offset)
+    ))
+    : [];
+  const forecastMaps = usable.map(({ model }) => forecastPointMap(model));
+  const hasCompleteForecast = usable.length === DISTRICTS.length
+    && expectedTargets.length === Number(horizonMonths)
+    && forecastMaps.every((pointsByPeriod) => expectedTargets.every(({ year, month }) => (
+      pointsByPeriod.has(periodKey(year, month))
+    )));
+  if (!hasCompleteForecast) return { status: "incomplete_coverage", operationalModel: "prophet", historicalSeries, backtestSeries, forecast: [], coverage: { totalDistricts: DISTRICTS.length, successfulDistricts: usable.length, completeCityForecast: false }, intervalAggregation: { method: "rolling_origin_absolute_error_conformal", coverage: AGGREGATE_INTERVAL_COVERAGE, status: "unavailable_incomplete_district_forecast", calibrationObservations: backtestSeries.length, minimumRequiredObservations: MIN_AGGREGATE_INTERVAL_OBSERVATIONS } };
+  const forecast = expectedTargets.map(({ year, month }, index) => {
+    const points = forecastMaps.map((pointsByPeriod) => (
+      pointsByPeriod.get(periodKey(year, month))
+    ));
+    const predictedCases = points.reduce(
+      (sum, point) => sum + Number(point.predictedCases || 0),
+      0,
+    );
+    const rawPredictedCases = points.reduce(
+      (sum, point) => sum + Number(
+        point.rawPredictedCases ?? point.predictedCases ?? 0,
+      ),
+      0,
+    );
+    const interval = conformalAggregateInterval(backtestSeries, predictedCases);
+    return {
+      year,
+      month,
+      date: points[0].date,
+      predictedCases,
+      rawPredictedCases,
+      lowerBound: interval.lowerBound,
+      upperBound: interval.upperBound,
+      isPrimaryTarget: index === 0,
+    };
+  });
+  const intervalAggregation = conformalAggregateInterval(
+    backtestSeries,
+    forecast[0].predictedCases,
+  );
+  return { status: "success", operationalModel: "prophet", historicalSeries, backtestSeries, metrics: metrics(backtestSeries), forecast, coverage: { totalDistricts: DISTRICTS.length, successfulDistricts: usable.length, completeCityForecast: true }, intervalAggregation };
 }
 function pooledEvaluation(districts) {
   const prophetRows = []; const naiveRows = [];
@@ -487,9 +560,18 @@ async function refreshMonthlyDistrictPredictionsImpl({ trigger = "manual", datas
       if (nextForecast) prophet.forecast = prophet.forecast.map((point) => point.isPrimaryTarget ? nextForecast : point);
       districts.push({ district, districtKey: normalizeDistrictKey(district), disease, historicalSeries: series.map(({ y, ...point }) => ({ ...point, cases: y })), models: { prophet, seasonalNaive }, modelComparison: comparison, selectedModel: comparison.bestHistoricalModel, operationalModel: comparison.operationalModel, operationalPolicy: "prophet_only", status: nextForecast ? "success" : "insufficient_data", message: prophet.message || "Prophet could not produce a forecast for the next month.", nextForecast });
     }
-    const wholeManila = aggregateWholeManila(districts);
-    const cityForecast = await attachThreshold({ point: primaryForecast(wholeManila), datasetId: dataset._id, disease, district: undefined, excludedPeriods });
-    if (cityForecast) wholeManila.forecast = [cityForecast];
+    const wholeManila = aggregateWholeManila(districts, horizonMonths);
+    if (wholeManila.status === "success") {
+      wholeManila.forecast = await Promise.all(
+        wholeManila.forecast.map((point) => attachThreshold({
+          point,
+          datasetId: dataset._id,
+          disease,
+          district: undefined,
+          excludedPeriods,
+        })),
+      );
+    }
     diseaseOutputs.push({ disease, districts, wholeManila, modelEvaluation: pooledEvaluation(districts), modelCoverage: { prophet: { totalDistricts: DISTRICTS.length, successfulDistricts: districts.filter((item) => item.models.prophet.status === "success").length }, seasonalNaive: { totalDistricts: DISTRICTS.length, successfulDistricts: districts.filter((item) => item.models.seasonalNaive.status === "success").length } } });
   }
   const inputFingerprint = fingerprint(diseaseOutputs.map(({ disease, districts }) => ({ disease, districts: districts.map(({ district, historicalSeries }) => ({ district, historicalSeries })) })));

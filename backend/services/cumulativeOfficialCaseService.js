@@ -141,6 +141,13 @@ function coverageBounds(coverageByDistrict) {
   };
 }
 
+function compareDatasetPosition(left, right) {
+  const createdAtDifference = new Date(left.createdAt).getTime()
+    - new Date(right.createdAt).getTime();
+  if (createdAtDifference !== 0) return createdAtDifference;
+  return String(left._id).localeCompare(String(right._id));
+}
+
 function rowDate(row) {
   const exact = validDate(row?.surveillanceDate || row?.weekStartDate);
   if (exact) return exact;
@@ -252,6 +259,69 @@ export async function resolveCumulativeDatasetContext(datasetId) {
 }
 
 /**
+ * Resolves list-page coverage metadata with one history query instead of two
+ * queries per dataset row.
+ */
+export async function resolveCumulativeDatasetSummaries(anchors = []) {
+  const eligibleAnchors = anchors.filter((anchor) => (
+    anchor?.status === "validated"
+      && String(anchor?.providerType || "").trim().toLowerCase() === "cesu"
+      && mongoose.isValidObjectId(anchor?._id)
+      && validDate(anchor?.createdAt)
+  ));
+  if (!eligibleAnchors.length) return new Map();
+
+  const newestByMode = new Map();
+  for (const anchor of eligibleAnchors) {
+    const mode = anchor.dataMode === "development" ? "development" : "official";
+    const current = newestByMode.get(mode);
+    if (!current || compareDatasetPosition(current, anchor) < 0) {
+      newestByMode.set(mode, anchor);
+    }
+  }
+
+  const modeQueries = [...newestByMode].map(([mode, newest]) => ({
+    dataMode: mode === "development" ? "development" : { $ne: "development" },
+    $or: [
+      { createdAt: { $lt: newest.createdAt } },
+      { createdAt: newest.createdAt, _id: { $lte: newest._id } },
+    ],
+  }));
+  const history = await Dataset.find({
+    status: "validated",
+    providerType: "cesu",
+    $or: modeQueries,
+  })
+    .sort({ createdAt: 1, _id: 1 })
+    .select(
+      "_id dataMode providerType providerName reportingFrequency coverageStart coverageEnd districtCoverage districts createdAt filePath formatType",
+    )
+    .lean();
+
+  const historyByMode = new Map([
+    ["official", []],
+    ["development", []],
+  ]);
+  for (const dataset of history) {
+    const mode = dataset.dataMode === "development" ? "development" : "official";
+    historyByMode.get(mode).push(dataset);
+  }
+
+  return new Map(eligibleAnchors.map((anchor) => {
+    const mode = anchor.dataMode === "development" ? "development" : "official";
+    const datasets = historyByMode.get(mode).filter(
+      (dataset) => compareDatasetPosition(dataset, anchor) <= 0,
+    );
+    const observedBounds = coverageBounds(mergeCoverageByDistrict(datasets));
+    return [String(anchor._id), {
+      coverageStart: observedBounds.start,
+      coverageEnd: observedBounds.end,
+      uploadCount: datasets.length,
+    }];
+  }));
+}
+
+/**
  * Keeps the newest authoritative CESU value within each covered period.
  */
 export function selectAuthoritativeOfficialRows(rows, datasets) {
@@ -272,7 +342,8 @@ export function selectAuthoritativeOfficialRows(rows, datasets) {
   const selected = [];
   for (const streamDatasets of streams.values()) {
     const newerCoverageByDistrict = new Map();
-    for (const dataset of [...streamDatasets].reverse()) {
+    const newestFirst = [...streamDatasets].sort(compareDatasetPosition).reverse();
+    for (const dataset of newestFirst) {
       const datasetRows = rowsByDataset.get(String(dataset._id)) || [];
       for (const row of datasetRows) {
         const intervals = newerCoverageByDistrict.get(row.district) || [];

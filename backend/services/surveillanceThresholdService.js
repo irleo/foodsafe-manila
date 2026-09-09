@@ -69,11 +69,20 @@ function verifiedCoverageForScope(context, district, legacyCoverage) {
   };
 }
 
-function exclusionContainsMonth(exclusion, year, month, disease, district) {
+export function exclusionContainsMonth(exclusion, year, month, disease, district) {
+  const hasDiseaseFilter = exclusion?.disease !== undefined
+    && exclusion?.disease !== null
+    && String(exclusion.disease).trim() !== "";
   const exclusionDisease = normalizeSurveillanceDisease(exclusion?.disease);
+  // Invalid legacy values must never degrade into a wildcard exclusion.
+  if (hasDiseaseFilter && !exclusionDisease) return false;
   if (exclusionDisease && exclusionDisease !== disease) return false;
-  if (exclusion?.district && exclusion.district !== district) return false;
-  if (exclusion?.district && !district) return false;
+  const hasDistrictFilter = exclusion?.district !== undefined
+    && exclusion?.district !== null
+    && String(exclusion.district).trim() !== "";
+  if (hasDistrictFilter && !CITY_DISTRICTS.includes(exclusion.district)) return false;
+  if (hasDistrictFilter && exclusion.district !== district) return false;
+  if (hasDistrictFilter && !district) return false;
   const values = [exclusion?.startYear, exclusion?.startMonth, exclusion?.endYear, exclusion?.endMonth].map(Number);
   if (!values.every(Number.isInteger)) return false;
   const [startYear, startMonth, endYear, endMonth] = values;

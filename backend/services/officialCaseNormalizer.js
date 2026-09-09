@@ -23,13 +23,21 @@ export function parseNumber(v) {
 // Excel serial date to JS Date (UTC-ish). Works for modern Excel (1900 date system).
 export function parseExcelDate(v) {
   if (v === undefined || v === null || v === "") return null;
-  if (v instanceof Date && !Number.isNaN(v.getTime())) return v;
+  if (v instanceof Date && !Number.isNaN(v.getTime())) {
+    return new Date(Date.UTC(
+      v.getUTCFullYear(),
+      v.getUTCMonth(),
+      v.getUTCDate(),
+    ));
+  }
 
   // numeric Excel serial
   if (typeof v === "number" && Number.isFinite(v)) {
     const ms = Math.round((v - 25569) * 86400 * 1000);
     const d = new Date(ms);
-    return Number.isNaN(d.getTime()) ? null : d;
+    return Number.isNaN(d.getTime())
+      ? null
+      : new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
   }
 
   const text = String(v).trim();
@@ -47,8 +55,7 @@ export function parseExcelDate(v) {
     return exactDate;
   }
 
-  const d = new Date(text);
-  return Number.isNaN(d.getTime()) ? null : d;
+  return null;
 }
 
 export const getIsoWeekData = getDohMorbidityWeek;

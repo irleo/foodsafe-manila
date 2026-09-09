@@ -11,14 +11,19 @@ import {
 } from "./statisticsCaseBuilders";
 
 export function buildAnalyticsCasesViewModel(caseRows = [], coverage = {}) {
+  const coveredDistricts = Array.isArray(coverage?.coveredDistricts)
+    ? coverage.coveredDistricts
+    : [];
   const monthlyTimelineData = buildMonthlyTimelineData(caseRows, coverage);
   const diseaseData = buildDiseaseDistributionComparison(caseRows);
-  const districtData = buildDistrictDataFromCases(caseRows);
-  const districtStats = buildDistrictStatisticsFromCases(caseRows);
-  const yoy = buildYoYCaseStatsFromCases(caseRows);
+  const districtData = buildDistrictDataFromCases(caseRows, coveredDistricts);
+  const districtStats = buildDistrictStatisticsFromCases(caseRows, coveredDistricts);
+  const yoy = buildYoYCaseStatsFromCases(caseRows, coverage);
   const diseaseTrend = buildDiseaseTrendByMonth(caseRows, 5, 60, coverage);
 
-  const topDistrict = districtStats[0]?.district ?? "—";
+  const topDistrict = districtStats[0]?.totalCases > 0
+    ? districtStats[0].district
+    : "—";
   const topDisease = diseaseData[0]?.disease ?? "—";
 
   return {
@@ -28,8 +33,10 @@ export function buildAnalyticsCasesViewModel(caseRows = [], coverage = {}) {
     previousYearCases: yoy?.lastYearCases ?? 0,
     topDistrict,
     topDisease,
-    districtsCovered: districtStats.length,
+    districtsCovered: coveredDistricts.length || districtStats.length,
     yoyPct: yoy?.yoyPct ?? null,
+    hasComparablePeriod: yoy?.hasComparablePeriod ?? false,
+    comparisonIsPartial: yoy?.comparisonIsPartial ?? false,
 
     diseaseData,
     districtData,

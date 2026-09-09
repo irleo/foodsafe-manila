@@ -156,8 +156,13 @@ export function buildDiseaseDistributionComparison(caseRows = []) {
     .sort((a, b) => b.cases - a.cases);
 }
 
-export function buildDistrictDataFromCases(caseRows = []) {
-  const map = {};
+export function buildDistrictDataFromCases(caseRows = [], coveredDistricts = []) {
+  const map = Object.fromEntries(
+    (Array.isArray(coveredDistricts) ? coveredDistricts : [])
+      .map((district) => String(district || "").trim())
+      .filter(Boolean)
+      .map((district) => [district, 0]),
+  );
   for (const r of caseRows) {
     const district = String(r?.district || "").trim();
     const cases = Number(r?.cases ?? 0);

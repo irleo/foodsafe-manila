@@ -22,7 +22,7 @@ async function fetchJson(url, options = {}) {
 /**
  * Load latest saved PredictionRun (DB-backed).
  * @param {string} token
- * @param {{ datasetId?: string, districtKey?: string, district?: string }} [opts]
+ * @param {{ datasetId?: string, districtKey?: string, district?: string, forecastHorizonMonths?: number }} [opts]
  */
 export async function fetchLatestPredictions(
   token,
@@ -48,11 +48,11 @@ export async function fetchLatestPredictions(
 /**
  * Admin/CESU: refresh predictions now (recompute + persist).
  * @param {string} token
- * @param {{ datasetId?: string, forecastHorizonMonths?: number }} [opts]
+ * @param {{ datasetId?: string, forecastHorizonMonths?: number, force?: boolean }} [opts]
  */
 export async function requestPredictionRefresh(
   token,
-  { datasetId, forecastHorizonMonths } = {},
+  { datasetId, forecastHorizonMonths, force = false } = {},
 ) {
   const { res, body: j } = await fetchJson(`${API_BASE}/api/predictions/refresh`, {
     method: "POST",
@@ -60,7 +60,7 @@ export async function requestPredictionRefresh(
       "Content-Type": "application/json",
       Authorization: token ? `Bearer ${token}` : "",
     },
-    body: JSON.stringify({ datasetId, forecastHorizonMonths }),
+    body: JSON.stringify({ datasetId, forecastHorizonMonths, force }),
   });
   if (!res.ok) {
     throw new Error(j.message || "Prediction refresh failed");
@@ -70,11 +70,12 @@ export async function requestPredictionRefresh(
 
 export async function refreshPredictions(
   token,
-  { datasetId, forecastHorizonMonths } = {},
+  { datasetId, forecastHorizonMonths, force = false } = {},
 ) {
   const j = await requestPredictionRefresh(token, {
     datasetId,
     forecastHorizonMonths,
+    force,
   });
   if (!j.accepted) return j;
 
@@ -108,6 +109,7 @@ export async function refreshPredictions(
       await requestPredictionRefresh(token, {
         datasetId: pollDatasetId,
         forecastHorizonMonths,
+        force,
       });
     }
   }

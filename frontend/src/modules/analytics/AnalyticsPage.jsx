@@ -10,6 +10,7 @@ import { buildMonthlyTimelineData } from "./utils/analyticsCaseBuilders";
 import { formatStatusLabel } from "../../utils/formatStatusLabel";
 import { useReports } from "../report-logs/hooks/useReports";
 import { buildReportVolumeRows } from "./utils/reportAnalyticsBuilders";
+import { MANILA_DISTRICTS } from "./utils/analyticsCoverage";
 
 const ALL_ANALYTICS_STATUSES = "all";
 const CASE_STATUS_OPTIONS = [
@@ -60,6 +61,7 @@ export default function Analytics() {
   const officialCoverage = useMemo(() => ({
     coverageStart: dataset?.analyticalCoverageStart || dataset?.coverageStart,
     coverageEnd: dataset?.analyticalCoverageEnd || dataset?.coverageEnd,
+    coveredDistricts: MANILA_DISTRICTS,
   }), [dataset]);
 
   const selectedRows = useMemo(
@@ -204,6 +206,8 @@ export default function Analytics() {
             topDisease={vm.topDisease}
             districtsCovered={vm.districtsCovered}
             yoyPct={vm.yoyPct}
+            hasComparablePeriod={vm.hasComparablePeriod}
+            comparisonIsPartial={vm.comparisonIsPartial}
           />
 
           <AnalyticsGrid

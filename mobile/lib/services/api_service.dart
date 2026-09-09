@@ -414,9 +414,9 @@ class ApiService {
   /// Official case rows for a dataset (no classification filter = all types).
   static Future<List<Map<String, dynamic>>> fetchOfficialCasesByDataset(
     String datasetId, {
-    int limit = 50,
+    int limit = 5000,
   }) async {
-    final pageSize = limit.clamp(1, 50);
+    final pageSize = limit.clamp(1, 5000);
     final rows = <Map<String, dynamic>>[];
     var page = 1;
     var totalPages = 1;

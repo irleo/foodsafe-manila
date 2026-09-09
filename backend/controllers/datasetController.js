@@ -10,7 +10,7 @@ import { logActivity } from "../utils/logActivity.js";
 import { importOfficialCasesXlsx } from "../services/officialCaseImportService.js";
 import { refreshMonthlyDistrictPredictions } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
 import { createNotification } from "../services/notificationService.js";
-import { resolveCumulativeDatasetContext } from "../services/cumulativeOfficialCaseService.js";
+import { resolveCumulativeDatasetSummaries } from "../services/cumulativeOfficialCaseService.js";
 import {
   isSafePublicMessage,
   sanitizeValidationErrors,
@@ -28,6 +28,31 @@ const OFFICIAL_TEMPLATE_STORAGE_KEY = "templates/FoodSafe_Template.xlsx";
 const XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const PREDICTION_GRANULARITY = "monthly_disease_district_cases";
 const DEFAULT_PREDICTION_REFRESH_TIMEOUT_MS = 12 * 60 * 1000;
+
+function optionalDeclaredCoverage(body = {}) {
+  const startText = String(body.coverageStart || "").trim();
+  const endText = String(body.coverageEnd || "").trim();
+  const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateOnlyPattern.test(startText) || !dateOnlyPattern.test(endText)) {
+    return { coverageStart: null, coverageEnd: null };
+  }
+
+  const coverageStart = new Date(`${startText}T00:00:00.000Z`);
+  const coverageEnd = new Date(`${endText}T23:59:59.999Z`);
+  const todayEnd = new Date();
+  todayEnd.setUTCHours(23, 59, 59, 999);
+  if (
+    Number.isNaN(coverageStart.getTime())
+    || Number.isNaN(coverageEnd.getTime())
+    || coverageStart.toISOString().slice(0, 10) !== startText
+    || coverageEnd.toISOString().slice(0, 10) !== endText
+    || coverageStart > coverageEnd
+    || coverageEnd > todayEnd
+  ) {
+    return { coverageStart: null, coverageEnd: null };
+  }
+  return { coverageStart, coverageEnd };
+}
 
 function predictionRefreshTimeoutMs() {
   const parsed = Number.parseInt(process.env.PREDICTION_REFRESH_TIMEOUT_MS, 10);
@@ -273,8 +298,8 @@ export const uploadDataset = async (req, res) => {
         providerName,
         reportingFrequency,
         ingestionMethod: "excel",
-        coverageStart: new Date(),
-        coverageEnd: new Date(),
+        coverageStart,
+        coverageEnd,
         originalFileName,
         storageProvider: "none",
         mimeType: req.file.mimetype,
@@ -453,11 +478,12 @@ export const handleDatasetUploadError = async (err, req, res, next) => {
     const originalFileName =
       req.file?.originalname || String(req.body?.originalFileName || "unknown");
     const mimeType = req.file?.mimetype || String(req.body?.mimeType || "");
+    const { coverageStart, coverageEnd } = optionalDeclaredCoverage(req.body);
     const failed = await Dataset.create({
       name,
       dataSource: "official_upload",
-      coverageStart: new Date(),
-      coverageEnd: new Date(),
+      coverageStart,
+      coverageEnd,
       originalFileName,
       storageProvider: "none",
       mimeType,
@@ -558,12 +584,13 @@ export const listDatasets = async (req, res) => {
       Dataset.countDocuments(filter),
     ]);
 
-    const items = await Promise.all(datasets.map(async (entry) => {
+    const cumulativeByDatasetId = await resolveCumulativeDatasetSummaries(datasets);
+    const items = datasets.map((entry) => {
       const validationErrors = Array.isArray(entry.validationErrors)
         ? entry.validationErrors
         : [];
       const cumulative = entry.status === "validated" && entry.providerType === "cesu"
-        ? await resolveCumulativeDatasetContext(entry._id)
+        ? cumulativeByDatasetId.get(String(entry._id))
         : null;
       return {
         ...entry,
@@ -580,7 +607,7 @@ export const listDatasets = async (req, res) => {
           : validationErrors.length,
         validationErrors: sanitizeValidationErrors(validationErrors).slice(0, 5),
       };
-    }));
+    });
 
     res.json({
       items,

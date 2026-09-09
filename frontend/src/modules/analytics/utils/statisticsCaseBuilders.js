@@ -1,6 +1,17 @@
-export function buildDistrictStatisticsFromCases(caseRows = []) {
+export function buildDistrictStatisticsFromCases(caseRows = [], coveredDistricts = []) {
   const safe = Array.isArray(caseRows) ? caseRows : [];
   const districtMap = {};
+
+  for (const value of Array.isArray(coveredDistricts) ? coveredDistricts : []) {
+    const district = String(value || "").trim();
+    if (!district || districtMap[district]) continue;
+    districtMap[district] = {
+      district,
+      totalCases: 0,
+      years: new Set(),
+      diseases: new Set(),
+    };
+  }
 
   for (const r of safe) {
     const district = String(r?.district || "").trim();
@@ -61,10 +72,24 @@ function getMaxYearInData(caseRows = []) {
   return maxYear;
 }
 
-export function buildYoYCaseStatsFromCases(caseRows = []) {
+function getCoverageMonthIndex(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return null;
+  return date.getUTCFullYear() * 12 + date.getUTCMonth();
+}
+
+export function buildYoYCaseStatsFromCases(caseRows = [], coverage = {}) {
   const safe = Array.isArray(caseRows) ? caseRows : [];
 
-  const thisYear = getMaxYearInData(safe);
+  const coverageStartIndex = getCoverageMonthIndex(coverage?.coverageStart);
+  const coverageEndIndex = getCoverageMonthIndex(coverage?.coverageEnd);
+  const hasValidCoverage =
+    coverageStartIndex !== null &&
+    coverageEndIndex !== null &&
+    coverageStartIndex <= coverageEndIndex;
+  const thisYear = hasValidCoverage
+    ? Math.floor(coverageEndIndex / 12)
+    : getMaxYearInData(safe);
   if (!thisYear) {
     return {
       thisYear: null,
@@ -72,26 +97,47 @@ export function buildYoYCaseStatsFromCases(caseRows = []) {
       thisYearCases: 0,
       lastYearCases: 0,
       yoyPct: null,
+      hasComparablePeriod: false,
+      comparisonIsPartial: false,
     };
   }
 
   const lastYear = thisYear - 1;
+  const comparisonStartMonth = hasValidCoverage && Math.floor(coverageStartIndex / 12) === thisYear
+    ? (coverageStartIndex % 12) + 1
+    : 1;
+  const comparisonEndMonth = hasValidCoverage
+    ? (coverageEndIndex % 12) + 1
+    : 12;
+  const previousPeriodStartIndex = lastYear * 12 + comparisonStartMonth - 1;
+  const previousPeriodEndIndex = lastYear * 12 + comparisonEndMonth - 1;
+  const hasComparablePeriod = !hasValidCoverage || (
+    previousPeriodStartIndex >= coverageStartIndex &&
+    previousPeriodEndIndex <= coverageEndIndex
+  );
 
   let thisYearCases = 0;
   let lastYearCases = 0;
 
   for (const r of safe) {
     const year = Number(r?.year);
+    const month = Number(r?.month);
     const cases = Number(r?.cases ?? 0);
     if (!Number.isFinite(year)) continue;
     if (!Number.isFinite(cases) || cases < 0) continue;
 
+    if (hasValidCoverage) {
+      if (!Number.isInteger(month) || month < comparisonStartMonth || month > comparisonEndMonth) {
+        continue;
+      }
+    }
+
     if (year === thisYear) thisYearCases += cases;
-    else if (year === lastYear) lastYearCases += cases;
+    else if (year === lastYear && hasComparablePeriod) lastYearCases += cases;
   }
 
   const yoyPct =
-    lastYearCases > 0
+    hasComparablePeriod && lastYearCases > 0
       ? ((thisYearCases - lastYearCases) / lastYearCases) * 100
       : null;
 
@@ -101,6 +147,8 @@ export function buildYoYCaseStatsFromCases(caseRows = []) {
     thisYearCases,
     lastYearCases,
     yoyPct: yoyPct === null ? null : Number(yoyPct.toFixed(1)),
+    hasComparablePeriod,
+    comparisonIsPartial: comparisonStartMonth !== 1 || comparisonEndMonth !== 12,
   };
 }
 

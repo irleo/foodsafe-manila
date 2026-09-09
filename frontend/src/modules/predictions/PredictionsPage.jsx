@@ -172,6 +172,7 @@ export default function PredictionsPage() {
       try {
         const refreshResult = await refreshPredictions(token, {
           forecastHorizonMonths: 1,
+          force: true,
         });
         const response = await fetchLatestPredictions(token);
         setRefreshJob(response?.refreshJob || null);
