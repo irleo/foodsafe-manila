@@ -1,8 +1,9 @@
 import { toast } from "sonner";
+import { getErrorMessage } from "./errors";
 
 export const notify = {
   success: (msg) => toast.success(msg),
-  error: (msg) => toast.error(msg),
+  error: (error) => toast.error(getErrorMessage(error)),
   info: (msg) => toast(msg),
   loading: (msg) => toast.loading(msg),
 
@@ -11,7 +12,9 @@ export const notify = {
     toast.promise(promise, {
       loading,
       success,
-      error,
+      error: (reason) => getErrorMessage(
+        typeof error === "function" ? error(reason) : error || reason,
+      ),
     });
     return promise;
   },

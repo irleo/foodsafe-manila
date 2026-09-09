@@ -51,3 +51,7 @@ export function getForecastExecutionStats() {
     uniqueJobs: inFlightByKey.size,
   };
 }
+
+export function hasForecastExecution(key) {
+  return inFlightByKey.has(key);
+}

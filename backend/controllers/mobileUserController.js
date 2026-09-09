@@ -1,5 +1,6 @@
 import MobileUser from "../models/MobileUser.js";
 import { normalizePhone, sanitizeMobileUser } from "../utils/citizenAuth.js";
+import { logRequestError } from "../utils/serverLogger.js";
 
 // PUT /api/users/:id (citizen profile — mobile app)
 export const updateMobileProfile = async (req, res) => {
@@ -42,7 +43,7 @@ export const updateMobileProfile = async (req, res) => {
     await mobileUser.save();
     return res.status(200).json(sanitizeMobileUser(mobileUser));
   } catch (error) {
-    console.error("Citizen profile update error:", error);
+    logRequestError(error, req, "CITIZEN_PROFILE_ERROR");
     return res.status(500).json({ message: "Failed to update profile" });
   }
 };

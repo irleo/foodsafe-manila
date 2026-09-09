@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:foodsafe_manila/screens/change_password_screen.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../widgets/snackbar_widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_service.dart';
+import '../services/api_client.dart';
 import '../services/session.dart';
 import '../utils/philippine_mobile_number.dart';
 import '../widgets/app_loading.dart';
 import '../widgets/philippine_mobile_prefix.dart';
+import '../screens/report_form_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -51,11 +53,40 @@ class _LogInScreenState extends State<LoginScreen> {
       if (user != null) {
         await Session.saveCurrentUser(user);
         if (!mounted) return;
-        SnackbarWidgets.success(context, "Login successful");
+
+        SnackbarWidgets.success(context, "Sign in successful");
+
+        final args =
+            ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+        if (args != null && args['returnToReport'] == true) {
+          Navigator.pushReplacementNamed(context, '/dashboard');
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ReportFormScreen(),
+              ),
+            );
+          });
+          return;
+        }
 
         Navigator.pushReplacementNamed(context, '/dashboard');
       } else {
         SnackbarWidgets.error(context, "Invalid phone number or password");
+      }
+    } catch (error) {
+      if (mounted) {
+        SnackbarWidgets.error(
+          context,
+          ApiClient.safeErrorMessage(
+            error,
+            fallback: 'Unable to sign in. Please try again.',
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -68,33 +99,7 @@ class _LogInScreenState extends State<LoginScreen> {
       backgroundColor: Colors.white,
       body: SafeArea(
         top: true,
-        child: PopScope(
-          canPop: false,
-          onPopInvokedWithResult: (didPop, result) async {
-            if (didPop) return;
-
-            if (backPressedOnce) {
-              await SystemNavigator.pop();
-            } else {
-              setState(() {
-                backPressedOnce = true;
-              });
-
-              SnackbarWidgets.error(
-                context,
-                'If you are trying to exit the app, please try again',
-              );
-
-              Future.delayed(const Duration(seconds: 2), () {
-                if (mounted) {
-                  setState(() {
-                    backPressedOnce = false;
-                  });
-                }
-              });
-            }
-          },
-          child: Container(
+        child: Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
@@ -106,9 +111,30 @@ class _LogInScreenState extends State<LoginScreen> {
               child: Column(
                 children: [
                   Padding(
-                    padding: EdgeInsets.fromLTRB(16, 64, 16, 24),
+                    padding: EdgeInsets.fromLTRB(16, 24, 16, 24),
                     child: Column(
-                      children: [Image.asset('assets/foodsafe_logo.png')],
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: InkWell(
+                            onTap: () => Navigator.pop(context),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  LucideIcons.chevronLeft,
+                                  color: Colors.white70,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  "Back",
+                                  style: GoogleFonts.inter(color: Colors.white70),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Image.asset('assets/foodsafe_logo.png')],
                     ),
                   ),
                   // White sheet (but still in SAME scroll)
@@ -124,16 +150,16 @@ class _LogInScreenState extends State<LoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          "Welcome Back",
+                          "Welcome Back!",
                           style: GoogleFonts.inter(
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
                             color: Color(0xFF111827),
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 4),
                         Text(
-                          "Sign in to continue",
+                          "Sign in to continue to FoodSafe",
                           style: GoogleFonts.inter(
                             fontSize: 13,
                             color: Color(0xFF4B5563),
@@ -220,9 +246,9 @@ class _LogInScreenState extends State<LoginScreen> {
                                 children: [
                                   TextButton(
                                     onPressed: () {
-                                      Navigator.pushNamed(
+                                      Navigator.push(
                                         context,
-                                        '/change_password',
+                                        MaterialPageRoute(builder: (context) => ChangePasswordScreen(isForgot: true))
                                       );
                                     },
                                     child: Text(
@@ -264,7 +290,6 @@ class _LogInScreenState extends State<LoginScreen> {
                                       : Text(
                                           "Sign In",
                                           style: GoogleFonts.inter(
-                                            fontSize: 16,
                                             fontWeight: FontWeight.w800,
                                           ),
                                         ),
@@ -277,14 +302,16 @@ class _LogInScreenState extends State<LoginScreen> {
                         const SizedBox(height: 18),
 
                         const Divider(height: 1, color: Color(0xFFE5E7EB)),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 18),
 
-                        Text(
-                          "Don't have an account?",
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            color: Color(0xFF4B5563),
+                        Align(
+                          alignment: Alignment.center,
+                          child: Text(
+                            "Don't have an account?",
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: Color(0xFF4B5563),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 10),
@@ -314,19 +341,6 @@ class _LogInScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ),
-
-                        const SizedBox(height: 18),
-
-                        Text(
-                          "By signing in, you agree to our Terms of Service and Privacy Policy. "
-                          "Your data is protected under the Data Privacy Act of 2012.",
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: Color(0xFF4B5563),
-                            height: 1.35,
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -334,7 +348,6 @@ class _LogInScreenState extends State<LoginScreen> {
               ),
             ),
           ),
-        ),
       ),
     );
   }

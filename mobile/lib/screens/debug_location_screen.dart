@@ -86,7 +86,7 @@ class _DebugLocationScreenState extends State<DebugLocationScreen> {
     await DebugLocationService.clear();
     await LocationService.clearCache();
     if (!mounted) return;
-    SnackbarWidgets.success(context, 'Using real GPS again');
+    SnackbarWidgets.success(context, 'Using real GPS');
     setState(() {
       _enabled = false;
       _barangayLabel = null;

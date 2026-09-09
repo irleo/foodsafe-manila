@@ -1,6 +1,9 @@
 import jwt from "jsonwebtoken";
+import MobileUser from "../models/MobileUser.js";
+import WebUser from "../models/WebUser.js";
+import { isTokenVersionCurrent } from "../utils/tokenVersion.js";
 
-export const verifyToken = (req, res, next) => {
+export const verifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization || "";
   const [scheme, token] = authHeader.split(" ");
 
@@ -8,11 +11,25 @@ export const verifyToken = (req, res, next) => {
     return res.status(401).json({ message: "No token provided" });
   }
 
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ message: "Invalid token" });
+  try {
+    const user = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    const UserModel = user.accountType === "citizen" ? MobileUser : WebUser;
+    const persistedUser = await UserModel.findById(user.id)
+      .select("tokenVersion")
+      .lean();
+
+    if (!persistedUser || !isTokenVersionCurrent(user.tokenVersion, persistedUser.tokenVersion)) {
+      return res.status(401).json({ message: "Session has been revoked." });
+    }
+
     req.user = user;
-    next();
-  });
+    return next();
+  } catch (error) {
+    if (error instanceof jwt.JsonWebTokenError) {
+      return res.status(401).json({ message: "Invalid or expired session." });
+    }
+    return next(error);
+  }
 };
 
 
@@ -33,4 +50,20 @@ export const verifyRoles = (...roles) => {
     }
     next();
   };
+};
+
+export const requireInternalRole = (...roles) => {
+  return (req, res, next) => {
+    if (req.user?.accountType !== "web" || !roles.includes(req.user?.role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    return next();
+  };
+};
+
+export const requireCitizenAccount = (req, res, next) => {
+  if (req.user?.accountType !== "citizen" || req.user?.role !== "citizen") {
+    return res.status(403).json({ message: "Citizen account required." });
+  }
+  return next();
 };

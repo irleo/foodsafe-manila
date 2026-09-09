@@ -6,6 +6,7 @@ import {
   buildDistrictStatisticsFromCases,
   buildYoYCaseStatsFromCases,
 } from "../services/statisticsCaseBuilders.js";
+import { logRequestError } from "../utils/serverLogger.js";
 
 export async function getAnalyticsSummary(req, res) {
   try {
@@ -18,7 +19,6 @@ export async function getAnalyticsSummary(req, res) {
     const caseRows = await getAnalyticalCaseRows({
       datasetId,
       statuses: ["confirmed"],
-      includeReports: false,
     });
 
     const yearRange = getYearRange(caseRows);
@@ -90,6 +90,7 @@ export async function getAnalyticsSummary(req, res) {
         totalDefinition: "Confirmed cases from authoritative CESU uploads only",
         selectedCaseStatus: "confirmed",
         sourcePolicy: "authoritative_cesu_uploads_only",
+        includes: ["official_upload"],
         yearRange,
         baseYear,
         previousYear,
@@ -108,9 +109,10 @@ export async function getAnalyticsSummary(req, res) {
       caseConcentrationByDistrict: districtStats,
     });
   } catch (err) {
+    logRequestError(err, req, "ANALYTICS_SERVICE_ERROR");
     return res.status(err?.status || 500).json({
-      message: "Failed to build analytics summary",
-      error: err?.message,
+      code: "ANALYTICS_SERVICE_ERROR",
+      message: "Analytics data could not be loaded.",
     });
   }
 }

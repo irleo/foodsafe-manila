@@ -55,8 +55,20 @@ const DatasetSchema = new mongoose.Schema(
       required: true,
       default: "file",
     },
-    coverageStart: { type: Date, required: true },
-    coverageEnd: { type: Date, required: true },
+    coverageStart: {
+      type: Date,
+      default: null,
+      required() {
+        return this.status !== "failed";
+      },
+    },
+    coverageEnd: {
+      type: Date,
+      default: null,
+      required() {
+        return this.status !== "failed";
+      },
+    },
     districtCoverage: { type: [DistrictCoverageSchema], default: [] },
 
     originalFileName: { type: String, required: true },

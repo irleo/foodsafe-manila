@@ -64,6 +64,13 @@ const reportSchema = new mongoose.Schema(
       index: { name: "reportsExposureBarangayNo" },
     },
 
+    exposureDescription: {
+      type: String,
+      default: null,
+      trim: true,
+      maxlength: 500,
+    },
+
     symptoms: {
       type: [String],
       required: true,
@@ -74,7 +81,15 @@ const reportSchema = new mongoose.Schema(
       index: { name: "reportsSymptoms" },
     },
 
-    caseCount: { type: Number, default: 1, min: 1 },
+    caseCount: {
+      type: Number,
+      default: 1,
+      min: 1,
+      validate: {
+        validator: Number.isInteger,
+        message: "caseCount must be an integer.",
+      },
+    },
 
     foodSource: { type: String, default: null, trim: true },
 
@@ -123,7 +138,6 @@ const reportSchema = new mongoose.Schema(
         "reported",
         "suspected",
         "probable",
-        "not_validated",
         "ruled_out",
         "confirmed",
       ],
@@ -134,7 +148,7 @@ const reportSchema = new mongoose.Schema(
 
     currentStatus: {
       type: String,
-      enum: ["reported", "suspected", "probable", "confirmed", "not_validated", "ruled_out"],
+      enum: ["reported", "suspected", "probable", "confirmed", "ruled_out"],
       default: "reported",
       required: true,
     },
@@ -146,7 +160,7 @@ const reportSchema = new mongoose.Schema(
     },
     validationStatus: {
       type: String,
-      enum: ["not_started", "probable", "confirmed", "not_validated"],
+      enum: ["not_started", "probable", "confirmed"],
       default: "not_started",
       required: true,
     },
@@ -183,7 +197,7 @@ const reportSchema = new mongoose.Schema(
       validatedAt: { type: Date },
       result: {
         type: String,
-        enum: ["probable", "confirmed", "not_validated"],
+        enum: ["probable", "confirmed"],
       },
       condition: { type: String, trim: true, maxlength: 200 },
       laboratoryEvidence: { type: String, trim: true, maxlength: 4000 },
@@ -208,6 +222,8 @@ const reportSchema = new mongoose.Schema(
     remarks: { type: String, default: null, trim: true, maxlength: 4000 },
 
     isCounted: {
+      // Report-workflow eligibility only. This never promotes a citizen report
+      // to OfficialCase or includes it in thresholds, baselines, or prediction.
       type: Boolean,
       default: true,
       index: { name: "reportsIsCounted" },

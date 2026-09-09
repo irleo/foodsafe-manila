@@ -43,8 +43,7 @@ services:
   runtime: node
   repo: https://github.com/irleo/foodsafe-manila
   branch: production
-  # 1 CPU / 2 GB RAM for in-memory XLSX validation and Prophet execution.
-  plan: starter
+  plan: free
   envVars:
   - key: MONGO_URI
     sync: false

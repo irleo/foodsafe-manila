@@ -5,7 +5,6 @@ import '../screens/login_screen.dart';
 import '../screens/signup_screen.dart';
 import 'screens/change_password_screen.dart';
 import 'services/location_service.dart';
-import 'services/notification_service.dart';
 import 'services/api_client.dart';
 import 'services/session.dart';
 
@@ -13,19 +12,14 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Session.initialize();
   await ApiClient.warmSession();
-  await NotificationService.initialize();
   await LocationService.preloadLocation();
   runApp(
-    MainApp(
-      initialRoute: ApiClient.hasAuthenticatedSession ? '/dashboard' : '/login',
-    ),
+    MainApp(),
   );
 }
 
 class MainApp extends StatelessWidget {
-  final String initialRoute;
-
-  const MainApp({super.key, required this.initialRoute});
+  const MainApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +27,7 @@ class MainApp extends StatelessWidget {
       builder: (context, child) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          initialRoute: initialRoute,
+          initialRoute: '/dashboard',
           routes: {
             '/login': (context) => const LoginScreen(),
             '/signup': (context) => const SignupScreen(),

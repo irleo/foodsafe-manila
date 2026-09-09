@@ -8,6 +8,9 @@ import {
 } from "../utils/citizenAuth.js";
 import { validatePassword } from "../utils/passwordValidation.js";
 import { consumeMobileOtpVerification } from "../services/mobileOtpService.js";
+import { consumeEmailOtpVerification } from "../services/mobileEmailOtpService.js";
+import { logRequestError } from "../utils/serverLogger.js";
+import { isTokenVersionCurrent } from "../utils/tokenVersion.js";
 
 // POST /api/auth/register
 export const registerCitizen = async (req, res) => {
@@ -55,7 +58,7 @@ export const registerCitizen = async (req, res) => {
     if (error?.code === 11000) {
       return res.status(409).json({ message: "Phone number already registered" });
     }
-    console.error("Citizen register error:", error);
+    logRequestError(error, req, "CITIZEN_REGISTER_ERROR");
     return res.status(500).json({ message: "Failed to register user" });
   }
 };
@@ -81,7 +84,10 @@ export const loginCitizen = async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    const { accessToken, refreshToken } = signCitizenTokens(mobileUser._id);
+    const { accessToken, refreshToken } = signCitizenTokens(
+      mobileUser._id,
+      mobileUser.tokenVersion,
+    );
 
     return res.status(200).json({
       ...sanitizeMobileUser(mobileUser),
@@ -89,7 +95,7 @@ export const loginCitizen = async (req, res) => {
       refreshToken,
     });
   } catch (error) {
-    console.error("Citizen login error:", error);
+    logRequestError(error, req, "CITIZEN_LOGIN_ERROR");
     return res.status(500).json({ message: "Failed to login" });
   }
 };
@@ -106,16 +112,33 @@ export const checkPhoneExists = async (req, res) => {
     const exists = await MobileUser.exists({ phoneNumber: normalizedPhone });
     return res.json({ exists: Boolean(exists) });
   } catch (error) {
-    console.error("Phone exists check error:", error);
+    logRequestError(error, req, "PHONE_LOOKUP_ERROR");
     return res.status(500).json({ message: "Failed to check phone number" });
+  }
+};
+
+// GET /api/auth/user/email-exists?email=
+export const checkEmailExists = async (req, res) => {
+  const email = String(req.query.email || "").trim().toLowerCase();
+
+  if (!email) {
+    return res.status(400).json({ message: "Email query is required" });
+  }
+
+  try {
+    const exists = await MobileUser.exists({ email });
+    return res.json({ exists: Boolean(exists) });
+  } catch (error) {
+    logRequestError(error, req, "EMAIL_LOOKUP_ERROR");
+    return res.status(500).json({ message: "Failed to check email address" });
   }
 };
 
 // POST /api/auth/reset-password
 export const resetCitizenPassword = async (req, res) => {
-  const { phone, newPassword, verificationToken } = req.body;
+  const { phone, email, newPassword, verificationToken } = req.body;
 
-  if (!phone || !newPassword || !verificationToken) {
+  if ((!phone && !email) || !newPassword || !verificationToken) {
     return res.status(400).json({ message: "Missing required fields" });
   }
 
@@ -125,6 +148,36 @@ export const resetCitizenPassword = async (req, res) => {
   }
 
   try {
+    if (email) {
+      const normalizedEmail = String(email).trim().toLowerCase();
+
+      const mobileUser = await MobileUser.findOne({
+        email: normalizedEmail,
+      });
+
+      if (!mobileUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // This must call an email verification-token consumer.
+      const verified = await consumeEmailOtpVerification({
+        email: normalizedEmail,
+        purpose: "password_reset",
+        verificationToken,
+      });
+
+      if (!verified) {
+        return res.status(403).json({
+          message: "Email verification is invalid or expired",
+        });
+      }
+
+      mobileUser.password = await bcrypt.hash(newPassword, 10);
+      await mobileUser.save();
+
+      return res.json({ success: true });
+    }
+
     const normalizedPhone = normalizePhone(phone);
     const mobileUser = await MobileUser.findOne({ phoneNumber: normalizedPhone });
 
@@ -145,11 +198,12 @@ export const resetCitizenPassword = async (req, res) => {
     }
 
     mobileUser.password = await bcrypt.hash(newPassword, 10);
+    mobileUser.tokenVersion = (mobileUser.tokenVersion || 0) + 1;
     await mobileUser.save();
 
     return res.json({ success: true });
   } catch (error) {
-    console.error("Citizen reset password error:", error);
+    logRequestError(error, req, "CITIZEN_PASSWORD_RESET_ERROR");
     return res.status(500).json({ message: "Failed to reset password" });
   }
 };
@@ -174,7 +228,14 @@ export const refreshCitizenToken = async (req, res) => {
       return res.status(401).json({ message: "Invalid refresh token" });
     }
 
-    const { accessToken, refreshToken } = signCitizenTokens(mobileUser._id);
+    if (!isTokenVersionCurrent(decoded.tokenVersion, mobileUser.tokenVersion)) {
+      return res.status(401).json({ message: "Session has been revoked" });
+    }
+
+    const { accessToken, refreshToken } = signCitizenTokens(
+      mobileUser._id,
+      mobileUser.tokenVersion,
+    );
 
     return res.status(200).json({
       accessToken,
@@ -182,7 +243,7 @@ export const refreshCitizenToken = async (req, res) => {
       user: sanitizeMobileUser(mobileUser),
     });
   } catch (error) {
-    console.error("Citizen refresh error:", error);
+    logRequestError(error, req, "CITIZEN_SESSION_REFRESH_ERROR");
     return res.status(403).json({ message: "Invalid refresh token" });
   }
 };

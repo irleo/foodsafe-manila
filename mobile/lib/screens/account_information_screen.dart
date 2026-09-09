@@ -13,7 +13,8 @@ class AccountInformationScreen extends StatefulWidget {
   const AccountInformationScreen({super.key});
 
   @override
-  State<AccountInformationScreen> createState() => _AccountInformationScreenState();
+  State<AccountInformationScreen> createState() =>
+      _AccountInformationScreenState();
 }
 
 class _AccountInformationScreenState extends State<AccountInformationScreen> {
@@ -39,6 +40,23 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
   final int _resendSeconds = 0;
 
   @override
+  void initState() {
+    super.initState();
+
+    // Initialize OTP controllers
+    otpControllers = List.generate(6, (_) => TextEditingController());
+    otpFocusNodes = List.generate(6, (_) => FocusNode());
+
+    if (user != null) {
+      _nameCtrl.text = user!['username'] ?? '';
+      _phoneCtrl.text = toPhilippineMobileInput(
+        user!['phoneNumber']?.toString() ?? '',
+      );
+      _emailCtrl.text = user!['email'] ?? '';
+    }
+  }
+
+  @override
   void dispose() {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
@@ -53,103 +71,107 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
     super.dispose();
   }
 
-  @override
-  void initState() {
-    super.initState();
+  void _handleOtpKey(int index, KeyEvent event) {
+    if (event is! KeyDownEvent) return;
 
-    // Initialize OTP controllers
-    otpControllers = List.generate(4, (_) => TextEditingController());
-    otpFocusNodes = List.generate(4, (_) => FocusNode());
+    if (event.logicalKey == LogicalKeyboardKey.backspace) {
+      if (otpControllers[index].text.isEmpty && index > 0) {
+        otpControllers[index - 1].clear();
 
-    if (user != null) {
-      _nameCtrl.text = user!['username'] ?? '';
-      _phoneCtrl.text = toPhilippineMobileInput(
-        user!['phoneNumber']?.toString() ?? '',
-      );
-      _emailCtrl.text = user!['email'] ?? '';
+        FocusScope.of(context).requestFocus(otpFocusNodes[index - 1]);
+      }
+
+      // Always keep the combined OTP updated.
+      _updateOtp();
     }
+  }
+
+  void _updateOtp() {
+    _otpCtrl.text = otpControllers.map((c) => c.text).join();
   }
 
   // Build OTP verification UI
   Widget _buildOtpVerificationStep() {
-    void updateOtp() {
-      _otpCtrl.text = otpControllers.map((c) => c.text).join();
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "Verify new phone number",
+          "Verification code",
           style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 10),
         Text(
-          "We've sent a 4-digit OTP to $_pendingPhoneNumber. Enter it below to confirm the change.",
+          "Enter the 6-digit code sent to your phone number.",
           style: GoogleFonts.inter(fontSize: 14),
         ),
         const SizedBox(height: 30),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: List.generate(4, (index) {
+          children: List.generate(6, (index) {
             return SizedBox(
-              height: 64,
-              width: 64,
-              child: TextFormField(
-                onChanged: (value) {
-                  if (value.length == 1 && index < 3) {
-                    // Move to next field
-                    FocusScope.of(
-                      context,
-                    ).requestFocus(otpFocusNodes[index + 1]);
-                  } else if (value.isEmpty && index > 0) {
-                    // Move back if deleted
-                    FocusScope.of(
-                      context,
-                    ).requestFocus(otpFocusNodes[index - 1]);
-                  }
-                  updateOtp();
-                },
-                style: GoogleFonts.inter(fontWeight: FontWeight.w800),
-                decoration: InputDecoration(
-                  contentPadding: const EdgeInsets.symmetric(vertical: 18),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(
-                      color: Color(0xFF3B82F6),
-                      width: 2,
+              height: 50,
+              width: 48,
+              child: KeyboardListener(
+                focusNode: FocusNode(),
+                onKeyEvent: (event) => _handleOtpKey(index, event),
+                child: TextFormField(
+                  controller: otpControllers[index],
+                  focusNode: otpFocusNodes[index],
+
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.next,
+
+                  textAlign: TextAlign.center,
+                  textAlignVertical: TextAlignVertical.center,
+
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w800),
+
+                  inputFormatters: [
+                    LengthLimitingTextInputFormatter(1),
+                    FilteringTextInputFormatter.digitsOnly,
+                  ],
+
+                  onChanged: (value) {
+                    _updateOtp();
+
+                    if (value.isNotEmpty && index < 5) {
+                      FocusScope.of(
+                        context,
+                      ).requestFocus(otpFocusNodes[index + 1]);
+                    }
+                  },
+
+                  decoration: InputDecoration(
+                    contentPadding: EdgeInsets.zero,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF3B82F6),
+                        width: 2,
+                      ),
+                    ),
+                    errorMaxLines: 2,
+                    errorStyle: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: const Color(0xFFDC2626),
                     ),
                   ),
-                  errorMaxLines: 2,
-                  errorStyle: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: const Color(0xFFDC2626),
-                  ),
                 ),
-                keyboardType: TextInputType.number,
-                controller: otpControllers[index],
-                focusNode: otpFocusNodes[index],
-                textAlign: TextAlign.center,
-                textAlignVertical: TextAlignVertical.center,
-                inputFormatters: [
-                  LengthLimitingTextInputFormatter(1),
-                  FilteringTextInputFormatter.digitsOnly,
-                ],
               ),
             );
           }),
         ),
         const SizedBox(height: 10),
         Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
             Text('Did not receive code?', style: GoogleFonts.inter()),
             TextButton(
@@ -177,27 +199,10 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
         Row(
           children: [
             Expanded(
-              child: OutlinedButton(
-                onPressed: _loading ? null : () {}, // Implement cancel logic here
-                style: OutlinedButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  side: const BorderSide(color: Color(0xFFD1D5DB)),
-                ),
-                child: Text(
-                  "Cancel",
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black87,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
               child: ElevatedButton(
-                onPressed: _loading ? null : () {}, // Implement verify OTP logic here
+                onPressed: _loading
+                    ? null
+                    : () {}, // Implement verify OTP logic here
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF2563EB),
                   foregroundColor: Colors.white,
@@ -217,7 +222,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                         ),
                       )
                     : Text(
-                        "Verify & Save",
+                        "Verify",
                         style: GoogleFonts.inter(fontWeight: FontWeight.w800),
                       ),
               ),
@@ -343,7 +348,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
                             child: Text(
-                              "Continue",
+                              "Yes",
                               style: GoogleFonts.inter(
                                 fontWeight: FontWeight.w500,
                                 color: Color(0xFF2563EB),
@@ -365,7 +370,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
                             child: Text(
-                              "Cancel",
+                              "No",
                               style: GoogleFonts.inter(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w600,
@@ -423,7 +428,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                           child: Text(
-                            "Discard",
+                            "Yes",
                             style: GoogleFonts.inter(
                               fontWeight: FontWeight.w500,
                               color: Color(0xFF2563EB),
@@ -445,7 +450,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                           child: Text(
-                            "Cancel",
+                            "No",
                             style: GoogleFonts.inter(
                               color: Colors.white,
                               fontWeight: FontWeight.w600,
@@ -529,7 +534,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                                   ),
                                             ),
                                             child: Text(
-                                              "Continue",
+                                              "Yes",
                                               style: GoogleFonts.inter(
                                                 fontWeight: FontWeight.w500,
                                                 color: Color(0xFF2563EB),
@@ -557,7 +562,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                                   ),
                                             ),
                                             child: Text(
-                                              "Cancel",
+                                              "No",
                                               style: GoogleFonts.inter(
                                                 color: Colors.white,
                                                 fontWeight: FontWeight.w600,
@@ -621,7 +626,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                                   ),
                                             ),
                                             child: Text(
-                                              "Discard",
+                                              "Yes",
                                               style: GoogleFonts.inter(
                                                 fontWeight: FontWeight.w500,
                                                 color: Color(0xFF2563EB),
@@ -649,7 +654,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                                   ),
                                             ),
                                             child: Text(
-                                              "Cancel",
+                                              "No",
                                               style: GoogleFonts.inter(
                                                 color: Colors.white,
                                                 fontWeight: FontWeight.w600,
@@ -752,11 +757,14 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                           hintStyle: GoogleFonts.inter(
                                             color: Color(0xFFD1D5DB),
                                           ),
-                                          contentPadding: const EdgeInsets.symmetric(
-                                            vertical: 14,
-                                          ),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                vertical: 14,
+                                              ),
                                           border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(12),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -767,7 +775,8 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                       child: TextFormField(
                                         controller: _phoneCtrl,
                                         enabled: _isEditing,
-                                        validator: validatePhilippineMobileInput,
+                                        validator:
+                                            validatePhilippineMobileInput,
                                         keyboardType: TextInputType.number,
                                         inputFormatters: const [
                                           PhilippineMobileInputFormatter(),
@@ -779,20 +788,24 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                               context,
                                             ).colorScheme.outline,
                                           ),
-                                          prefixIconConstraints: const BoxConstraints(
-                                            minWidth: 88,
-                                          ),
+                                          prefixIconConstraints:
+                                              const BoxConstraints(
+                                                minWidth: 88,
+                                              ),
                                           hintText: philippineMobileHint,
                                           hintStyle: GoogleFonts.inter(
                                             color: Color(0xFFD1D5DB),
                                           ),
                                           helperText: philippineMobileHelper,
                                           helperMaxLines: 2,
-                                          contentPadding: const EdgeInsets.symmetric(
-                                            vertical: 14,
-                                          ),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                vertical: 14,
+                                              ),
                                           border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(12),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -816,7 +829,8 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                           }
                                           return null;
                                         },
-                                        keyboardType: TextInputType.emailAddress,
+                                        keyboardType:
+                                            TextInputType.emailAddress,
                                         style: GoogleFonts.inter(),
                                         decoration: InputDecoration(
                                           prefixIcon: Icon(
@@ -829,11 +843,14 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                           hintStyle: GoogleFonts.inter(
                                             color: Color(0xFFD1D5DB),
                                           ),
-                                          contentPadding: const EdgeInsets.symmetric(
-                                            vertical: 14,
-                                          ),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                vertical: 14,
+                                              ),
                                           border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(12),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -843,7 +860,6 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
 
                                     SizedBox(
                                       width: double.infinity,
-                                      height: 54,
                                       child: ElevatedButton(
                                         onPressed: _loading
                                             ? null
@@ -925,7 +941,6 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
   }
 }
 
-
 class _InputField extends StatelessWidget {
   final String label;
   final Widget child;
@@ -937,7 +952,10 @@ class _InputField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: GoogleFonts.inter(fontSize: 13)),
+        Text(
+          label,
+          style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500),
+        ),
         const SizedBox(height: 6),
         Theme(
           data: Theme.of(context).copyWith(

@@ -278,8 +278,8 @@ class MapScreenState extends State<MapScreen> {
             addPolygon(points);
           }
         }
-      } catch (e) {
-        debugPrint('Error parsing polygon: $e');
+      } catch (_) {
+        // Skip malformed polygon data without exposing parser internals.
       }
     }
 
@@ -470,7 +470,7 @@ class MapScreenState extends State<MapScreen> {
     );
   }
 
-  String _formatFilterItem(String item, String label) {
+  String _formatFilterItem(String item, String? label) {
     if (item == 'All') {
       switch (label) {
         case 'Year':
@@ -497,7 +497,6 @@ class MapScreenState extends State<MapScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
-        automaticallyImplyLeading: false,
         surfaceTintColor: const Color(0xFFF9FAFB),
         backgroundColor: Colors.white,
         toolbarHeight: 92,
@@ -585,7 +584,7 @@ class MapScreenState extends State<MapScreen> {
                         ? selectedCaseClassification
                         : 'confirmed',
                     items: _classificationOptions.isEmpty
-                        ? const ['confirmed', 'suspected', 'reported', 'not_validated']
+                        ? const ['confirmed', 'suspected', 'probable']
                         : _classificationOptions,
                     formatItem: _formatFilterItem,
                     onChanged: (value) {

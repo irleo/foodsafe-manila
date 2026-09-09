@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:foodsafe_manila/screens/alerts_screen.dart';
-import 'package:foodsafe_manila/screens/analytics_screen.dart';
 import 'package:foodsafe_manila/screens/report_history_screen.dart';
 import 'package:foodsafe_manila/screens/report_form_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../screens/home_screen.dart';
+import 'home_screen.dart';
 import '../screens/map_screen.dart';
 import '../services/api_client.dart';
 import '../services/session.dart';
@@ -16,7 +14,7 @@ import 'account_information_screen.dart';
 import 'change_password_screen.dart';
 import 'package:flutter/foundation.dart';
 import '../screens/debug_location_screen.dart';
-
+import 'insights_screen.dart';
 
 class BottomNavBarScreen extends StatefulWidget {
   const BottomNavBarScreen({super.key});
@@ -29,10 +27,8 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
     with WidgetsBindingObserver {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final GlobalKey<HomeScreenState> _homeKey = GlobalKey<HomeScreenState>();
-  final GlobalKey<MapScreenState> _mapKey = GlobalKey<MapScreenState>();
-  final GlobalKey<AnalyticsScreenState> _analyticsKey =
-      GlobalKey<AnalyticsScreenState>();
-  final GlobalKey<AlertsScreenState> _alertsKey = GlobalKey<AlertsScreenState>();
+  final GlobalKey<InsightsScreenState> _insightsKey =
+      GlobalKey<InsightsScreenState>();
 
   int _selectedIndex = 0;
   final PageController _pageController = PageController();
@@ -63,10 +59,13 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
   }
 
   Future<void> _onAppResumed() async {
+    if (Session.currentUser == null) {
+      return;
+    }
     final ok = await ApiClient.refreshSessionOnResume();
     if (!mounted) return;
     if (!ok) {
-      Navigator.pushReplacementNamed(context, '/login');
+      Navigator.pushNamed(context, '/login');
       return;
     }
     _refreshCurrentTab();
@@ -78,13 +77,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
         _homeKey.currentState?.refreshData();
         break;
       case 1:
-        _mapKey.currentState?.refreshData();
-        break;
-      case 2:
-        _analyticsKey.currentState?.refreshData();
-        break;
-      case 3:
-        _alertsKey.currentState?.refreshData();
+        _insightsKey.currentState?.refreshData();
         break;
     }
   }
@@ -94,7 +87,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
     final user = Session.currentUser;
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: Colors.white,
+      backgroundColor: Color(0xFFF9FAFB),
       endDrawer: Drawer(
         backgroundColor: const Color(0xFFF9FAFB),
         shape: const RoundedRectangleBorder(
@@ -127,7 +120,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
                           child: Text(
                             user?['username'] != null
                                 ? user!['username'][0].toUpperCase()
-                                : '',
+                                : 'J',
                             style: GoogleFonts.inter(
                               color: Color(0xFF3B82F6),
                               fontSize: 24,
@@ -166,37 +159,33 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
               _buildMenuTile(
                 icon: LucideIcons.user,
                 gradientColors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
-                title: "Account information",
+                title: "Account Information",
                 subtitle: "Update your account details",
                 page: const AccountInformationScreen(),
               ),
               _buildMenuTile(
                 icon: LucideIcons.lock,
                 gradientColors: [Color(0xFFEF4444), Color(0xFFDC2626)],
-                title: "Change password",
+                title: "Change Password",
                 subtitle: "Update your account password",
                 page: const ChangePasswordScreen(),
               ),
               _buildMenuTile(
                 icon: LucideIcons.clipboardList,
                 gradientColors: [Color(0xFF10B981), Color(0xFF059669)],
-                title: "My reports",
+                title: "My Reports",
                 subtitle: "View and manage your submitted reports",
                 page: const ReportHistoryScreen(),
               ),
               if (kDebugMode && _enableDebugTools) ...[
-                    _buildMenuTile(
-                      icon: Icons.location_searching,
-                      gradientColors: const [
-                        Color(0xFF8B5CF6),
-                        Color(0xFF7C3AED),
-                      ],
-                      title: 'Simulate location (debug)',
-                      subtitle:
-                          'Test reports and alerts from a Manila barangay',
-                      page: const DebugLocationScreen(),
-                    ),
-                  ],
+                _buildMenuTile(
+                  icon: Icons.location_searching,
+                  gradientColors: const [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
+                  title: 'Simulate Location (Debug)',
+                  subtitle: 'Test reports and alerts from a Manila barangay',
+                  page: const DebugLocationScreen(),
+                ),
+              ],
               Spacer(),
               Container(
                 color: Colors.white,
@@ -284,7 +273,8 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
                     if (confirm == true) {
                       await Session.clear();
                       if (!context.mounted) return;
-                      Navigator.pushReplacementNamed(context, '/login');
+                      Navigator.pop(context);
+                      SnackbarWidgets.success(context, 'Sign out successful');
                     }
                   },
                   style: ButtonStyle(
@@ -348,15 +338,28 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
           children: <Widget>[
             HomeScreen(
               key: _homeKey,
-              onProfileTap: () {
+              onProfilePressed: () {
+                if (Session.currentUser == null) {
+                  Navigator.pushNamed(context, '/login');
+                  return;
+                }
                 _scaffoldKey.currentState?.openEndDrawer();
               },
-              onNavigateToAlerts: () => _onTappedBar(3),
-              onNavigateToMap: () => _onTappedBar(1),
+              onMapPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const MapScreen()),
+              ),
             ),
-            MapScreen(key: _mapKey),
-            AnalyticsScreen(key: _analyticsKey),
-            AlertsScreen(key: _alertsKey),
+            InsightsScreen(
+              key: _homeKey,
+              onProfilePressed: () {
+                if (Session.currentUser == null) {
+                  Navigator.pushNamed(context, '/login');
+                  return;
+                }
+                _scaffoldKey.currentState?.openEndDrawer();
+              },
+            ),
           ],
           onPageChanged: (page) {
             setState(() {
@@ -369,6 +372,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
         child: Container(
           height: 64.sp,
           decoration: BoxDecoration(
+            color: Colors.white,
             border: Border(
               top: BorderSide(color: Colors.grey.shade300, width: 1),
             ),
@@ -390,62 +394,44 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
                       label: 'Home',
                       index: 0,
                     ),
-                    _buildBottomNavItem(
-                      icon: LucideIcons.mapPin,
-                      label: 'Map',
-                      index: 1,
-                    ),
                     _buildBottomNavItem(label: 'Report'),
                     _buildBottomNavItem(
-                      icon: LucideIcons.chartColumn,
-                      label: 'Analytics',
-                      index: 2,
-                    ),
-                    _buildBottomNavItem(
-                      icon: LucideIcons.bell,
-                      label: 'Alerts',
-                      index: 3,
+                      icon: LucideIcons.chartNoAxesColumn,
+                      label: 'Insights',
+                      index: 1,
                     ),
                   ],
                 ),
               ),
-              Positioned(
-                top: -24.sp,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(36),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ReportFormScreen(),
-                    ),
-                  ),
-                  child: Container(
-                    width: 58.sp,
-                    height: 58.sp,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
-                      ),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 18,
-                          offset: Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: Icon(
-                        Icons.campaign,
-                        color: Colors.white,
-                        size: 28.sp,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
             ],
+          ),
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButton: SizedBox(
+        width: 72,
+        height: 72,
+        child: FloatingActionButton(
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const ReportFormScreen()),
+          ),
+          tooltip: 'Submit a report',
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          shape: const CircleBorder(),
+          child: Ink(
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: const Center(
+              child: Icon(Icons.campaign, color: Colors.white, size: 36),
+            ),
           ),
         ),
       ),
@@ -505,7 +491,8 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
     );
   }
 
-  String formatPhone(String phone) {
+  String formatPhone(String? phone) {
+    if (phone == null || phone.isEmpty) return 'Guest';
     if (phone.length != 11) return phone;
 
     return '${phone.substring(0, 4)} '
@@ -533,6 +520,11 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
           splashColor: const Color(0xFF2563EB).withValues(alpha: 0.15),
           highlightColor: Colors.black.withValues(alpha: 0.04),
           onTap: () async {
+            if (Session.currentUser == null) {
+              Navigator.pushNamed(context, '/login');
+              return;
+            }
+
             final updated = await Navigator.push<bool>(
               context,
               MaterialPageRoute(builder: (context) => page),
@@ -583,7 +575,11 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
                     ),
                   ),
 
-                  const Icon(LucideIcons.chevronRight, color: Colors.grey),
+                  const Icon(
+                    LucideIcons.chevronRight,
+                    color: Colors.grey,
+                    size: 20,
+                  ),
                 ],
               ),
             ),

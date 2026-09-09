@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { paginationMeta, parsePagination } from "../utils/pagination.js";
 import { getAnalyticalCasePage } from "../services/analyticalCaseService.js";
+import { logRequestError } from "../utils/serverLogger.js";
 
 export const listCasesByDataset = async (req, res) => {
   try {
@@ -38,11 +39,9 @@ export const listCasesByDataset = async (req, res) => {
     if (req.query.disease) filters.disease = String(req.query.disease).trim();
 
     const allowedStatuses = new Set([
-      "reported",
       "suspected",
       "probable",
       "confirmed",
-      "not_validated",
     ]);
     const selectedStatuses = String(
       req.query.caseClassification || "confirmed",
@@ -78,6 +77,10 @@ export const listCasesByDataset = async (req, res) => {
       },
     });
   } catch (err) {
-    return res.status(err?.status || 500).json({ message: err?.message || "Server error" });
+    logRequestError(err, req, "CASE_DATA_ERROR");
+    return res.status(err?.status || 500).json({
+      code: "ANALYTICS_SERVICE_ERROR",
+      message: "Case data could not be loaded.",
+    });
   }
 };

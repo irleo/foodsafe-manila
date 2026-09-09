@@ -72,8 +72,9 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       final allowed = await _checkCooldown(userId);
       if (!allowed) return false;
 
-      final reportedSymptoms =
-          FormatHelpers.formatSymptoms(selectedSymptoms).toList();
+      final reportedSymptoms = FormatHelpers.formatSymptoms(
+        selectedSymptoms,
+      ).toList();
       final coordinates = await LocationService.getCurrentCoordinates();
 
       if (coordinates == null) {
@@ -102,7 +103,8 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       }
 
       await ManilaGeoService.ensureLoaded();
-      final resolved = LocationService.cachedManilaLocation ??
+      final resolved =
+          LocationService.cachedManilaLocation ??
           ManilaGeoService.lookup(lat, lng);
       if (resolved == null) {
         if (mounted) {
@@ -123,16 +125,14 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       String? exposureBarangay;
       int? exposureBarangayNo;
 
-      if (selectedAteFoodLocation ==
-          'Same as my current district location') {
+      if (selectedAteFoodLocation == 'Same as my current district location') {
         exposureDistrict = resolved.district;
         exposureBarangay = resolved.barangayNo > 0
             ? 'Barangay ${resolved.barangayNo}'
             : resolved.barangay;
         exposureBarangayNo = resolved.barangayNo;
       } else if (selectedAteFoodLocation == 'Choose a different district') {
-        exposureDistrict =
-            FormatHelpers.normalizeDistrict(selectedDistrict);
+        exposureDistrict = FormatHelpers.normalizeDistrict(selectedDistrict);
         exposureBarangay = selectedExposureBarangay;
         exposureBarangayNo = selectedExposureBarangayNo;
       }
@@ -144,6 +144,9 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
         exposureDistrict: exposureDistrict,
         exposureBarangay: exposureBarangay,
         exposureBarangayNo: exposureBarangayNo,
+        exposureDescription: _locationDescriptionController.text.trim().isEmpty
+            ? null
+            : _locationDescriptionController.text.trim(),
         location: locationPayload,
       );
 
@@ -151,14 +154,6 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
         if (mounted) {
           SnackbarWidgets.success(context, "Report submitted successfully!");
         }
-
-        setState(() {
-          _remainingCooldown = reportCooldown;
-          isCooldown = true;
-          _updateTimeText();
-        });
-
-        _startTimer();
 
         return true;
       } else {
@@ -169,12 +164,18 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       }
     } on ApiException catch (e) {
       if (mounted) {
-        SnackbarWidgets.error(context, e.message);
+        SnackbarWidgets.error(context, ApiClient.safeErrorMessage(e));
       }
       return false;
-    } catch (e) {
+    } catch (error) {
       if (mounted) {
-        SnackbarWidgets.error(context, "Error: $e");
+        SnackbarWidgets.error(
+          context,
+          ApiClient.safeErrorMessage(
+            error,
+            fallback: 'The report could not be submitted.',
+          ),
+        );
       }
       return false;
     } finally {
@@ -312,9 +313,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
               return true;
             }
           }
-        }
-
-        else if (type == 'MultiPolygon') {
+        } else if (type == 'MultiPolygon') {
           final multiPolygons = coordinates as List<dynamic>;
 
           for (final polygonGroup in multiPolygons) {
@@ -335,8 +334,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       }
 
       return false;
-    } catch (e) {
-      debugPrint('Manila boundary check error: $e');
+    } catch (_) {
       return false;
     }
   }
@@ -389,12 +387,21 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
   String? selectedExposureBarangay;
   int? selectedExposureBarangayNo;
   List<Map<String, dynamic>> exposureBarangayOptions = [];
+  final _locationDescriptionController = TextEditingController();
 
   late String locationText;
 
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (Session.currentUser == null) {
+        _promptSignIn();
+      }
+    });
+
     _loadHeader();
     locationText = LocationService.cachedAddress ?? 'Fetching...';
 
@@ -407,6 +414,93 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
     _initCooldown();
   }
 
+  Future<void> _promptSignIn() async {
+    final shouldSignIn = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            'Sign in required',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+          ),
+          content: Text(
+            'You must sign in before submitting a report.',
+            style: GoogleFonts.inter(),
+          ),
+          actions: [
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.pop(context, false);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      side: const BorderSide(color: Color(0xFF2563EB)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text(
+                      "Cancel",
+                      style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF2563EB),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context, true);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2563EB),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text(
+                      "Sign in",
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted) return;
+
+    if (shouldSignIn == true) {
+      Navigator.pushReplacementNamed(
+        context,
+        '/login',
+        arguments: {'returnToReport': true},
+      );
+      return;
+    }
+
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
+  }
+
   void _loadExposureBarangays(String district) {
     exposureBarangayOptions = ManilaGeoService.barangaysForDistrict(district);
     selectedExposureBarangay = null;
@@ -415,6 +509,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
 
   @override
   void dispose() {
+    _locationDescriptionController.dispose();
     _cooldownTimer?.cancel();
     super.dispose();
   }
@@ -496,106 +591,174 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                   horizontal: 16,
                   vertical: 24,
                 ),
-                child: Column(
-                  children: [
-                    _currentStep != 3
-                        ? Column(
+                child: isCooldown
+                    ? Column(
+                        children: [
+                          SizedBox(height: 72),
+                          Container(
+                            width: 80,
+                            height: 80,
+                            margin: EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.green[100],
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Icon(
+                                LucideIcons.circleCheckBig,
+                                color: Colors.green[600],
+                                size: 48,
+                              ),
+                            ),
+                          ),
+                          // Report submitted message
+                          Column(
                             children: [
-                              isCooldown
-                                  ? Container(
-                                      padding: const EdgeInsets.all(12), // p-3
-                                      decoration: BoxDecoration(
-                                        color: const Color(
-                                          0xFFFFFBEB,
-                                        ), // bg-amber-50
-                                        border: Border.all(
-                                          color: const Color(0xFFFCD34D),
-                                        ), // border-amber-300
-                                        borderRadius: BorderRadius.circular(
-                                          12,
-                                        ), // rounded-xl
-                                      ),
-                                      child: Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.center,
-                                        children: [
-                                          // Icon container
-                                          Container(
-                                            width: 32,
-                                            height: 32,
-                                            decoration: BoxDecoration(
-                                              color: const Color(
-                                                0xFFF59E0B,
-                                              ), // bg-amber-500
-                                              borderRadius:
-                                                  BorderRadius.circular(
-                                                    8,
-                                                  ), // rounded-lg
-                                            ),
-                                            child: const Center(
-                                              child: Icon(
-                                                LucideIcons.clock,
-                                                size: 16,
-                                                color: Colors.white,
+                              Text(
+                                'Report Submitted',
+                                style: GoogleFonts.inter(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                'You have successfully submitted a report. You can submit another report after the cooldown period.',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          SizedBox(height: 20),
+
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ReportHistoryScreen(),
+                                  ),
+                                );
+                              },
+                              label: const Text('View reports'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2563EB),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                textStyle: GoogleFonts.inter(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          SizedBox(height: 20),
+
+                          Container(
+                            padding: const EdgeInsets.all(12), // p-3
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFFBEB), // bg-amber-50
+                              border: Border.all(
+                                color: const Color(0xFFFCD34D),
+                              ), // border-amber-300
+                              borderRadius: BorderRadius.circular(
+                                12,
+                              ), // rounded-xl
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                // Icon container
+                                Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFFF59E0B,
+                                    ), // bg-amber-500
+                                    borderRadius: BorderRadius.circular(
+                                      8,
+                                    ), // rounded-lg
+                                  ),
+                                  child: const Center(
+                                    child: Icon(
+                                      LucideIcons.clock,
+                                      size: 16,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+
+                                const SizedBox(width: 12), // gap-3
+                                // Text content
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      RichText(
+                                        text: TextSpan(
+                                          style: GoogleFonts.inter(
+                                            fontSize: 12, // text-xs
+                                            color: Color(
+                                              0xFF78350F,
+                                            ), // text-amber-900
+                                          ),
+                                          children: [
+                                            TextSpan(
+                                              text: "Cooldown Active: ",
+                                              style: GoogleFonts.inter(
+                                                fontWeight: FontWeight.bold,
                                               ),
                                             ),
-                                          ),
-
-                                          const SizedBox(width: 12), // gap-3
-                                          // Text content
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                RichText(
-                                                  text: TextSpan(
-                                                    style: GoogleFonts.inter(
-                                                      fontSize: 12, // text-xs
-                                                      color: Color(
-                                                        0xFF78350F,
-                                                      ), // text-amber-900
-                                                    ),
-                                                    children: [
-                                                      TextSpan(
-                                                        text:
-                                                            "Cooldown Active: ",
-                                                        style:
-                                                            GoogleFonts.inter(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
-                                                            ),
-                                                      ),
-                                                      TextSpan(
-                                                        text:
-                                                            "Next report available in",
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-
-                                                const SizedBox(
-                                                  height: 2,
-                                                ), // mb-0.5
-
-                                                Text(
-                                                  timeLeft, // e.g. "44s"
-                                                  style: GoogleFonts.inter(
-                                                    fontSize: 14, // text-sm
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Color(
-                                                      0xFFB45309,
-                                                    ), // text-amber-700
-                                                  ),
-                                                ),
-                                              ],
+                                            TextSpan(
+                                              text: "Next report available in",
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
-                                    )
-                                  : Container(
+
+                                      const SizedBox(height: 2), // mb-0.5
+
+                                      Text(
+                                        timeLeft, // e.g. "44s"
+                                        style: GoogleFonts.inter(
+                                          fontSize: 14, // text-sm
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(
+                                            0xFFB45309,
+                                          ), // text-amber-700
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        children: [
+                          buildStepContent(),
+                          _currentStep != 3
+                              ? Column(
+                                  children: [
+                                    const SizedBox(height: 20),
+                                    Container(
                                       padding: const EdgeInsets.all(12), // p-3
                                       decoration: BoxDecoration(
                                         color: const Color(
@@ -664,15 +827,11 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                                         ],
                                       ),
                                     ),
-
-                              const SizedBox(height: 20),
-                            ],
-                          )
-                        : SizedBox.shrink(),
-
-                    buildStepContent(),
-                  ],
-                ),
+                                  ],
+                                )
+                              : SizedBox.shrink(),
+                        ],
+                      ),
               ),
             ),
           ],
@@ -916,6 +1075,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                     style: GoogleFonts.inter(
                       color: Colors.blue[900],
                       fontSize: 14,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -1002,13 +1162,9 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
           const SizedBox(height: 10),
           Text(
             'Select district where you ate the food',
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              color: Color(0xFF374151),
-              fontWeight: FontWeight.w500,
-            ),
+            style: GoogleFonts.inter(fontSize: 14, color: Color(0xFF6B7280)),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           dropdownButton(
             initialSelection: selectedDistrict,
             hintText: 'Choose district...',
@@ -1035,19 +1191,59 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                 .map((b) => b['label'] as String)
                 .toList(),
             onSelected: (value) {
-              final match = exposureBarangayOptions.cast<Map<String, dynamic>>().where(
-                (b) => b['label'] == value,
-              );
+              final match = exposureBarangayOptions
+                  .cast<Map<String, dynamic>>()
+                  .where((b) => b['label'] == value);
               final selected = match.isNotEmpty ? match.first : null;
               setState(() {
                 selectedExposureBarangay = value;
-                selectedExposureBarangayNo =
-                    selected?['barangayNo'] as int?;
+                selectedExposureBarangayNo = selected?['barangayNo'] as int?;
               });
             },
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
         ],
+        const SizedBox(height: 10),
+        Text(
+          'Describe the location (optional)',
+          style: GoogleFonts.inter(fontSize: 14, color: Color(0xFF6B7280)),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _locationDescriptionController,
+          maxLines: 3,
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Colors.black87,
+          ),
+          decoration: InputDecoration(
+            hintText: 'e.g. near the market, beside the school...',
+            hintStyle: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey,
+            ),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
+            ),
+          ),
+        ),
 
         const SizedBox(height: 16),
 
@@ -1326,6 +1522,41 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                           ),
                         ],
                       ),
+
+                      if (_locationDescriptionController.text.trim().isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        const Divider(),
+                        const SizedBox(height: 16),
+
+                        Text(
+                          "LOCATION DESCRIPTION",
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: Colors.grey,
+                            letterSpacing: 1,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        Row(
+                          children:[
+                            Icon(
+                              LucideIcons.notebookPen,
+                              size: 16,
+                              color: Colors.purple.shade600,
+                            ),
+                            SizedBox(width: 6),
+                            Text(
+                              _locationDescriptionController.text.trim(),
+                              style: GoogleFonts.inter(
+                                fontWeight: FontWeight.w500,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ]
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -1566,7 +1797,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
             ),
             SizedBox(height: 8),
             Text(
-              'Thank you for helping the city monitor food-related illness signals.',
+              'Thank you for helping the city monitor food-related disease signals.',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(fontSize: 14, color: Colors.grey[600]),
             ),

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:foodsafe_manila/widgets/snackbar_widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_service.dart';
+import '../services/api_client.dart';
 import '../utils/philippine_mobile_number.dart';
 import '../widgets/app_loading.dart';
 import '../widgets/philippine_mobile_prefix.dart';
@@ -109,7 +110,7 @@ class _SignupScreenState extends State<SignupScreen> {
       SnackbarWidgets.success(context, "Verification code sent");
       return true;
     } catch (error) {
-      if (mounted) SnackbarWidgets.error(context, error.toString());
+      if (mounted) SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
       return false;
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -144,7 +145,7 @@ class _SignupScreenState extends State<SignupScreen> {
         Navigator.pop(context); // return to login
       }
     } catch (error) {
-      if (mounted) SnackbarWidgets.error(context, error.toString());
+      if (mounted) SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -168,7 +169,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
         setState(() => _currentStep = 1);
       } catch (error) {
-        if (mounted) SnackbarWidgets.error(context, error.toString());
+        if (mounted) SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
       } finally {
         if (mounted) setState(() => _loading = false);
       }
@@ -256,17 +257,6 @@ class _SignupScreenState extends State<SignupScreen> {
                         _stepProgressBar(),
                         const SizedBox(height: 20),
                         _buildStepContent(),
-                        const SizedBox(height: 20),
-                        Text(
-                          "By creating an account, you agree to our Terms of Service and Privacy Policy. "
-                          "Your data is protected under the Data Privacy Act of 2012.",
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: const Color(0xFF4B5563),
-                            height: 1.35,
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -346,9 +336,9 @@ class _SignupScreenState extends State<SignupScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle("Personal Information", "Tell us a bit about yourself"),
+        _sectionTitle("Create your account", "Fill up your personal information"),
         _LabeledField(
-          label: "Name *",
+          label: "Name",
           child: TextFormField(
             controller: _usernameCtrl,
             textInputAction: TextInputAction.next,
@@ -370,7 +360,7 @@ class _SignupScreenState extends State<SignupScreen> {
         const SizedBox(height: 14),
 
         _LabeledField(
-          label: "Phone Number *",
+          label: "Phone Number",
           child: TextFormField(
             controller: _phoneCtrl,
             keyboardType: TextInputType.number,
@@ -411,7 +401,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                   )
                 : Text(
-                    "Next",
+                    "Submit",
                     style: GoogleFonts.inter(fontWeight: FontWeight.w800),
                   ),
           ),
@@ -424,9 +414,9 @@ class _SignupScreenState extends State<SignupScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle("Account Security", "Set a password for your account"),
+        _sectionTitle("Set your password", 'Must be at least 8 characters with uppercase, lowercase, numbers, and symbols'),
         _LabeledField(
-          label: "Password *",
+          label: "Password",
           child: TextFormField(
             controller: _passCtrl,
             focusNode: _passFocus,
@@ -456,14 +446,10 @@ class _SignupScreenState extends State<SignupScreen> {
           ),
         ),
 
-        _helper(
-          'Must be at least 8 characters with uppercase, lowercase, numbers, and symbols',
-        ),
-
         const SizedBox(height: 14),
 
         _LabeledField(
-          label: "Confirm Password *",
+          label: "Confirm Password",
           child: TextFormField(
             controller: _confirmPassCtrl,
             focusNode: _confirmPassFocus,
@@ -536,7 +522,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                       )
                     : Text(
-                        "Next",
+                        "Confirm",
                         style: GoogleFonts.inter(fontWeight: FontWeight.w800),
                       ),
               ),

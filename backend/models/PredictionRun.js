@@ -169,6 +169,16 @@ predictionRunSchema.index(
   { name: "predictionRunsModelGranularityScopeGeneratedAt" },
 );
 
+// Coordinates active refreshes across application instances.
+predictionRunSchema.index(
+  { model: 1, granularity: 1, datasetScope: 1, status: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: "running" },
+    name: "predictionRunsActiveScopeUnique",
+  },
+);
+
 // Checking latest forecast basis
 predictionRunSchema.index({
   basisDatasetId: 1,

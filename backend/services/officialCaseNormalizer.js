@@ -23,13 +23,21 @@ export function parseNumber(v) {
 // Excel serial date to JS Date (UTC-ish). Works for modern Excel (1900 date system).
 export function parseExcelDate(v) {
   if (v === undefined || v === null || v === "") return null;
-  if (v instanceof Date && !Number.isNaN(v.getTime())) return v;
+  if (v instanceof Date && !Number.isNaN(v.getTime())) {
+    return new Date(Date.UTC(
+      v.getUTCFullYear(),
+      v.getUTCMonth(),
+      v.getUTCDate(),
+    ));
+  }
 
   // numeric Excel serial
   if (typeof v === "number" && Number.isFinite(v)) {
     const ms = Math.round((v - 25569) * 86400 * 1000);
     const d = new Date(ms);
-    return Number.isNaN(d.getTime()) ? null : d;
+    return Number.isNaN(d.getTime())
+      ? null
+      : new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
   }
 
   const text = String(v).trim();
@@ -47,8 +55,7 @@ export function parseExcelDate(v) {
     return exactDate;
   }
 
-  const d = new Date(text);
-  return Number.isNaN(d.getTime()) ? null : d;
+  return null;
 }
 
 export const getIsoWeekData = getDohMorbidityWeek;
@@ -207,12 +214,8 @@ export function normalizeTemplateRow(row = {}) {
     row.barangay ?? row.Barangay,
   );
   const disease = normalizeDisease(row.disease);
-  const dateOfOnset = parseExcelDate(row.date_of_onset ?? row.dateOfOnset);
-  const dateReportedInput = row.date_reported ?? row.dateReported;
-  const hasDateReported = dateReportedInput !== undefined
-    && dateReportedInput !== null
-    && String(dateReportedInput).trim() !== "";
-  const dateReported = hasDateReported ? parseExcelDate(dateReportedInput) : null;
+  const reportDateInput = row.report_date ?? row.reportDate;
+  const reportDate = parseExcelDate(reportDateInput);
   const cls = normalizeCaseClassification(
     row.case_classification ?? row.caseClassification,
   );
@@ -248,19 +251,11 @@ export function normalizeTemplateRow(row = {}) {
     };
   if (!disease)
     return { ok: false, field: "disease", message: "Disease is missing or unsupported." };
-  if (!dateOfOnset)
-    return { ok: false, field: "dateOfOnset", message: "Date of onset must be a valid Excel date or YYYY-MM-DD value." };
-  const year = dateOfOnset.getUTCFullYear();
+  if (!reportDate)
+    return { ok: false, field: "reportDate", message: "Report date must be a valid Excel date or YYYY-MM-DD value." };
+  const year = reportDate.getUTCFullYear();
   if (year < MIN_YEAR || year > MAX_YEAR)
-    return { ok: false, field: "dateOfOnset", message: `Date of onset year must be ${MIN_YEAR}–${MAX_YEAR}.` };
-  if (hasDateReported && !dateReported)
-    return { ok: false, field: "dateReported", message: "Date reported must be a valid Excel date or YYYY-MM-DD value." };
-  if (
-    dateReported
-    && (dateReported.getUTCFullYear() < MIN_YEAR || dateReported.getUTCFullYear() > MAX_YEAR)
-  ) {
-    return { ok: false, field: "dateReported", message: `Date reported year must be ${MIN_YEAR}–${MAX_YEAR}.` };
-  }
+    return { ok: false, field: "reportDate", message: `Report date year must be ${MIN_YEAR}–${MAX_YEAR}.` };
   if (!cls)
     return {
       ok: false,
@@ -274,7 +269,7 @@ export function normalizeTemplateRow(row = {}) {
       message: "Cases must be a positive whole number.",
     };
 
-  const weekData = getDohMorbidityWeek(dateOfOnset);
+  const weekData = getDohMorbidityWeek(reportDate);
 
   return {
     ok: true,
@@ -285,14 +280,13 @@ export function normalizeTemplateRow(row = {}) {
       barangayNo,
       disease,
       year,
-      month: dateOfOnset.getUTCMonth() + 1,
+      month: reportDate.getUTCMonth() + 1,
       epidemiologicalYear: weekData.epidemiologicalYear,
       epidemiologicalWeek: weekData.epidemiologicalWeek,
       weekStartDate: weekData.weekStartDate,
-      dateOfOnset,
-      dateReported,
-      surveillanceDate: dateOfOnset,
-      surveillanceDateBasis: "onset_date",
+      dateReported: reportDate,
+      surveillanceDate: reportDate,
+      surveillanceDateBasis: "report_date",
       caseClassification: cls,
       cases,
       source: "official",

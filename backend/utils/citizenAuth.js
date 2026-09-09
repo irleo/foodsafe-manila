@@ -26,11 +26,12 @@ export function sanitizeMobileUser(mobileUser) {
   };
 }
 
-export function signCitizenTokens(userId) {
+export function signCitizenTokens(userId, tokenVersion = 0) {
   const payload = {
     id: String(userId),
     role: "citizen",
     accountType: "citizen",
+    tokenVersion,
   };
 
   const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {

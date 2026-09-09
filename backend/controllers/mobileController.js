@@ -3,6 +3,7 @@ import { getDashboardSummary } from "../services/dashboardSummaryService.js";
 import { getAnalyticalCaseRows } from "../services/analyticalCaseService.js";
 import { calculateLatestSurveillanceThreshold } from "../services/surveillanceThresholdService.js";
 import { SURVEILLANCE_DISEASES } from "../constants/surveillanceMethodology.js";
+import { logRequestError } from "../utils/serverLogger.js";
 
 const riskSnapshotCache = createAsyncTtlCache({
   name: "mobile-risk-snapshot",
@@ -35,7 +36,6 @@ function riskCacheTtlMs() {
 async function aggregateOfficialByBarangay(since, barangayNo = null) {
   const rows = await getAnalyticalCaseRows({
     statuses: ["confirmed"],
-    includeReports: false,
   });
   const sinceKey = since
     ? since.getUTCFullYear() * 12 + since.getUTCMonth()
@@ -154,7 +154,7 @@ export const getMobileDashboard = async (req, res) => {
 
     return res.json(payload);
   } catch (error) {
-    console.error("Mobile dashboard error:", error);
+    logRequestError(error, req, "DASHBOARD_DATA_ERROR");
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -167,7 +167,7 @@ export const getMobileRiskHeatmap = async (req, res) => {
 
     return res.json({ success: true, months, areas, summary });
   } catch (error) {
-    console.error("Mobile risk heatmap error:", error);
+    logRequestError(error, req, "HEATMAP_SERVICE_ERROR");
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -188,7 +188,7 @@ export const getMobileNearbyRisk = async (req, res) => {
       barangayNo ? getNearbyAreaRisk(barangayNo, months) : Promise.resolve(null),
       getRiskSnapshot(months),
       getLatestSurveillanceThreshold().catch((error) => {
-        console.error("Mobile surveillance threshold error:", error);
+        logRequestError(error, req, "THRESHOLD_CALCULATION_ERROR");
         return null;
       }),
     ]);
@@ -219,7 +219,7 @@ export const getMobileNearbyRisk = async (req, res) => {
       message: thresholdMessage,
     });
   } catch (error) {
-    console.error("Mobile nearby risk error:", error);
+    logRequestError(error, req, "HEATMAP_SERVICE_ERROR");
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -227,48 +227,207 @@ export const getMobileNearbyRisk = async (req, res) => {
 // GET /api/official-cases/analytics
 export const getMobileOfficialAnalytics = async (req, res) => {
   try {
-    const selectedYear = req.query.year && req.query.year !== "all" ? Number(req.query.year) : undefined;
-    const selectedMonth = req.query.month && req.query.month !== "all" ? Number(req.query.month) : undefined;
+    const period = String(req.query.period || "total_cumulative");
+
+    const now = new Date();
+    let startDate = null;
+    let endDate = null;
+
+    if (period === "last_7_days" || period === "last_28_days") {
+      const days = period === "last_7_days" ? 7 : 28;
+
+      endDate = now;
+      startDate = new Date(
+        now.getTime() - days * 24 * 60 * 60 * 1000,
+      );
+    }
+
     const rows = await getAnalyticalCaseRows({
-      statuses: ["confirmed"],
-      includeReports: false,
+      statuses: [
+        "suspected",
+        "probable",
+        "confirmed",
+      ],
     });
-    const filtered = rows.filter((row) =>
-      (selectedYear === undefined || row.year === selectedYear) &&
-      (selectedMonth === undefined || row.month === selectedMonth),
-    );
-    const totalCases = filtered.reduce((sum, row) => sum + Number(row.cases || 0), 0);
-    const group = (items, keySelector) => {
-      const totals = new Map();
-      for (const item of items) {
-        const key = keySelector(item);
-        if (key === undefined || key === null || key === "") continue;
-        totals.set(key, (totals.get(key) || 0) + Number(item.cases || 0));
+
+    const filtered = rows.filter((row) => {
+      if (startDate && endDate) {
+        const rowDateValue = row.surveillanceDate || row.weekStartDate;
+        const rowDate = new Date(rowDateValue);
+
+        if (
+          Number.isNaN(rowDate.getTime()) ||
+          rowDate < startDate ||
+          rowDate >= endDate
+        ) {
+          return false;
+        }
       }
-      return [...totals.entries()].map(([_id, total]) => ({ _id, total }));
+
+      const district = req.query.district?.toString().trim();
+      const disease = req.query.disease?.toString().trim();
+
+      if (district && row.district !== district) return false;
+      if (disease && row.disease !== disease) return false;
+
+      return true;
+    });
+
+    const allRows = rows.filter((row) => {
+      const district = req.query.district?.toString().trim();
+      const disease = req.query.disease?.toString().trim();
+
+      if (district && row.district !== district) return false;
+      if (disease && row.disease !== disease) return false;
+
+      return true;
+    });
+
+    const validDates = allRows
+      .map((row) => ({
+        year: Number(row.year),
+        month: Number(row.month),
+      }))
+      .filter(
+        ({ year, month }) =>
+          Number.isInteger(year) && Number.isInteger(month) && month >= 1 && month <= 12,
+      );
+
+    const currentDate = new Date();
+    const currentYear = currentDate.getUTCFullYear();
+    const currentMonth = currentDate.getUTCMonth() + 1;
+
+    const previousDate = new Date(
+      Date.UTC(currentYear, currentMonth - 2, 1),
+    );
+
+    const currentMonthCases = allRows
+      .filter(
+        (row) =>
+          Number(row.year) === currentYear &&
+          Number(row.month) === currentMonth,
+      )
+      .reduce((sum, row) => sum + Number(row.cases || 0), 0);
+
+    const previousMonthCases = allRows
+      .filter(
+        (row) =>
+          Number(row.year) === previousDate.getUTCFullYear() &&
+          Number(row.month) === previousDate.getUTCMonth() + 1,
+      )
+      .reduce((sum, row) => sum + Number(row.cases || 0), 0);
+
+    const firstDate = validDates.sort(
+      (a, b) => a.year * 12 + a.month - (b.year * 12 + b.month),
+    )[0];
+
+    const lastDate = validDates.length
+      ? validDates[validDates.length - 1]
+      : null;
+
+    const groupTotals = (items, selector) => {
+      const totals = new Map();
+
+      for (const item of items) {
+        const key = selector(item);
+        if (!key) continue;
+
+        totals.set(
+          key,
+          (totals.get(key) || 0) + Number(item.cases || 0),
+        );
+      }
+
+      return [...totals.entries()]
+        .map(([name, cases]) => ({ name, cases }))
+        .sort((a, b) => b.cases - a.cases);
     };
-    const districtData = group(filtered, (row) => row.district).sort((a, b) => String(a._id).localeCompare(String(b._id)));
-    const diseaseDistribution = group(filtered, (row) => row.disease).sort((a, b) => b.total - a.total).slice(0, 7);
-    const topDistrict = [...districtData].sort((a, b) => b.total - a.total)[0]?._id || "N/A";
-    const topDisease = diseaseDistribution[0]?._id || "N/A";
-    const baseYear = selectedYear ?? new Date().getFullYear();
-    const currentYearTotal = rows.filter((row) => row.year === baseYear).reduce((sum, row) => sum + Number(row.cases || 0), 0);
-    const previousYearTotal = rows.filter((row) => row.year === baseYear - 1).reduce((sum, row) => sum + Number(row.cases || 0), 0);
-    const growth = previousYearTotal > 0 ? ((currentYearTotal - previousYearTotal) / previousYearTotal) * 100 : 0;
-    const trendData = group(filtered, (row) => selectedYear === undefined ? row.year : row.month).sort((a, b) => Number(a._id) - Number(b._id));
+
+    const overviewDistricts = groupTotals(allRows, (row) => row.district);
+    const overviewDiseases = groupTotals(allRows, (row) => row.disease);
+
+    const cumulativeCases = allRows.reduce(
+      (sum, row) => sum + Number(row.cases || 0),
+      0,
+    );
+
+    const monthlyChange =
+      previousMonthCases > 0
+        ? ((currentMonthCases - previousMonthCases) / previousMonthCases) * 100
+        : null;
+
+    const group = (items, selector) => {
+      const totals = new Map();
+
+      for (const item of items) {
+        const key = selector(item);
+        if (!key) continue;
+
+        totals.set(
+          key,
+          (totals.get(key) || 0) + Number(item.cases || 0),
+        );
+      }
+
+      return totals;
+    };
+
+    const districtTotals = group(filtered, (row) => row.district);
+    const diseaseTotals = group(filtered, (row) => row.disease);
+
+    const districts = [
+      "District 1",
+      "District 2",
+      "District 3",
+      "District 4",
+      "District 5",
+      "District 6",
+    ];
+
+    const districtData = districts.map((district) => ({
+      _id: district,
+      total: districtTotals.get(district) || 0,
+    }));
+
+    const diseaseDistribution = [...diseaseTotals.entries()]
+      .map(([_id, total]) => ({ _id, total }))
+      .sort((a, b) => b.total - a.total);
 
     return res.json({
-      totalCases,
-      topDistrict,
-      topDisease,
+      period,
+      totalCases: filtered.reduce(
+        (sum, row) => sum + Number(row.cases || 0),
+        0,
+      ),
       districtData,
       diseaseDistribution,
-      trendData,
-      growth: growth.toFixed(1),
-      caseDefinition: "Confirmed cases from authoritative CESU uploads only.",
+      overview: {
+        currentMonthCases,
+        previousMonthCases,
+        monthlyChange,
+        cumulativeCases,
+        coverageStart: firstDate
+          ? {
+              year: firstDate.year,
+              month: firstDate.month,
+            }
+          : null,
+        coverageEnd: lastDate
+          ? {
+              year: lastDate.year,
+              month: lastDate.month,
+            }
+          : null,
+        topDistrict: overviewDistricts[0] || null,
+        topDisease: overviewDiseases[0] || null,
+      },
     });
   } catch (error) {
-    console.error("Mobile official analytics error:", error);
-    return res.status(500).json({ message: "Server error" });
+    logRequestError(error, req, "ANALYTICS_SERVICE_ERROR");
+
+    return res.status(500).json({
+      code: "ANALYTICS_SERVICE_ERROR",
+      message: "Analytics data could not be loaded.",
+    });
   }
 };

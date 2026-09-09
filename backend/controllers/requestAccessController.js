@@ -1,6 +1,7 @@
 import User from "../models/WebUser.js";
 import bcrypt from "bcryptjs";
 import { validatePassword } from "../utils/passwordValidation.js";
+import { logRequestError } from "../utils/serverLogger.js";
 
 export const requestAccess = async (req, res) => {
   const { username, email, password, organization, position, requestedRole } = req.body;
@@ -45,7 +46,7 @@ export const requestAccess = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error requesting access:", error);
+    logRequestError(error, req, "ACCESS_REQUEST_ERROR");
     return res.status(500).json({ message: "Server error" });
   }
 };

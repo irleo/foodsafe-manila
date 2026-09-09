@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import Notification from "../models/Notification.js";
 import NotificationReadReceipt from "../models/NotificationReadReceipt.js";
 import { paginationMeta, parsePagination } from "../utils/pagination.js";
+import { logRequestError } from "../utils/serverLogger.js";
 
 function toNotification({
   id,
@@ -95,6 +96,7 @@ export const getNotifications = async (req, res) => {
       pagination: paginationMeta({ page, limit, total }),
     });
   } catch (error) {
+    logRequestError(error, req, "NOTIFICATION_SERVICE_ERROR");
     return res.status(500).json({ message: "Failed to fetch notifications." });
   }
 };
@@ -119,7 +121,7 @@ export const markNotificationRead = async (req, res) => {
     );
     return res.json({ success: true, id: String(notification._id), unread: false });
   } catch (error) {
-    console.error("Failed to mark notification as read:", error);
+    logRequestError(error, req, "NOTIFICATION_UPDATE_ERROR");
     return res.status(500).json({ message: "Failed to mark notification as read." });
   }
 };
@@ -138,7 +140,7 @@ export const markNotificationUnread = async (req, res) => {
     ]);
     return res.json({ success: true, id: String(notification._id), unread: true });
   } catch (error) {
-    console.error("Failed to mark notification as unread:", error);
+    logRequestError(error, req, "NOTIFICATION_UPDATE_ERROR");
     return res.status(500).json({ message: "Failed to mark notification as unread." });
   }
 };
@@ -171,7 +173,7 @@ export const markAllNotificationsRead = async (req, res) => {
     ]);
     return res.json({ success: true });
   } catch (error) {
-    console.error("Failed to mark all notifications as read:", error);
+    logRequestError(error, req, "NOTIFICATION_UPDATE_ERROR");
     return res.status(500).json({ message: "Failed to mark all notifications as read." });
   }
 };

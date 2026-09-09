@@ -15,7 +15,7 @@ const TEMPLATE_REQUIRED = [
   "district",
   "barangay",
   "disease",
-  "date_of_onset",
+  "report_date",
   "case_classification",
   "cases",
 ];
@@ -35,6 +35,14 @@ function hasAllHeaders(headers = [], required = []) {
   return required.every((r) => set.has(normalizeHeaderKey(r)));
 }
 
+function worksheetHeaders(sheet) {
+  const [headerRow = []] = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: "",
+  });
+  return Array.isArray(headerRow) ? headerRow : [];
+}
+
 export function detectOfficialCaseXlsxFormat(wb) {
   const sheetNames = wb?.SheetNames || [];
   if (!sheetNames.length)
@@ -42,9 +50,7 @@ export function detectOfficialCaseXlsxFormat(wb) {
 
   // Template: find any sheet containing all required template columns
   for (const sn of sheetNames) {
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: "" });
-    if (!rows.length) continue;
-    const headers = Object.keys(rows[0] || {});
+    const headers = worksheetHeaders(wb.Sheets[sn]);
     if (hasAllHeaders(headers, TEMPLATE_REQUIRED)) {
       return { ok: true, formatType: "processed_template", sheetName: sn };
     }
@@ -52,9 +58,7 @@ export function detectOfficialCaseXlsxFormat(wb) {
 
   // Raw: any sheet containing raw required columns
   for (const sn of sheetNames) {
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: "" });
-    if (!rows.length) continue;
-    const headers = Object.keys(rows[0] || {});
+    const headers = worksheetHeaders(wb.Sheets[sn]);
     if (hasAllHeaders(headers, RAW_REQUIRED)) {
       return { ok: true, formatType: "raw_health_office" };
     }
@@ -76,7 +80,7 @@ function validateRawWorkbook(wb) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: "" });
     if (!rows.length) continue;
     totalRows += rows.length;
-    const headers = Object.keys(rows[0] || {});
+    const headers = worksheetHeaders(wb.Sheets[sn]);
     if (!hasAllHeaders(headers, RAW_REQUIRED)) continue;
     validSheets += 1;
   }
@@ -99,9 +103,8 @@ function validateTemplateWorkbook(wb, preferredSheetName) {
     (preferredSheetName && wb.SheetNames.includes(preferredSheetName)
       ? preferredSheetName
       : wb.SheetNames.find((sn) => {
-          const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: "" });
-          const headers = Object.keys(rows[0] || {});
-          return rows.length && hasAllHeaders(headers, TEMPLATE_REQUIRED);
+          const headers = worksheetHeaders(wb.Sheets[sn]);
+          return hasAllHeaders(headers, TEMPLATE_REQUIRED);
         })) || null;
 
   if (!sheetName) {
@@ -141,6 +144,53 @@ function minMaxYearMonth(records) {
   if (!coverageStart || !coverageEnd)
     return { coverageStart: null, coverageEnd: null };
   return { coverageStart, coverageEnd };
+}
+
+function exactRecordBounds(records) {
+  const dates = records
+    .map((record) => {
+      const exact = record?.surveillanceDate || record?.weekStartDate;
+      if (exact) return new Date(exact);
+      if (Number.isInteger(record?.year) && Number.isInteger(record?.month)) {
+        return new Date(Date.UTC(record.year, record.month - 1, 1));
+      }
+      return null;
+    })
+    .filter((date) => date && !Number.isNaN(date.getTime()));
+  if (!dates.length) return { start: null, end: null };
+  return {
+    start: new Date(Math.min(...dates.map((date) => date.getTime()))),
+    end: new Date(Math.max(...dates.map((date) => date.getTime()))),
+  };
+}
+
+function validateDeclaredCoverage(records, coverageStart, coverageEnd) {
+  const start = coverageStart ? new Date(coverageStart) : null;
+  const end = coverageEnd ? new Date(coverageEnd) : null;
+  if (
+    !start
+    || !end
+    || Number.isNaN(start.getTime())
+    || Number.isNaN(end.getTime())
+    || start > end
+  ) {
+    return { ok: false, reason: "Valid declared coverage dates are required." };
+  }
+
+  const observed = exactRecordBounds(records);
+  if (observed.start && (observed.start < start || observed.end > end)) {
+    return {
+      ok: false,
+      reason: "The selected coverage dates must include every valid case date in the workbook.",
+      validationErrors: [{
+        sheet: null,
+        row: null,
+        field: "coverage",
+        message: `Valid workbook records span ${observed.start.toISOString().slice(0, 10)} through ${observed.end.toISOString().slice(0, 10)}.`,
+      }],
+    };
+  }
+  return { ok: true, coverageStart: start, coverageEnd: end };
 }
 
 export function districtCoverageFromRecords(records, suppliedCoverage = []) {
@@ -302,6 +352,8 @@ export async function importOfficialCasesXlsx({
   storageKey,
   fileSize = 0,
   districtCoverage = [],
+  declaredCoverageStart,
+  declaredCoverageEnd,
   beforePersist,
 } = {}) {
   if (!Buffer.isBuffer(fileBuffer)) throw new Error("fileBuffer is required");
@@ -318,7 +370,7 @@ export async function importOfficialCasesXlsx({
           sheet: null,
           row: null,
           field: "workbook",
-          message: error?.message || "Invalid Excel workbook.",
+          message: "Invalid Excel workbook.",
         },
       ],
     };
@@ -408,7 +460,21 @@ export async function importOfficialCasesXlsx({
       };
     }
 
-    const { coverageStart, coverageEnd } = minMaxYearMonth(normalized);
+    const declaredCoverage = validateDeclaredCoverage(
+      normalized,
+      declaredCoverageStart,
+      declaredCoverageEnd,
+    );
+    if (!declaredCoverage.ok) {
+      return {
+        success: false,
+        formatType,
+        reason: declaredCoverage.reason,
+        validationErrors: declaredCoverage.validationErrors || [],
+        validationErrorCount: invalidRowCount,
+      };
+    }
+    const { coverageStart, coverageEnd } = declaredCoverage;
     const resolvedDistrictCoverage = districtCoverageFromRecords(
       normalized,
       districtCoverage,
@@ -523,8 +589,7 @@ export async function importOfficialCasesXlsx({
         n.value.district,
         n.value.barangayNo,
         n.value.disease,
-        n.value.dateOfOnset?.toISOString?.() || "",
-        n.value.dateReported?.toISOString?.() || "",
+        n.value.surveillanceDate?.toISOString?.() || "",
         n.value.caseClassification,
         n.value.cases,
       ].join("|");
@@ -554,7 +619,21 @@ export async function importOfficialCasesXlsx({
       };
     }
 
-    const { coverageStart, coverageEnd } = minMaxYearMonth(normalized);
+    const declaredCoverage = validateDeclaredCoverage(
+      normalized,
+      declaredCoverageStart,
+      declaredCoverageEnd,
+    );
+    if (!declaredCoverage.ok) {
+      return {
+        success: false,
+        formatType,
+        reason: declaredCoverage.reason,
+        validationErrors: declaredCoverage.validationErrors || [],
+        validationErrorCount: invalidRowCount,
+      };
+    }
+    const { coverageStart, coverageEnd } = declaredCoverage;
     const resolvedDistrictCoverage = districtCoverageFromRecords(
       normalized,
       districtCoverage,

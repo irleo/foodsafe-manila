@@ -1,5 +1,6 @@
 import User from "../models/WebUser.js";
 import { logActivity } from "../utils/logActivity.js";
+import { logRequestError } from "../utils/serverLogger.js";
 
 const ASSIGNABLE_ROLES = new Set(["cesu", "surveillance_team"]);
 const GOVERNMENT_EMAIL_PATTERN = /^[^\s@]+@(?:[a-z0-9-]+\.)*gov\.ph$/i;
@@ -65,7 +66,7 @@ export const getUsers = async (req, res) => {
       currentPage: page,
     });
   } catch (error) {
-    console.error("Error fetching users:", error);
+    logRequestError(error, req, "USER_LIST_ERROR");
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -85,7 +86,7 @@ export const getUserStats = async (req, res) => {
 
     res.status(200).json({ pending, approved, rejected, suspended });
   } catch (error) {
-    console.error("Error fetching user stats:", error);
+    logRequestError(error, req, "USER_STATS_ERROR");
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -197,7 +198,7 @@ export const updateUserStatus = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error updating user status:", error);
+    logRequestError(error, req, "USER_STATUS_UPDATE_ERROR");
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -256,7 +257,7 @@ export const updateUserAccess = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error updating user access:", error);
+    logRequestError(error, req, "USER_ACCESS_UPDATE_ERROR");
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -273,7 +274,7 @@ export const deleteUser = async (req, res) => {
     await User.findByIdAndDelete(req.params.id);
     res.status(200).json({ message: "User deleted successfully" });
   } catch (error) {
-    console.error("Error deleting user:", error);
+    logRequestError(error, req, "USER_DELETE_ERROR");
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -287,7 +288,7 @@ export const getProfile = async (req, res) => {
     }
     res.status(200).json(user);
   } catch (error) {
-    console.error("Error fetching profile:", error);
+    logRequestError(error, req, "USER_PROFILE_ERROR");
     res.status(500).json({ message: "Server error" });
   }
 };

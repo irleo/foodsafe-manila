@@ -1,5 +1,6 @@
 import MobileUser from "../models/MobileUser.js";
 import { normalizePhone } from "../utils/citizenAuth.js";
+import { logRequestError } from "../utils/serverLogger.js";
 import {
   sendMobileOtp,
   verifyMobileOtp,
@@ -58,20 +59,18 @@ export const requestMobileOtp = async (req, res) => {
       error?.code === "SEMAPHORE_NOT_CONFIGURED" ||
       error?.code === "SEMAPHORE_INVALID_CONFIG"
     ) {
-      return res.status(503).json({ message: error.message });
+      logRequestError(error, req, "SMS_PROVIDER_CONFIGURATION_ERROR");
+      return res.status(503).json({ message: "Verification codes are temporarily unavailable." });
     }
 
     if (error?.code === "SEMAPHORE_AUTH_FAILED") {
+      logRequestError(error, req, "SMS_PROVIDER_AUTH_ERROR");
       return res.status(503).json({
-        message: "SMS provider authentication failed",
+        message: "Verification codes are temporarily unavailable.",
       });
     }
 
-    console.error("Mobile OTP send error:", {
-      code: error?.code,
-      status: error?.status,
-      message: error?.message,
-    });
+    logRequestError(error, req, "SMS_DELIVERY_ERROR");
     return res.status(502).json({ message: "Failed to send verification code" });
   }
 };
@@ -96,7 +95,7 @@ export const confirmMobileOtp = async (req, res) => {
       return res.status(400).json({ message: error.message });
     }
 
-    console.error("Mobile OTP verify error:", error);
+    logRequestError(error, req, "OTP_VERIFICATION_ERROR");
     return res.status(500).json({ message: "Failed to verify code" });
   }
 };

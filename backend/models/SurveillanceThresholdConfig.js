@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { SURVEILLANCE_DISEASES } from "../constants/surveillanceMethodology.js";
 
 const ExcludedPeriodSchema = new mongoose.Schema(
   {
@@ -8,7 +9,13 @@ const ExcludedPeriodSchema = new mongoose.Schema(
     endYear: { type: Number, required: true, min: 1900, max: 2200 },
     endWeek: { type: Number, min: 1, max: 53 },
     endMonth: { type: Number, min: 1, max: 12 },
-    disease: { type: String, default: null, trim: true, maxlength: 120 },
+    disease: {
+      type: String,
+      enum: [null, ...SURVEILLANCE_DISEASES],
+      default: null,
+      trim: true,
+      maxlength: 120,
+    },
     district: {
       type: String,
       enum: [null, "District 1", "District 2", "District 3", "District 4", "District 5", "District 6"],

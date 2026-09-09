@@ -11,10 +11,18 @@ import { paginationMeta, parsePagination } from "../utils/pagination.js";
 import { refreshDashboardSummaryAfterWrite } from "../services/dashboardSummaryService.js";
 import { listReportAudit, recordReportAudit } from "../services/reportAuditService.js";
 import { getDohMorbidityWeek } from "../utils/dohMorbidityWeek.js";
+import { logRequestError } from "../utils/serverLogger.js";
 import {
   normalizeSurveillanceDisease,
   validateProbableClassification,
 } from "../constants/surveillanceMethodology.js";
+import { getReportLogSummary } from "../services/reportAnalyticsService.js";
+import {
+  buildCitizenDuplicateQuery,
+  isWithinManilaBounds,
+  parseManilaReportDate,
+  validateReportedAt,
+} from "../utils/reportPolicy.js";
 
 const REPORT_LIST_FIELDS = [
   "_id",
@@ -24,6 +32,7 @@ const REPORT_LIST_FIELDS = [
   "location.barangay",
   "exposureDistrict",
   "exposureBarangay",
+  "exposureDescription",
   "symptoms",
   "caseCount",
   "foodSource",
@@ -82,12 +91,14 @@ function sameSet(a = [], b = []) {
 
 export const createReport = async (req, res) => {
   if (process.env.NODE_ENV !== "production") {
-    console.log("HIT createReport", req.method, req.originalUrl);
   }
 
   try {
     if (!req.user?.id) {
       return res.status(401).json({ message: "Authentication required." });
+    }
+    if (req.user.accountType !== "citizen" || req.user.role !== "citizen") {
+      return res.status(403).json({ message: "Citizen account required." });
     }
 
     const {
@@ -96,6 +107,7 @@ export const createReport = async (req, res) => {
       exposureDistrict, // reported at district A but suspect exposure at district B
       exposureBarangay,
       exposureBarangayNo,
+      exposureDescription,
       symptoms,
       caseCount,
       foodSource,
@@ -141,6 +153,12 @@ export const createReport = async (req, res) => {
         .json({ message: "Location coordinates must be valid numbers." });
     }
 
+    if (!isWithinManilaBounds(lat, lng)) {
+      return res.status(400).json({
+        message: "Location coordinates must be within the City of Manila.",
+      });
+    }
+
     // Validate optional exposureDistrict (food source district)
     let exposureDistrictKey = null;
     if (typeof exposureDistrict !== "undefined" && exposureDistrict !== null && exposureDistrict !== "") {
@@ -172,23 +190,18 @@ export const createReport = async (req, res) => {
     const normalizedCaseCount =
       typeof caseCount === "undefined" ? 1 : Number(caseCount);
 
-    if (!Number.isFinite(normalizedCaseCount) || normalizedCaseCount < 1) {
-      return res.status(400).json({ message: "caseCount must be a positive number." });
+    if (!Number.isInteger(normalizedCaseCount) || normalizedCaseCount < 1) {
+      return res.status(400).json({ message: "caseCount must be a positive integer." });
     }
 
     const clampedCaseCount = Math.min(normalizedCaseCount, 10);
 
-    const parsedReportedAt = reportedAt ? new Date(reportedAt) : new Date();
-    if (Number.isNaN(parsedReportedAt.getTime())) {
-      return res
-        .status(400)
-        .json({ message: "reportedAt must be a valid date if provided." });
-    }
-
     const now = new Date();
-    if (parsedReportedAt.getTime() > now.getTime() + 5 * 60 * 1000) {
-      return res.status(400).json({ message: "reportedAt cannot be in the future." });
+    const reportedAtValidation = validateReportedAt(reportedAt, now);
+    if (reportedAtValidation.error) {
+      return res.status(400).json({ message: reportedAtValidation.error });
     }
+    const parsedReportedAt = reportedAtValidation.reportedAt;
 
     // Rate limit per user (DB-based)
     const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -210,16 +223,12 @@ export const createReport = async (req, res) => {
 
     const dupSince = new Date(now.getTime() - DUPLICATE_WINDOW_HOURS * 60 * 60 * 1000);
 
-    const recentSimilar = await Report.findOne({
+    const recentSimilar = await Report.findOne(buildCitizenDuplicateQuery({
       reportedBy: req.user.id,
-      $or: [
-        { exposureDistrict: countingDistrictKey }, // if they used exposureDistrict before
-        { exposureDistrict: null, "location.district": countingDistrictKey }, // fallback
-      ],
-      reportedAt: { $gte: dupSince },
-      source: "citizen_app",
-    })
-      .sort({ reportedAt: -1 })
+      countingDistrictKey,
+      since: dupSince,
+    }))
+      .sort({ createdAt: -1 })
       .select("symptoms exposureDistrict location.district")
       .lean();
 
@@ -259,6 +268,9 @@ export const createReport = async (req, res) => {
       exposureBarangayNo:
         Number.isFinite(parsedExposureBarangayNo) && parsedExposureBarangayNo >= 1
           ? parsedExposureBarangayNo
+          : null,
+      exposureDescription: exposureDescription
+          ? String(exposureDescription).trim()
           : null,
       symptoms: normalizedSymptoms,
       caseCount: clampedCaseCount,
@@ -332,7 +344,7 @@ export const createReport = async (req, res) => {
 
     return res.status(201).json(report);
   } catch (error) {
-    console.error("Error creating report:", error);
+    logRequestError(error, req, "REPORT_CREATE_ERROR");
     return res.status(500).json({ message: "Failed to create report." });
   }
 };
@@ -350,14 +362,20 @@ export const getUserReports = async (req, res) => {
 
     const { page, limit, skip } = parsePagination(req.query);
     const query = { reportedBy: userId };
-    const [reports, total] = await Promise.all([
+    const [reports, total, confirmedReports] = await Promise.all([
       Report.find(query)
         .sort({ reportedAt: -1 })
         .skip(skip)
         .limit(limit)
         .select(REPORT_LIST_FIELDS)
         .lean(),
+
       Report.countDocuments(query),
+
+      Report.countDocuments({
+        ...query,
+        currentStatus: "confirmed",
+      }),
     ]);
 
     const formattedReports = reports.map((report) => {
@@ -385,10 +403,11 @@ export const getUserReports = async (req, res) => {
 
     return res.json({
       items: formattedReports,
+      confirmedReports,
       pagination: paginationMeta({ page, limit, total }),
     });
   } catch (error) {
-    console.error("Error fetching user reports:", error);
+    logRequestError(error, req, "REPORT_SERVICE_ERROR");
     return res.status(500).json({ message: "Failed to load reports" });
   }
 };
@@ -413,14 +432,13 @@ export const getLastUserReport = async (req, res) => {
       lastReportAt: latestReport ? latestReport.reportedAt : null,
     });
   } catch (error) {
-    console.error("Error fetching last report:", error);
+    logRequestError(error, req, "REPORT_SERVICE_ERROR");
     return res.status(500).json({ message: "Failed to load last report" });
   }
 };
 
 export const getReports = async (req, res) => {
   if (process.env.NODE_ENV !== "production") {
-    console.log("HIT getReports", req.method, req.originalUrl);
   }
 
   if (!["admin", "cesu", "surveillance_team"].includes(req.user?.role)) {
@@ -443,6 +461,7 @@ export const getReports = async (req, res) => {
       from,
       to,
       status,
+      queue,
       search,
       sortOrder = "desc",
     } = req.query;
@@ -461,15 +480,25 @@ export const getReports = async (req, res) => {
       "suspected",
       "probable",
       "confirmed",
-      "not_validated",
       "ruled_out",
     ]);
+    const queueStatuses = {
+      needs_review: ["reported", "suspected", "probable"],
+      resolved: ["confirmed", "ruled_out"],
+    };
+    if (queue && !queueStatuses[String(queue).trim().toLowerCase()]) {
+      return res.status(400).json({ message: "Invalid report queue." });
+    }
     if (status) {
       const normalizedStatus = String(status).trim().toLowerCase();
       if (!allowedStatuses.has(normalizedStatus)) {
         return res.status(400).json({ message: "Invalid report status." });
       }
       query.currentStatus = normalizedStatus;
+    } else if (queue) {
+      query.currentStatus = {
+        $in: queueStatuses[String(queue).trim().toLowerCase()],
+      };
     }
 
     if (!["asc", "desc"].includes(String(sortOrder).toLowerCase())) {
@@ -522,19 +551,19 @@ export const getReports = async (req, res) => {
       query.reportedAt = {};
 
       if (from) {
-        const fromDate = new Date(from);
-        if (Number.isNaN(fromDate.getTime())) {
+        const fromDate = parseManilaReportDate(from);
+        if (!fromDate) {
           return res.status(400).json({ message: "Invalid from date." });
         }
         query.reportedAt.$gte = fromDate;
       }
 
       if (to) {
-        const toDate = new Date(to);
-        if (Number.isNaN(toDate.getTime())) {
+        const toDate = parseManilaReportDate(to, { exclusiveEnd: true });
+        if (!toDate) {
           return res.status(400).json({ message: "Invalid to date." });
         }
-        query.reportedAt.$lte = toDate;
+        query.reportedAt.$lt = toDate;
       }
     }
 
@@ -544,9 +573,8 @@ export const getReports = async (req, res) => {
           { case: { $eq: ["$currentStatus", "reported"] }, then: 0 },
           { case: { $eq: ["$currentStatus", "suspected"] }, then: 1 },
           { case: { $eq: ["$currentStatus", "probable"] }, then: 2 },
-          { case: { $eq: ["$currentStatus", "not_validated"] }, then: 3 },
-          { case: { $eq: ["$currentStatus", "ruled_out"] }, then: 4 },
-          { case: { $eq: ["$currentStatus", "confirmed"] }, then: 5 },
+          { case: { $eq: ["$currentStatus", "ruled_out"] }, then: 3 },
+          { case: { $eq: ["$currentStatus", "confirmed"] }, then: 4 },
         ],
         default: 6,
       },
@@ -556,7 +584,7 @@ export const getReports = async (req, res) => {
       REPORT_LIST_FIELDS.split(" ").map((field) => [field, 1]),
     );
 
-    const [rawReports, total] = await Promise.all([
+    const [rawReports, total, summary] = await Promise.all([
       Report.aggregate([
         { $match: query },
         { $addFields: { _statusPriority: statusPriority } },
@@ -566,6 +594,7 @@ export const getReports = async (req, res) => {
         { $project: projection },
       ]),
       Report.countDocuments(query),
+      getReportLogSummary(),
     ]);
     const populatePaths = [
       { path: "investigation.personnelIds", select: "username" },
@@ -580,6 +609,10 @@ export const getReports = async (req, res) => {
 
     // Back-compat: ensure caseClassification exists for old docs
     return res.json({
+      sourceDefinition: {
+        includes: ["citizen_report"],
+        excludes: ["official_upload"],
+      },
       items: reports.map((obj) => {
         const restrictedWorkflow = canAccessPatientIdentity
           ? {}
@@ -627,9 +660,11 @@ export const getReports = async (req, res) => {
         };
       }),
       pagination: paginationMeta({ page, limit, total }),
+      summary,
       permissions: { canAccessPatientIdentity },
     });
   } catch (error) {
+    logRequestError(error, req, "REPORT_SERVICE_ERROR");
     return res.status(500).json({ message: "Failed to fetch reports." });
   }
 };
@@ -686,7 +721,7 @@ export const completeInvestigation = async (req, res) => {
       return res.status(400).json({ message: "Investigation personnel must be approved Data Managers or Surveillance Officers." });
     }
 
-    report.investigation = {
+    const investigation = {
       investigationId: new mongoose.Types.ObjectId(),
       investigationDate,
       personnelIds: validPersonnel.map((person) => person._id),
@@ -699,23 +734,40 @@ export const completeInvestigation = async (req, res) => {
       recordedBy: req.user.id,
       recordedAt: new Date(),
     };
-    report.investigationStatus = "completed";
-    report.disease = suspectedDisease;
-    await report.save();
+    const updatedReport = await Report.findOneAndUpdate(
+      {
+        _id: report._id,
+        currentStatus: "reported",
+        investigationStatus: "not_started",
+      },
+      {
+        $set: {
+          investigation,
+          investigationStatus: "completed",
+          disease: suspectedDisease,
+        },
+      },
+      { new: true, runValidators: true },
+    ).select(workflowStatusFields).lean();
+    if (!updatedReport) {
+      return res.status(409).json({
+        message: "This case has already been investigated or advanced by another request.",
+      });
+    }
     await recordReportAudit({
-      reportId: report._id,
+      reportId: updatedReport._id,
       actorId: req.user.id,
       action: "investigation_recorded",
-      previousStatus: report.currentStatus,
-      newStatus: report.currentStatus,
+      previousStatus: "reported",
+      newStatus: "reported",
       details: {
-        investigationId: String(report.investigation.investigationId),
+        investigationId: String(investigation.investigationId),
         suspectedDisease,
       },
     });
-    return res.json({ message: "Investigation completed.", report: await Report.findById(report._id).select(workflowStatusFields).lean() });
+    return res.json({ message: "Investigation completed.", report: updatedReport });
   } catch (error) {
-    console.error("Error completing investigation:", error);
+    logRequestError(error, req, "REPORT_INVESTIGATION_ERROR");
     return res.status(500).json({ message: "Failed to complete investigation." });
   }
 };
@@ -736,32 +788,47 @@ export const markReportSuspected = async (req, res) => {
       });
     }
 
-    const previousStatus = report.currentStatus;
-    report.caseClassification = "suspected";
-    report.currentStatus = "suspected";
-    report.disease = suspectedDisease;
-    report.suspectedDecision = {
-      outcome: "suspected",
-      markedBy: req.user.id,
-      markedAt: new Date(),
-      investigationId: report.investigation?.investigationId,
-      investigationFindings: report.investigation?.findings || "",
-      reason: undefined,
-      remarks: String(req.body?.remarks || "").trim(),
-    };
-    await report.save();
+    const updatedReport = await Report.findOneAndUpdate(
+      {
+        _id: report._id,
+        currentStatus: "reported",
+        investigationStatus: "completed",
+      },
+      {
+        $set: {
+          caseClassification: "suspected",
+          currentStatus: "suspected",
+          disease: suspectedDisease,
+          suspectedDecision: {
+            outcome: "suspected",
+            markedBy: req.user.id,
+            markedAt: new Date(),
+            investigationId: report.investigation?.investigationId,
+            investigationFindings: report.investigation?.findings || "",
+            reason: undefined,
+            remarks: String(req.body?.remarks || "").trim(),
+          },
+        },
+      },
+      { new: true, runValidators: true },
+    ).select(workflowStatusFields).lean();
+    if (!updatedReport) {
+      return res.status(409).json({
+        message: "This case was already advanced by another request.",
+      });
+    }
     await recordReportAudit({
-      reportId: report._id,
+      reportId: updatedReport._id,
       actorId: req.user.id,
       action: "marked_suspected",
-      previousStatus,
+      previousStatus: "reported",
       newStatus: "suspected",
       details: { investigationId: String(report.investigation?.investigationId || "") },
     });
     await refreshDashboardSummaryAfterWrite();
-    return res.json({ message: "Case marked as suspected.", report: await Report.findById(report._id).select(workflowStatusFields).lean() });
+    return res.json({ message: "Case marked as suspected.", report: updatedReport });
   } catch (error) {
-    console.error("Error marking case as suspected:", error);
+    logRequestError(error, req, "REPORT_STATUS_ERROR");
     return res.status(500).json({ message: "Failed to mark case as suspected." });
   }
 };
@@ -797,36 +864,51 @@ export const ruleOutReport = async (req, res) => {
       });
     }
 
-    const previousStatus = report.currentStatus;
-    report.caseClassification = "ruled_out";
-    report.currentStatus = "ruled_out";
-    report.suspectedDecision = {
-      outcome: "ruled_out",
-      markedBy: req.user.id,
-      markedAt: new Date(),
-      investigationId: report.investigation?.investigationId,
-      investigationFindings: report.investigation?.findings || "",
-      reason,
-      remarks,
-    };
-    report.isCounted = false;
-    report.excludeReason = reason;
-    await report.save();
+    const updatedReport = await Report.findOneAndUpdate(
+      {
+        _id: report._id,
+        currentStatus: "reported",
+        investigationStatus: "completed",
+      },
+      {
+        $set: {
+          caseClassification: "ruled_out",
+          currentStatus: "ruled_out",
+          suspectedDecision: {
+            outcome: "ruled_out",
+            markedBy: req.user.id,
+            markedAt: new Date(),
+            investigationId: report.investigation?.investigationId,
+            investigationFindings: report.investigation?.findings || "",
+            reason,
+            remarks,
+          },
+          isCounted: false,
+          excludeReason: reason,
+        },
+      },
+      { new: true, runValidators: true },
+    ).select(workflowStatusFields).lean();
+    if (!updatedReport) {
+      return res.status(409).json({
+        message: "This case was already advanced by another request.",
+      });
+    }
     await recordReportAudit({
-      reportId: report._id,
+      reportId: updatedReport._id,
       actorId: req.user.id,
       action: "report_ruled_out",
-      previousStatus,
+      previousStatus: "reported",
       newStatus: "ruled_out",
       details: { reason },
     });
     await refreshDashboardSummaryAfterWrite();
     return res.json({
       message: "Report ruled out.",
-      report: await Report.findById(report._id).select(workflowStatusFields).lean(),
+      report: updatedReport,
     });
   } catch (error) {
-    console.error("Error ruling out report:", error);
+    logRequestError(error, req, "REPORT_STATUS_ERROR");
     return res.status(500).json({ message: "Failed to rule out report." });
   }
 };
@@ -834,8 +916,8 @@ export const ruleOutReport = async (req, res) => {
 export const validateReport = async (req, res) => {
   try {
     const result = String(req.body?.result || "").trim();
-    if (!["probable", "confirmed", "not_validated"].includes(result)) {
-      return res.status(400).json({ message: "Classification result must be Probable, Confirmed, or Not Confirmed." });
+    if (!["probable", "confirmed"].includes(result)) {
+      return res.status(400).json({ message: "Classification result must be Probable or Confirmed." });
     }
     const supportingFindings = requireText(req.body?.supportingFindings, "Supporting findings");
     if (supportingFindings.error) return res.status(400).json({ message: supportingFindings.error });
@@ -846,6 +928,9 @@ export const validateReport = async (req, res) => {
     if (!report) return res.status(404).json({ message: "Report not found." });
     if (!["suspected", "probable"].includes(report.currentStatus)) {
       return res.status(409).json({ message: "Only a suspected or probable case can receive a classification outcome." });
+    }
+    if (report.currentStatus === result) {
+      return res.status(409).json({ message: "This classification has already been recorded." });
     }
     const disease = normalizeSurveillanceDisease(
       report.disease || report.investigation?.suspectedDisease,
@@ -862,11 +947,7 @@ export const validateReport = async (req, res) => {
     }
 
     const previousStatus = report.currentStatus;
-    report.caseClassification = result;
-    report.currentStatus = result;
-    report.validationStatus = result;
-    report.disease = disease;
-    report.validation = {
+    const validation = {
       validatedBy: req.user.id,
       validatedAt: new Date(),
       result,
@@ -875,18 +956,17 @@ export const validateReport = async (req, res) => {
       supportingFindings: supportingFindings.value,
       remarks: String(req.body?.remarks || "").trim(),
     };
-    report.classificationEvidence = {
+    const classificationEvidence = {
       evidenceType: result === "probable"
         ? evidenceType
-        : result === "confirmed"
-          ? "confirmatory_laboratory_result"
-          : "supporting_findings",
+        : "confirmatory_laboratory_result",
       details: String(
         req.body?.evidenceDetails || req.body?.laboratoryEvidence || supportingFindings.value,
       ).trim(),
       recordedBy: req.user.id,
       recordedAt: new Date(),
     };
+    let datasetId = report.datasetId || null;
     if (["probable", "confirmed"].includes(result) && !report.datasetId) {
       const reportedAt = new Date(report.reportedAt);
       const monthStart = new Date(
@@ -903,25 +983,42 @@ export const validateReport = async (req, res) => {
         .sort({ createdAt: -1 })
         .select("_id")
         .lean();
-      report.datasetId = matchingDataset?._id || null;
+      datasetId = matchingDataset?._id || null;
     }
-    await report.save();
+    const updatedReport = await Report.findOneAndUpdate(
+      { _id: report._id, currentStatus: previousStatus },
+      {
+        $set: {
+          caseClassification: result,
+          currentStatus: result,
+          validationStatus: result,
+          disease,
+          validation,
+          classificationEvidence,
+          datasetId,
+        },
+      },
+      { new: true, runValidators: true },
+    ).select(workflowStatusFields).lean();
+    if (!updatedReport) {
+      return res.status(409).json({
+        message: "This case was already classified by another request.",
+      });
+    }
     await recordReportAudit({
-      reportId: report._id,
+      reportId: updatedReport._id,
       actorId: req.user.id,
       action: result === "confirmed"
         ? "case_confirmed"
-        : result === "probable"
-          ? "case_marked_probable"
-          : "case_not_validated",
+        : "case_marked_probable",
       previousStatus,
       newStatus: result,
       details: { condition: disease, evidenceType: evidenceType || undefined },
     });
     await refreshDashboardSummaryAfterWrite();
-    return res.json({ message: "Case classification recorded.", report: await Report.findById(report._id).select(workflowStatusFields).lean() });
+    return res.json({ message: "Case classification recorded.", report: updatedReport });
   } catch (error) {
-    console.error("Error recording case confirmation:", error);
+    logRequestError(error, req, "REPORT_CONFIRMATION_ERROR");
     return res.status(500).json({ message: "Failed to record case confirmation." });
   }
 };
@@ -947,7 +1044,7 @@ export const getReportAudit = async (req, res) => {
       )),
     });
   } catch (error) {
-    console.error("Error loading report audit trail:", error);
+    logRequestError(error, req, "REPORT_AUDIT_ERROR");
     return res.status(500).json({ message: "Failed to load report audit trail." });
   }
 };

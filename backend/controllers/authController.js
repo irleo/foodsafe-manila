@@ -10,6 +10,8 @@ import {
 } from "../services/emailService.js";
 import { logActivity } from "../utils/logActivity.js";
 import { validatePassword } from "../utils/passwordValidation.js";
+import { logRequestError } from "../utils/serverLogger.js";
+import { isTokenVersionCurrent } from "../utils/tokenVersion.js";
 
 const RESET_OTP_TTL_MINUTES = 10;
 const RESET_OTP_LENGTH = 6;
@@ -31,10 +33,20 @@ function webSessionCookieOptions() {
   };
 }
 
-function generateOtp(length = RESET_OTP_LENGTH) {
-  const min = 10 ** (length - 1);
-  const max = 10 ** length - 1;
-  return String(Math.floor(min + Math.random() * (max - min + 1)));
+export function generateOtp(length = RESET_OTP_LENGTH) {
+  if (!Number.isInteger(length) || length < 1 || length > 9) {
+    throw new RangeError("OTP length must be an integer between 1 and 9.");
+  }
+  return String(crypto.randomInt(0, 10 ** length)).padStart(length, "0");
+}
+
+function webTokenPayload(user) {
+  return {
+    id: user._id.toString(),
+    role: user.role,
+    accountType: "web",
+    tokenVersion: user.tokenVersion || 0,
+  };
 }
 
 function hashOtp(otp) {
@@ -221,23 +233,13 @@ export const sendRequestAccessOtp = async (req, res) => {
         expiresMinutes: ACCESS_OTP_TTL_MINUTES,
       });
 
-      console.log("OTP email sent through Brevo to:", normalizedEmail);
     } catch (mailError) {
-      console.error("Brevo SMTP failed:", {
-        message: mailError.message,
-        code: mailError.code,
-        command: mailError.command,
-        response: mailError.response,
-        responseCode: mailError.responseCode,
-      });
+      logRequestError(mailError, req, "ACCESS_OTP_DELIVERY_ERROR");
 
       if (isProd) throw mailError;
 
       usedDevFallback = true;
-      console.warn(
-        "SMTP unavailable in development. Using access OTP fallback for:",
-        normalizedEmail,
-      );
+      console.warn("SMTP unavailable in development; using access OTP fallback.");
     }
 
     return res.json({
@@ -252,11 +254,7 @@ export const sendRequestAccessOtp = async (req, res) => {
         : {}),
     });
   } catch (error) {
-    console.error("Error sending access request OTP:", {
-      message: error.message,
-      code: error.code,
-      stack: error.stack,
-    });
+    logRequestError(error, req, "ACCESS_OTP_ERROR");
 
     return res
       .status(500)
@@ -394,7 +392,7 @@ export const requestAccess = async (req, res) => {
         message: "An account or access request with this email already exists.",
       });
     }
-    console.error("Error requesting access:", error);
+    logRequestError(error, req, "ACCESS_REQUEST_ERROR");
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -441,13 +439,13 @@ export const login = async (req, res) => {
     await user.save();
 
     const accessToken = jwt.sign(
-      { id: user._id.toString(), role: user.role },
+      webTokenPayload(user),
       process.env.ACCESS_TOKEN_SECRET,
       { expiresIn: "15m" },
     );
 
     const refreshToken = jwt.sign(
-      { id: user._id.toString(), role: user.role },
+      webTokenPayload(user),
       process.env.REFRESH_TOKEN_SECRET,
       { expiresIn: "7d" },
     );
@@ -476,7 +474,7 @@ export const login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error logging in:", error);
+    logRequestError(error, req, "LOGIN_ERROR");
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -497,6 +495,11 @@ export const refreshToken = async (req, res) => {
       return res.status(401).json({ message: "Invalid refresh token" });
     }
 
+    if (!isTokenVersionCurrent(decoded.tokenVersion, user.tokenVersion)) {
+      res.clearCookie(WEB_SESSION_COOKIE, webSessionCookieOptions());
+      return res.status(401).json({ message: "Session has been revoked" });
+    }
+
     // Block refresh if account access changes after the token was issued.
     if (user.status !== "approved") {
       res.clearCookie(WEB_SESSION_COOKIE, webSessionCookieOptions());
@@ -511,7 +514,7 @@ export const refreshToken = async (req, res) => {
     }
 
     const newAccessToken = jwt.sign(
-      { id: user._id.toString(), role: user.role },
+      webTokenPayload(user),
       process.env.ACCESS_TOKEN_SECRET,
       { expiresIn: "15m" },
     );
@@ -536,7 +539,7 @@ export const refreshToken = async (req, res) => {
       return res.status(401).json({ message: "Session expired" });
     }
 
-    console.error("Error refreshing token:", error);
+    logRequestError(error, req, "SESSION_REFRESH_ERROR");
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -550,7 +553,7 @@ export const logout = (req, res) => {
 
     return res.status(200).json({ message: "Logged out successfully" });
   } catch (error) {
-    console.error("Error logging out:", error);
+    logRequestError(error, req, "LOGOUT_ERROR");
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -610,10 +613,7 @@ export const forgotPassword = async (req, res) => {
     } catch (mailError) {
       if (isProd) throw mailError;
       usedDevFallback = true;
-      console.warn(
-        "SMTP unavailable in development. Using OTP fallback for:",
-        user.email,
-      );
+      console.warn("SMTP unavailable in development; using reset OTP fallback.");
     }
 
     return res.json({
@@ -628,7 +628,7 @@ export const forgotPassword = async (req, res) => {
         : {}),
     });
   } catch (error) {
-    console.error("Error sending password reset OTP:", error);
+    logRequestError(error, req, "PASSWORD_RESET_OTP_ERROR");
     return res.status(500).json({ message: "Failed to process request." });
   }
 };
@@ -671,7 +671,7 @@ export const verifyResetOtp = async (req, res) => {
 
     return res.json({ success: true, message: "OTP verified." });
   } catch (error) {
-    console.error("Error verifying reset OTP:", error);
+    logRequestError(error, req, "PASSWORD_RESET_VERIFY_ERROR");
     return res.status(500).json({ message: "Failed to verify OTP." });
   }
 };
@@ -696,7 +696,7 @@ export const completePasswordReset = async (req, res) => {
 
   try {
     const user = await User.findOne({ email }).select(
-      "_id username email password resetOtpHash resetOtpExpiresAt resetOtpAttempts",
+      "_id username email password tokenVersion resetOtpHash resetOtpExpiresAt resetOtpAttempts",
     );
     if (!user || !user.resetOtpHash || !user.resetOtpExpiresAt) {
       return res.status(400).json({ message: "Invalid or expired OTP." });
@@ -724,6 +724,7 @@ export const completePasswordReset = async (req, res) => {
     user.resetOtpExpiresAt = null;
     user.resetOtpRequestedAt = null;
     user.resetOtpAttempts = 0;
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save();
 
     const displayName = user.username || user.email || "A user";
@@ -744,7 +745,7 @@ export const completePasswordReset = async (req, res) => {
 
     return res.json({ success: true, message: "Password has been reset." });
   } catch (error) {
-    console.error("Error completing password reset:", error);
+    logRequestError(error, req, "PASSWORD_RESET_ERROR");
     return res.status(500).json({ message: "Failed to reset password." });
   }
 };

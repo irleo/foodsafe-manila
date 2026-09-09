@@ -1,5 +1,9 @@
 import express from "express";
-import { verifyToken, verifyRoles } from "../middleware/authMiddleware.js";
+import {
+  requireCitizenAccount,
+  verifyToken,
+  verifyRoles,
+} from "../middleware/authMiddleware.js";
 import {
   getReports,
   createReport,
@@ -20,7 +24,7 @@ const reportLogRoles = verifyRoles("admin", "cesu", "surveillance_team");
 
 router.get("/", verifyToken, reportLogRoles, getReports);
 router.get("/:id/audit", verifyToken, reportLogRoles, getReportAudit);
-router.post("/", verifyToken, createReport);
+router.post("/", verifyToken, requireCitizenAccount, createReport);
 router.post("/:id/investigation", verifyToken, reportLogRoles, completeInvestigation);
 router.post("/:id/mark-suspected", verifyToken, reportLogRoles, markReportSuspected);
 router.post("/:id/rule-out", verifyToken, reportLogRoles, ruleOutReport);

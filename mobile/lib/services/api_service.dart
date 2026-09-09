@@ -70,6 +70,28 @@ class ApiService {
     return data['expiresInSeconds'] as int? ?? 300;
   }
 
+  static Future<int> sendEmailOtp({
+    required String email,
+    required String purpose,
+  }) async {
+    final response = await ApiClient.post(
+      '/auth/email/otp/send',
+      body: {
+        'email': email,
+        'purpose': purpose,
+      },
+      auth: false,
+    );
+
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Failed to send verification code',
+    );
+
+    final data = ApiClient.decodeMap(response);
+    return data['expiresInSeconds'] as int? ?? 300;
+  }
+
   static Future<String> verifyMobileOtp({
     required String phone,
     required String purpose,
@@ -103,22 +125,96 @@ class ApiService {
     return data['exists'] as bool? ?? false;
   }
 
+  static Future<bool> checkEmailExists(String email) async {
+    final response = await ApiClient.get(
+      '/auth/user/email-exists',
+      query: {'email': email},
+      auth: false,
+    );
+
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Failed to check email address',
+    );
+
+    final data = ApiClient.decodeMap(response);
+    return data['exists'] as bool? ?? false;
+  }
+
+  static Future<String> verifyEmailOtp({
+    required String email,
+    required String purpose,
+    required String otp,
+  }) async {
+    final response = await ApiClient.post(
+      '/auth/email/otp/verify',
+      body: {
+        'email': email,
+        'purpose': purpose,
+        'otp': otp,
+      },
+      auth: false,
+    );
+
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Failed to verify code',
+    );
+
+    final data = ApiClient.decodeMap(response);
+    final token = data['verificationToken'] as String?;
+
+    if (token == null || token.isEmpty) {
+      throw ApiException(
+        response.statusCode,
+        'Verification token is missing',
+      );
+    }
+
+    return token;
+  }
+
+  static Future<void> cancelEmailOtp({
+    required String email,
+    required String purpose,
+  }) async {
+    final response = await ApiClient.post(
+      '/auth/email/otp/cancel',
+      body: {
+        'email': email,
+        'purpose': purpose,
+      },
+      auth: false,
+    );
+
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Failed to cancel verification code',
+    );
+  }
+
   static Future<bool> updatePassword({
-    required String phone,
+    String? phone,
+    String? email,
     required String newPassword,
     required String verificationToken,
   }) async {
     final response = await ApiClient.post(
       '/auth/reset-password',
       body: {
-        'phone': phone,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+        if (email != null && email.isNotEmpty) 'email': email,
         'newPassword': newPassword,
         'verificationToken': verificationToken,
       },
       auth: false,
     );
 
-    ApiClient.throwIfError(response, fallback: 'Failed to update password');
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Failed to update password',
+    );
+
     return response.statusCode == 200;
   }
 
@@ -147,6 +243,7 @@ class ApiService {
     required String? exposureDistrict,
     String? exposureBarangay,
     int? exposureBarangayNo,
+    String? exposureDescription,
     required Map<String, dynamic> location,
   }) async {
     final response = await ApiClient.post(
@@ -158,6 +255,7 @@ class ApiService {
         'exposureDistrict': exposureDistrict,
         'exposureBarangay': exposureBarangay,
         'exposureBarangayNo': exposureBarangayNo,
+        'exposureDescription': exposureDescription,
         'location': location,
       },
     );
@@ -204,14 +302,12 @@ class ApiService {
     String? year,
     String? month,
     String? caseClassification,
-    bool includeReports = true,
   }) async {
     final query = <String, String>{
       if (year != null && year != 'all') 'year': year,
       if (month != null && month != 'all') 'month': month,
       if (caseClassification != null && caseClassification != 'all')
         'caseClassification': caseClassification,
-      if (!includeReports) 'includeReports': 'false',
     };
 
     final response = await ApiClient.get(
@@ -220,6 +316,28 @@ class ApiService {
     );
 
     if (response.statusCode != 200) return null;
+    return ApiClient.decodeMap(response);
+  }
+
+  static Future<Map<String, dynamic>> getInsightsDistribution({
+    required String period,
+    String? district,
+    String? disease,
+  }) async {
+    final response = await ApiClient.get(
+      '/official-cases/analytics',
+      query: {
+        'period': period,
+        if (district != null && district.isNotEmpty) 'district': district,
+        if (disease != null && disease.isNotEmpty) 'disease': disease,
+      },
+    );
+
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Failed to load insights data',
+    );
+
     return ApiClient.decodeMap(response);
   }
 
@@ -296,9 +414,9 @@ class ApiService {
   /// Official case rows for a dataset (no classification filter = all types).
   static Future<List<Map<String, dynamic>>> fetchOfficialCasesByDataset(
     String datasetId, {
-    int limit = 50,
+    int limit = 5000,
   }) async {
-    final pageSize = limit.clamp(1, 50);
+    final pageSize = limit.clamp(1, 5000);
     final rows = <Map<String, dynamic>>[];
     var page = 1;
     var totalPages = 1;

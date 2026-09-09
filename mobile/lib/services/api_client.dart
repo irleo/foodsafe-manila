@@ -8,14 +8,34 @@ import 'session.dart';
 class ApiException implements Exception {
   final int statusCode;
   final String message;
+  final String? code;
+  final String? errorId;
 
-  ApiException(this.statusCode, this.message);
+  ApiException(this.statusCode, this.message, {this.code, this.errorId});
 
   @override
   String toString() => message;
 }
 
 class ApiClient {
+  static final RegExp _unsafeDetails = RegExp(
+    r'traceback|modulenotfounderror|mongodb|mongoose|bson|e11000|enoent|eacces|node_modules|prophet|cmdstan|pystan|pandas|numpy|openpyxl|multer|express|jsonwebtoken|bcrypt|aws-sdk|cloudflare|process\.env|node_env|mongo_uri|python_bin|\.m?js:\d+|\.py:\d+|\.dart:\d+|[a-z]:\\|file://|/(?:app|home|opt|srv|usr|workspace)/|\?[a-z0-9_.%\[\]-]+=|mongodb(?:\+srv)?://|access[_-]?token|refresh[_-]?token|secret|authorization|aws_|r2_',
+    caseSensitive: false,
+  );
+
+  static const Map<String, String> _safeCodeMessages = {
+    'INTERNAL_ERROR': 'The request could not be completed.',
+    'DASHBOARD_DATA_ERROR': 'Dashboard data could not be loaded.',
+    'DATASET_UPLOAD_ERROR': 'The file could not be processed.',
+    'DATASET_SERVICE_ERROR': 'The dataset request could not be completed.',
+    'REPORT_SERVICE_ERROR': 'Reports could not be loaded.',
+    'HEATMAP_SERVICE_ERROR': 'Heatmap data is currently unavailable.',
+    'ANALYTICS_SERVICE_ERROR': 'Analytics data could not be loaded.',
+    'PREDICTION_SERVICE_ERROR': 'Prediction data is currently unavailable.',
+    'AUTHENTICATION_ERROR': 'The authentication request could not be completed.',
+    'AUTHORIZATION_ERROR': 'You do not have access to this action.',
+  };
+
   static const Map<String, String> jsonHeaders = {
     'Content-Type': 'application/json',
   };
@@ -181,13 +201,45 @@ class ApiClient {
     if (response.statusCode >= 200 && response.statusCode < 300) return;
 
     String message = fallback ?? 'Request failed';
+    String? code;
+    String? errorId;
     try {
       final data = jsonDecode(response.body);
-      if (data is Map && data['message'] != null) {
-        message = data['message'].toString();
+      if (data is Map) {
+        code = data['code']?.toString();
+        errorId = data['errorId']?.toString();
+        final codedMessage = _safeCodeMessages[code];
+        final candidate = data['message']?.toString() ?? '';
+        if (codedMessage != null) {
+          message = codedMessage;
+        } else if (candidate.isNotEmpty &&
+            candidate.length <= 500 &&
+            !_unsafeDetails.hasMatch(candidate)) {
+          message = candidate;
+        }
       }
-    } catch (_) {}
+    } catch (_) {
+      message = fallback ?? 'Request failed';
+    }
 
-    throw ApiException(response.statusCode, message);
+    throw ApiException(
+      response.statusCode,
+      message,
+      code: code,
+      errorId: errorId,
+    );
+  }
+
+  static String safeErrorMessage(
+    Object error, {
+    String fallback = 'The request could not be completed.',
+  }) {
+    if (error is! ApiException) return fallback;
+    final message = error.message.isNotEmpty &&
+            error.message.length <= 500 &&
+            !_unsafeDetails.hasMatch(error.message)
+        ? error.message
+        : fallback;
+    return error.errorId == null ? message : '$message Reference: ${error.errorId}';
   }
 }

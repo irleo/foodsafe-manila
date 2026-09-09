@@ -4,6 +4,12 @@ import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCRIPT = join(__dirname, "forecast_monthly.py");
+const DEFAULT_PROCESS_TIMEOUT_MS = 120_000;
+
+function positiveInteger(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 function pythonBinary() {
   if (process.env.PYTHON_BIN) return process.env.PYTHON_BIN;
@@ -12,27 +18,70 @@ function pythonBinary() {
 
 /**
  * @param {{ year:number, month:number, y:number }[]} series
- * @param {{ horizonMonths:number, backtestMonths?:number }} opts
+ * @param {{ horizonMonths:number, backtestMonths?:number, signal?:AbortSignal }} opts
  */
 export function runProphetMonthlyForecast(
   series,
-  { horizonMonths = 1, backtestMonths = 19 } = {},
+  { horizonMonths = 1, backtestMonths = 19, signal } = {},
 ) {
   const py = pythonBinary();
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new Error("Prediction refresh was cancelled."),
+      );
+      return;
+    }
+
     const child = spawn(py, [SCRIPT], { stdio: ["pipe", "pipe", "pipe"] });
+    const timeoutMs = positiveInteger(
+      process.env.PROPHET_PROCESS_TIMEOUT_MS,
+      DEFAULT_PROCESS_TIMEOUT_MS,
+    );
     let stdout = "";
     let stderr = "";
+    let settled = false;
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      signal?.removeEventListener("abort", handleAbort);
+    };
+    const rejectOnce = (error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+    const handleAbort = () => {
+      child.kill("SIGKILL");
+      rejectOnce(
+        signal?.reason instanceof Error
+          ? signal.reason
+          : new Error("Prediction refresh was cancelled."),
+      );
+    };
+    const timeout = setTimeout(() => {
+      child.kill("SIGKILL");
+      rejectOnce(
+        new Error(`Monthly Prophet exceeded its ${timeoutMs} ms process timeout.`),
+      );
+    }, timeoutMs);
+    timeout.unref?.();
+    signal?.addEventListener("abort", handleAbort, { once: true });
+
     child.stdout.on("data", (d) => (stdout += d.toString()));
     child.stderr.on("data", (d) => (stderr += d.toString()));
     child.on("error", (err) => {
-      reject(
+      rejectOnce(
         new Error(
           `Failed to start Python (${py}). Set PYTHON_BIN or install Python. ${err.message}`
         )
       );
     });
     child.on("close", (code) => {
+      if (settled) return;
       const text = (stdout || "").trim();
       let parsed;
       try {
@@ -46,7 +95,7 @@ export function runProphetMonthlyForecast(
         try {
           parsed = candidate ? JSON.parse(candidate) : null;
         } catch {
-          reject(
+          rejectOnce(
             new Error(
               `Monthly Prophet returned non-JSON. stderr: ${stderr || "(empty)"}`
             )
@@ -55,7 +104,7 @@ export function runProphetMonthlyForecast(
         }
       }
       if (parsed && parsed.ok === false) {
-        reject(
+        rejectOnce(
           new Error(
             parsed.error === "prophet_import_failed"
               ? "Prophet is not installed. Run: pip install -r backend/services/prophet/requirements.txt"
@@ -65,9 +114,11 @@ export function runProphetMonthlyForecast(
         return;
       }
       if (!parsed || !parsed.ok) {
-        reject(new Error(stderr || `Prophet exited with code ${code}`));
+        rejectOnce(new Error(stderr || `Prophet exited with code ${code}`));
         return;
       }
+      settled = true;
+      cleanup();
       resolve(parsed);
     });
 

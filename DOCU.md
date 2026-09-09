@@ -4,11 +4,11 @@ Updated on: 2026-08-31
 
 ## Overall Project Purpose
 
-FoodSafe Manila is a foodborne illness monitoring platform for Manila. It combines:
+FoodSafe Manila is a foodborne disease monitoring platform for Manila. It combines:
 
 - A web admin dashboard for health officials and analysts.
 - A backend API that stores official case data, citizen reports, analytics, heatmap data, notifications, users, and prediction runs.
-- A Flutter mobile app for citizens to register, submit suspected foodborne illness reports, view alerts, inspect nearby risk, and see analytics.
+- A Flutter mobile app for citizens to register, submit suspected foodborne disease reports, view alerts, inspect nearby risk, and see analytics.
 
 The backend is the source of truth. Both the React frontend and Flutter app call the same Express/MongoDB API on port 5000.
 
@@ -85,7 +85,7 @@ The backend is the source of truth. Both the React frontend and Flutter app call
 ### Official Dataset Uploads
 
 - XLSX upload flow for raw health-office workbooks and the simplified processed template.
-- The processed sheet accepts `district`, `barangay`, `disease`, `date_of_onset`, `case_classification`, `cases`, and optional `date_reported`; city, calendar fields, DOH morbidity year/week, Sunday week start, and source are derived server-side from onset.
+- The processed sheet accepts `district`, `barangay`, `disease`, `report_date`, `case_classification`, and `cases`; city, calendar fields, DOH morbidity year/week, Sunday week start, and source are derived server-side from the CESU report date.
 - Strict supported-disease, district/barangay, date, positive-whole-number, exact-row duplicate, and file-hash duplicate validation.
 - Private Cloudflare R2 storage for `templates/FoodSafe_Template.xlsx` and validated originals under `datasets/<dataset-id>/`; MongoDB stores object metadata and normalized records.
 - Authenticated template and original-dataset streaming downloads with client-side failure toasts.
@@ -130,14 +130,22 @@ The backend is the source of truth. Both the React frontend and Flutter app call
 - The Whole-Manila point forecast is coherent and bottom-up: it is the sum of all six district Prophet point forecasts. Whole-Manila output is unavailable unless all six districts have valid Prophet target forecasts.
 - Whole-Manila district bounds are never added. When at least 19 common rolling-origin aggregate errors are available, the 95% interval uses the corrected empirical 95th percentile of absolute errors from the same bottom-up Prophet pipeline: `max(0, pointForecast - radius)` to `pointForecast + radius`. Otherwise, the interval is explicitly stored and displayed as not calculated.
 - Prediction runs use schema version 9 and are stored in MongoDB with model, granularity, dataset scope, basis period, forecast target period, trigger, status, payload methodology, calibration status, and coverage metadata.
-- Manual admin refresh endpoint.
-- Automatic refresh after official upload.
+- Successful official uploads create one durable `running` prediction record and
+  automatically generate the forecast for that dataset.
+- The manual admin refresh endpoint reuses an active upload job or the current
+  saved forecast. It computes only when the latest validated dataset has no
+  successful prediction, allowing recovery from a failed upload-triggered run
+  without recomputing an unchanged dataset.
 - Prediction retrieval endpoint with optional district filtering.
 - Backtest and forecast payloads exposed to the frontend.
 - Prediction generated notifications.
-- A process-wide forecast queue that coalesces duplicate jobs and allows only one forecast refresh at a time.
+- A database-enforced partial unique index permits only one `running` forecast
+  per dataset scope across Render instances; the process-wide queue serializes
+  Python execution inside an instance.
 - Sequential district Prophet execution so the backend runs no more than one Python forecast child process at a time.
-- Forecast queue-wait and execution-duration logging for Render monitoring.
+- Durable job IDs, bounded request/process/overall timeouts, and forecast
+  queue-wait and execution-duration logging support client polling and Render
+  monitoring without indefinitely pending loading toasts.
 
 ### Notifications and Activity
 
@@ -146,6 +154,24 @@ The backend is the source of truth. Both the React frontend and Flutter app call
 - Mark all notifications read.
 - Notification creation service used by access requests, reports, dataset uploads, prediction runs, and password resets.
 - Activity log creation for important backend events and dashboard recent-activity display.
+
+### Error Handling and Information Disclosure
+
+- Every request receives an `ERR-XXXXXXXX` identifier through the
+  `X-Request-ID` header; unexpected HTTP errors return the same identifier.
+- Error responses use a standardized `success`, `code`, and `message` envelope.
+  Server failures are mapped to safe module-specific messages while expected
+  validation and authentication feedback remains actionable.
+- Structured server logs retain stack traces, request method, route, error code,
+  and authenticated user ID. Credentials, bearer tokens, JWTs, and MongoDB URI
+  credentials are redacted; request bodies and query values are not logged.
+- Upload validation details are allowlisted and sanitized. Historical dataset
+  and prediction error strings are sanitized before being returned.
+- React render failures use a global recovery boundary. Web toasts/error states
+  and Flutter snackbars pass exception text through shared disclosure filters.
+- Leakage checks cover dashboard/mobile, datasets, reports, heatmap, analytics,
+  predictions, users, authentication, safe validation feedback, and historical
+  Prophet payloads.
 
 ### React Admin Frontend
 
@@ -333,7 +359,7 @@ Missing or unclear:
 
 - `README.md` contains mojibake characters around dashes, likely from encoding conversion.
 - The web `AuthContext` calls `axios.get("/api/auth/refresh")`, relying on a dev proxy or same-origin deployment, while many other frontend files use `VITE_API_BASE_URL` or `http://localhost:5000`. This should be standardized.
-- `frontend/src/pages/LoginPage.jsx` displays sample admin/user credentials in the UI.
+- `frontend/src/modules/authentication/LoginPage.jsx` displays sample admin/user credentials in the UI.
 - `mobile/lib/config/api_config.dart` contains a concrete local IP address (`192.168.1.8`), which is environment-specific.
 - `MAX_REPORTS_PER_24H` in `backend/controllers/reportController.js` is set to `Infinity`, so the DB-backed daily report rate limit is effectively disabled.
 - Several development logs remain in backend/frontend code, including auth refresh and report-route logging.
@@ -407,7 +433,7 @@ Missing or unclear:
 - `backend/models/Notification.js`: Notification schema.
 - `backend/models/OfficialCase.js`: Monthly official case schema with district, barangay, disease, classification, and cases.
 - `backend/models/PredictionRun.js`: Stored monthly Prophet run containing operational forecasts, Seasonal Naïve benchmark metrics, rolling-origin errors, prediction intervals, and aggregate calibration metadata.
-- `backend/models/Report.js`: Citizen suspected illness report schema.
+- `backend/models/Report.js`: Citizen suspected disease report schema.
 - `backend/models/WebUser.js`: Web/admin account schema stored in `webUsers`.
 
 ### Backend SMS and OTP Services
@@ -436,7 +462,7 @@ Missing or unclear:
 - `backend/services/emailService.js`: SMTP email sending for OTP flows.
 - `backend/services/notificationService.js`: Notification creation helpers.
 - `backend/services/officialCaseImportService.js`: Official XLSX detection, validation, import, aggregation, and dataset persistence.
-- `backend/services/officialCaseNormalizer.js`: Raw/template normalization, including onset-based calendar and morbidity derivation.
+- `backend/services/officialCaseNormalizer.js`: Raw/template normalization, including report-date-based calendar and morbidity derivation.
 - `backend/services/r2StorageService.js`: Private R2 object upload, download, and orphan cleanup.
 - `backend/services/statisticsCaseBuilders.js`: Analytics/statistics builders from official cases.
 - `backend/services/validateDatasetFile.js`: Generic dataset file validation helper.
@@ -459,7 +485,6 @@ Missing or unclear:
 - `frontend/README.md`: Default Vite/React readme.
 - `frontend/src/main.jsx`: React entry point.
 - `frontend/src/App.jsx`: App shell with router and toast provider.
-- `frontend/src/App.css`: App-level styles.
 - `frontend/src/index.css`: Global/Tailwind styles.
 - `frontend/src/context/AuthContext.jsx`: Web auth state and refresh-on-load logic.
 - `frontend/src/routes/AppRoutes.jsx`: Public/protected/admin route definitions.
@@ -467,60 +492,36 @@ Missing or unclear:
 - `frontend/src/routes/PublicRoute.jsx`: Redirects authenticated users away from public-only pages.
 - `frontend/src/layouts/DashboardLayout.jsx`: Shared dashboard layout.
 
-### Frontend Pages
+### Frontend Modules
 
-- `frontend/src/pages/AnalyticsPage.jsx`: Dataset analytics dashboard.
-- `frontend/src/pages/DashboardPage.jsx`: Main web dashboard.
-- `frontend/src/pages/DataPage.jsx`: Dataset and report-log tab container.
-- `frontend/src/pages/ForgotPasswordPage.jsx`: Web forgot-password OTP request flow.
-- `frontend/src/pages/HeatmapPage.jsx`: Heatmap dashboard.
-- `frontend/src/pages/LoginPage.jsx`: Web login screen.
-- `frontend/src/pages/PredictionsPage.jsx`: Prophet-only operational forecast dashboard with Seasonal Naïve benchmark evaluation, coherent Whole-Manila totals, calibrated aggregate intervals, and comparison refresh.
-- `frontend/src/pages/RequestAccessPage.jsx`: Web access-request and OTP flow.
-- `frontend/src/pages/ResetPasswordPage.jsx`: Web password reset completion.
-- `frontend/src/pages/UserManagementPage.jsx`: Admin user approval/rejection/deletion page.
-- `frontend/src/pages/WelcomePage.jsx`: Public welcome screen.
+- `frontend/src/modules/analytics/`: Analytics page, chart/stat components, and analytics-specific builders.
+- `frontend/src/modules/authentication/`: Welcome, login, access-request, forgot/reset-password pages, the authentication layout, and password validation.
+- `frontend/src/modules/dashboard/`: Dashboard page, dashboard-only charts/activity UI, and dashboard builders.
+- `frontend/src/modules/data-upload/`: Dataset upload page, upload/list components, dataset hook, and local formatting/delay helpers.
+- `frontend/src/modules/heatmap/`: Heatmap page, map/summary components, hooks, API service, builders, district constants, and GeoJSON data.
+- `frontend/src/modules/predictions/`: Prophet operational forecast page, evaluation and forecast chart components, and prediction view-model helpers.
+- `frontend/src/modules/report-logs/`: Citizen report-log page, workflow/audit/list components, and report loading hook.
+- `frontend/src/modules/settings/`: Surveillance threshold settings page.
+- `frontend/src/modules/user-management/`: Admin user-management page and authenticated Axios hook.
 
-### Frontend API, Hooks, Components, and Utilities
+### Frontend Shared API, Hooks, Components, and Utilities
 
-- `frontend/src/api/datasets.js`: Dataset API functions.
-- `frontend/src/api/heatmap.js`: Heatmap API functions.
-- `frontend/src/api/predictions.js`: Prediction API functions.
-- `frontend/src/hooks/useAxiosPrivate.js`: Authenticated Axios helper hook.
-- `frontend/src/hooks/useDatasets.js`: Dataset fetching hook.
-- `frontend/src/hooks/useHeatmapPoints.js`: Heatmap fetching hook.
-- `frontend/src/hooks/useLatestDatasetId.js`: Latest validated dataset helper hook.
-- `frontend/src/hooks/useOfficialCases.js`: Official case loading hook.
-- `frontend/src/hooks/useReports.js`: Report loading hook.
-- `frontend/src/components/Navbar.jsx`: Top navigation and notifications access.
-- `frontend/src/components/NotificationsDropdown.jsx`: Notification list and read/unread UI.
-- `frontend/src/components/Sidebar.jsx`: Dashboard sidebar navigation.
-- `frontend/src/components/Spinner.jsx`: Loading spinner.
-- `frontend/src/components/analytics/AnalyticsGrid.jsx`: Analytics chart grid.
-- `frontend/src/components/analytics/AnalyticsStats.jsx`: Analytics stat cards.
-- `frontend/src/components/charts/*`: Recharts-based visualizations for districts, diseases, trends, risk, prediction errors, and actual-vs-predicted lines.
-- `frontend/src/components/dashboard/RecentActivityCard.jsx`: Recent activity display.
-- `frontend/src/components/data/OfficialDatasetsTab.jsx`: Dataset upload/list UI tab.
-- `frontend/src/components/data/ReportLogsTab.jsx`: Citizen report logs UI tab.
-- `frontend/src/components/datasets/UploadDropzone.jsx`: Dataset upload control.
-- `frontend/src/components/datasets/RecentDatasetsList.jsx`: Recent dataset list.
-- `frontend/src/components/heatmap/*`: Heatmap controls, map, legend, top districts, top disease, and stats row.
-- `frontend/src/components/reports/ReportsLogList.jsx`: Report list renderer.
-- `frontend/src/components/tables/DistrictStatisticsTable.jsx`: District statistics table.
-- `frontend/src/constants/chartColors.js`: Chart and severity color constants.
-- `frontend/src/constants/manilaDistrictCoords.js`: Manila district coordinate constants.
-- `frontend/src/utils/*`: Frontend builders and helpers for analytics, cases, dashboard cards, date formatting, delay, heatmap, normalization, passwords, prediction chart rows, statistics, toasts, and aggregations.
+- `frontend/src/api/datasets.js`: Dataset API functions shared by dataset selection and upload flows.
+- `frontend/src/api/predictions.js`: Prediction API functions shared by Predictions and Heatmap.
+- `frontend/src/api/thresholds.js`: Threshold API functions shared by Dashboard, Analytics, and Settings.
+- `frontend/src/hooks/useLatestDatasetId.js`: Latest validated dataset helper hook shared across data-driven modules.
+- `frontend/src/hooks/useOfficialCases.js`: Official case loading hook shared by Dashboard and Analytics.
+- `frontend/src/components/common/`: Shared loading, error-boundary, error-state, and data-coverage UI.
+- `frontend/src/components/navigation/`: Top navigation, notification dropdown, sidebar, and settings shortcut.
+- `frontend/src/constants/`: Cross-module chart colors and surveillance methodology constants.
+- `frontend/src/utils/`: Cross-module error, status, threshold, coverage, and toast helpers.
 
 ### Frontend Data and Assets
 
-- `frontend/src/data/districtStatistics.js`: Static district statistics data.
-- `frontend/src/data/manila-barangays-with-legislative-districts.json`: Barangay GeoJSON/features with legislative districts.
-- `frontend/src/data/manila-legislative-districts.json`: District geometry data.
-- `frontend/src/data/mockOfficialCases.js`: Mock official case fixture data.
-- `frontend/src/data/mockReports.js`: Mock report fixture data.
-- The official template is not bundled with the frontend; the authenticated backend streams `templates/FoodSafe_Template.xlsx` from private R2.
-- `frontend/public/vite.svg`: Default Vite asset.
-- `frontend/src/assets/react.svg`: Default React asset.
+- `frontend/src/modules/heatmap/data/manila-barangays-with-legislative-districts.json`: Barangay GeoJSON/features with legislative districts, colocated with Heatmap.
+- `frontend/src/assets/foodsafe_logo_nav.png`: FoodSafe navigation and authentication logo.
+- The official template is not bundled with the frontend; the authenticated backend streams it from private R2.
+- `frontend/public/vite.svg`: Current browser icon asset.
 
 ### Mobile App Source
 
