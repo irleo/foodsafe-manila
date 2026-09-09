@@ -483,7 +483,9 @@ function pooledEvaluation(districts) {
 }
 function fingerprint(value) { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
 
-async function refreshMonthlyDistrictPredictionsImpl({ trigger = "manual", datasetId, horizonMonths = 1, force = true, predictionRunId, signal } = {}) {
+async function refreshMonthlyDistrictPredictionsImpl({ trigger = "manual", datasetId, horizonMonths = 1, force = true, predictionRunId, signal, dryRun = false } = {}) {
+  if (typeof dryRun !== "boolean") throw new TypeError("dryRun must be a boolean.");
+  if (dryRun && predictionRunId) throw new Error("Dry runs cannot claim a prediction job.");
   throwIfAborted(signal);
   const dataset = datasetId
     ? await Dataset.findById(datasetId).select("_id status districtCoverage filePath formatType providerType providerName").lean()
@@ -496,7 +498,7 @@ async function refreshMonthlyDistrictPredictionsImpl({ trigger = "manual", datas
   if ([...coverages.values()].some((coverage) => !coverage)) throw new Error("Verified complete coverage is required for all six districts before forecasting.");
   const commonEnd = new Date(Math.min(...[...coverages.values()].map((intervals) => intervals.at(-1).end.getTime())));
   const datasetScope = new mongoose.Types.ObjectId(dataset._id);
-  if (!force) {
+  if (!force && !dryRun) {
     const saved = await PredictionRun.findOne({
       model: "prophet",
       granularity: GRANULARITY,
@@ -579,7 +581,7 @@ async function refreshMonthlyDistrictPredictionsImpl({ trigger = "manual", datas
   const basis = diseaseOutputs[0]?.districts?.[0]?.historicalSeries?.at(-1) || null;
   const target = basis ? addMonths(basis.year, basis.month, 1) : null;
   const existing = await PredictionRun.findOne({ model: "prophet", granularity: GRANULARITY, datasetScope, status: "success" }).sort({ generatedAt: -1 }).lean();
-  const canReuse = !force
+  const canReuse = !dryRun && !force
     && existing?.inputFingerprint === inputFingerprint
     && existing?.payload?.schemaVersion === FORECAST_SCHEMA_VERSION
     && Number(existing?.basisYear) === Number(basis?.year)
@@ -596,6 +598,8 @@ async function refreshMonthlyDistrictPredictionsImpl({ trigger = "manual", datas
     : { model: "prophet", granularity: GRANULARITY, datasetScope };
   const runUpdate = { trigger, status: "success", finishedAt: new Date(), generatedAt: now, errorMessage: null, payload, basisDatasetId: dataset._id, basisYear: basis?.year || null, basisMonth: basis?.month || null, basisWeek: null, forecastTargetYear: target?.year || null, forecastTargetMonth: target?.month || null, forecastTargetWeek: null, forecastHorizonMonths: horizonMonths, forecastHorizonWeeks: null, inputFingerprint };
   if (!predictionRunId) runUpdate.startedAt = now;
+  // Compute the identical payload, but never create/update a database record.
+  if (dryRun) return { ...runUpdate, model: "prophet", granularity: GRANULARITY, datasetScope, dryRun: true };
   const saved = await PredictionRun.findOneAndUpdate(
     runFilter,
     { $set: runUpdate },
@@ -610,7 +614,8 @@ export function refreshMonthlyDistrictPredictions(options = {}) {
   const jobKey = options.predictionRunId
     ? `${datasetKey}:${String(options.predictionRunId)}`
     : datasetKey;
-  return runSerializedForecast({ key: `monthly-global:${jobKey}`, label: `monthly global forecast (${datasetKey})` }, () => refreshMonthlyDistrictPredictionsImpl(options));
+  const executionKey = options.dryRun ? `monthly-dry-run:${jobKey}` : `monthly-global:${jobKey}`;
+  return runSerializedForecast({ key: executionKey, label: `monthly global forecast (${datasetKey})` }, () => refreshMonthlyDistrictPredictionsImpl(options));
 }
 
 export function isMonthlyDistrictPredictionRefreshActive({

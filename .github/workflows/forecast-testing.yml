@@ -1,0 +1,61 @@
+name: Forecast testing (dry run)
+
+on:
+  workflow_dispatch:
+    inputs:
+      datasetId:
+        description: Validated dataset ObjectId in the testing database
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: forecast-testing
+  cancel-in-progress: false
+
+jobs:
+  forecast:
+    if: github.ref == 'refs/heads/testing'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: forecast-testing
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/services/prophet/requirements.txt
+      - name: Install Node dependencies
+        run: npm ci --omit=dev
+        working-directory: backend
+      - name: Install Python dependencies
+        run: python -m pip install -r backend/services/prophet/requirements.txt
+      - name: Generate forecast without database writes
+        run: node backend/scripts/runMonthlyForecastDryRun.js
+        env:
+          TEST_MONGO_URI: ${{ secrets.TEST_MONGO_URI }}
+          DATASET_ID: ${{ inputs.datasetId }}
+          FORECAST_DRY_RUN: 'true'
+          PYTHON_BIN: python
+          PROPHET_PROCESS_TIMEOUT_MS: '300000'
+          OMP_NUM_THREADS: '1'
+          OPENBLAS_NUM_THREADS: '1'
+          MKL_NUM_THREADS: '1'
+      - name: Save dry-run output
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: forecast-testing-${{ github.run_id }}-${{ github.run_attempt }}
+          path: forecast-artifacts/*.json
+          if-no-files-found: ignore
+          retention-days: 3
