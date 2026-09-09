@@ -25,6 +25,7 @@ export default function Analytics() {
   const [selectedCaseStatus, setSelectedCaseStatus] = useState("confirmed");
   const { auth } = useAuth();
   const token = auth?.accessToken;
+  const isReportView = selectedCaseStatus === "reported";
   const { datasetId, dataset } = useLatestDatasetId(token);
   const {
     items: officialItems,
@@ -40,7 +41,7 @@ export default function Analytics() {
     reports: reportRows,
     loading: reportsLoading,
     errorMsg: reportsErrorMsg,
-  } = useReports(token, { fetchAll: true });
+  } = useReports(token, { fetchAll: true, autoFetch: isReportView });
 
   const officialCaseRows = useMemo(() => {
     const safe = Array.isArray(officialItems) ? officialItems : [];
@@ -93,7 +94,6 @@ export default function Analytics() {
     selectedCaseStatus === ALL_ANALYTICS_STATUSES
       ? "All Included"
       : formatStatusLabel(selectedCaseStatus);
-  const isReportView = selectedCaseStatus === "reported";
   const analyticsLoading = isReportView ? reportsLoading : officialLoading;
   const analyticsErrorMsg = isReportView ? reportsErrorMsg : officialErrorMsg;
 

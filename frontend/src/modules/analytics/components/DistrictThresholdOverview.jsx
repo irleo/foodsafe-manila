@@ -4,11 +4,7 @@ import { SURVEILLANCE_DISEASES } from "../../../constants/surveillanceMethodolog
 import { formatStatusLabel } from "../../../utils/formatStatusLabel";
 import { formatThresholdValue } from "../../../utils/formatThresholdValue.js";
 import { getErrorMessage } from "../../../utils/errors";
-
-const MANILA_DISTRICTS = Array.from(
-  { length: 6 },
-  (_, index) => `District ${index + 1}`,
-);
+import { MANILA_DISTRICTS } from "../utils/analyticsCoverage.js";
 
 function formatThresholdPeriod(result) {
   if (!result?.targetYear) return "Not available";
