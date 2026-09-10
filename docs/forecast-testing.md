@@ -61,5 +61,60 @@ For local execution, set `TEST_MONGO_URI`, `DATASET_ID`, `FORECAST_DRY_RUN=true`
 from the repository root. The worker does not load `.env` or fall back to `MONGO_URI`.
 Output goes to ignored `forecast-artifacts/`; existing files are not overwritten.
 
-After a successful trial, the next change can introduce durable job states,
-production dispatch, retries/recovery, and a controlled switch from local execution.
+## Second trial: save to the testing database
+
+The separate **Forecast testing (save to database)** workflow computes the forecast,
+requires successful output for every supported disease and all six districts,
+inserts a new `predictionRuns` record, and reads it back using the API's forecast
+eligibility check. Existing successful records are preserved. This phase does not
+add upload dispatch or change application scheduling.
+
+In the same `forecast-testing` GitHub environment, add:
+
+| Setting | Kind | Value |
+| --- | --- | --- |
+| `TEST_FORECAST_WRITE_MONGO_URI` | Secret | Connection URI for a dedicated user on the testing database |
+| `TEST_FORECAST_DB_NAME` | Variable | Exact database name contained in that URI |
+
+Keep `TEST_MONGO_URI` read-only for the original dry run. Give the new user read
+access to the testing dataset/history/configuration collections and `find`/`insert`
+access to `predictionRuns`. A custom role is preferable; a `readWrite` role restricted
+to the testing database is broader. No production access, deletion, index changes,
+or database migration is needed. Automatic collection/index creation is disabled;
+use the already initialized testing database. The database-name check catches a
+mismatched URI but cannot prove a database is non-production: configure both values
+for the actual isolated testing database.
+
+Push the reviewed files to `testing` and ensure this new workflow is also present
+on the default branch as described above. Run **Forecast testing (save to database)**,
+select `testing`, provide the dataset ID used for the dry run, and check **Save a new
+forecast to the testing database**. Both trial workflows share the same concurrency
+group. The write secret is supplied only to the compute step.
+
+Download the verification summary after success. It must contain
+`verifiedReadBack: true` and a `predictionRunId`. Open the testing app connected to
+the same database, select the same dataset, and reload Predictions. If this is not
+the latest dataset, explicitly select it; the default API view uses the latest
+validated CESU dataset. The app/backend must use the matching testing code schema.
+An authenticated `GET /api/predictions?datasetId=<datasetId>` should return
+`hasPrediction: true` and the matching `predictionRunId`, unless a newer run has
+since been saved. Viewing results does not require clicking the refresh button.
+
+Read-back verification is automated; the live app check still needs to be performed.
+The summary contains IDs and timing, not the complete case history.
+
+A re-run of the same GitHub workflow run uses the same record ID and verifies the
+existing result without inserting another record. A new **Run workflow** invocation
+creates a new record. Failure before saving leaves no database job; GitHub is the
+execution-status source for this manual phase. If the database committed a result
+but the runner lost its response, retry the same run to verify it.
+
+The worker deliberately does not expose a `running` database record: the current
+API assumes running jobs belong to local Python execution and may attempt to resume
+them. Do not treat this manual trial as the final distributed-job design. Avoid
+uploading or refreshing the same testing dataset during this check so that a local
+worker does not replace which result appears newest.
+
+After the write trial and app verification, the next change can introduce shared
+job ownership, durable queued/running/failed states, automatic dispatch and recovery,
+and a controlled switch from local execution.

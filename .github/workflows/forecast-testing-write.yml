@@ -1,4 +1,4 @@
-name: Forecast testing (dry run)
+name: Forecast testing (save to database)
 
 on:
   workflow_dispatch:
@@ -7,6 +7,11 @@ on:
         description: Validated dataset ObjectId in the testing database
         required: true
         type: string
+      confirmTestWrite:
+        description: Save a new forecast to the testing database
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -17,7 +22,7 @@ concurrency:
 
 jobs:
   forecast:
-    if: github.ref == 'refs/heads/testing'
+    if: github.ref == 'refs/heads/testing' && inputs.confirmTestWrite
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     environment: forecast-testing
@@ -40,22 +45,22 @@ jobs:
         working-directory: backend
       - name: Install Python dependencies
         run: python -m pip install -r backend/services/prophet/requirements.txt
-      - name: Generate forecast without database writes
-        run: node backend/scripts/runMonthlyForecastDryRun.js
+      - name: Compute, save, and verify testing forecast
+        run: node backend/scripts/runMonthlyForecastWriteTrial.js
         env:
-          TEST_MONGO_URI: ${{ secrets.TEST_MONGO_URI }}
+          TEST_FORECAST_WRITE_MONGO_URI: ${{ secrets.TEST_FORECAST_WRITE_MONGO_URI }}
+          TEST_FORECAST_DB_NAME: ${{ vars.TEST_FORECAST_DB_NAME }}
           DATASET_ID: ${{ inputs.datasetId }}
-          FORECAST_DRY_RUN: 'true'
+          CONFIRM_TEST_WRITE: ${{ inputs.confirmTestWrite }}
           PYTHON_BIN: python
           PROPHET_PROCESS_TIMEOUT_MS: '300000'
           OMP_NUM_THREADS: '1'
           OPENBLAS_NUM_THREADS: '1'
           MKL_NUM_THREADS: '1'
-      - name: Save dry-run output
-        if: ${{ always() && !cancelled() }}
+      - name: Save verification summary
         uses: actions/upload-artifact@v7
         with:
-          name: forecast-testing-${{ github.run_id }}-${{ github.run_attempt }}
-          path: forecast-artifacts/*.json
-          if-no-files-found: ignore
+          name: forecast-write-testing-${{ github.run_id }}-${{ github.run_attempt }}
+          path: forecast-write-artifacts/summary.json
+          if-no-files-found: error
           retention-days: 3
