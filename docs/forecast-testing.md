@@ -1,5 +1,27 @@
 # Manual forecast trial on GitHub Actions
 
+## Performance comparison
+
+GitHub testing workflows set `FORECAST_MODEL_CONCURRENCY=2`; local API execution
+defaults to one. The cap is two and district result ordering is preserved. Set the
+workflow value to `1` for a sequential comparison using the same implementation.
+Per-disease data preparation and per-district Prophet/threshold timings appear as
+`[forecast-timing]` lines. Per-model durations overlap with concurrency enabled, so
+do not sum them as wall-clock duration; use the existing whole-run `durationMs`.
+
+An explicit Python `backtestMonths: 0` now stays zero instead of becoming 19.
+Validated historical results are still reused only for an exact historical prefix;
+revised history still requests full recomputation. Forecast threshold calculations
+reuse the current run's authoritative disease rows and coverage. Prophet parameters,
+the 19-origin evaluation window, baseline exclusions, city aggregation, and interval
+formulas are unchanged. Sampled interval bounds can differ across executions.
+
+For a before/after comparison use the same dataset/database snapshot and input code
+methodology. Start a new manual dry run after pushing the code; rerunning an already
+successful automatic job intentionally skips computation. Compare total runtime,
+requested/calculated backtest counts, target dates, all model statuses, point values,
+and threshold values. No measured speedup is claimed until this remote run completes.
+
 This phase computes forecasts on `testing` and exports JSON. It does not dispatch
 from uploads, change Render, start Express, register cron jobs, create prediction
 jobs, or persist results. Production activation is a subsequent phase after the

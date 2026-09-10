@@ -10,7 +10,7 @@ export async function claimGitHubForecast(jobId, datasetId, workerRunId) {
     granularity: "monthly_disease_district_cases", forecastHorizonMonths: 1,
     status: "running", executionBackend: "github", executionPhase: "queued",
     executionExpiresAt: { $gt: new Date() },
-  }, { $set: { executionPhase: "executing", workerRunId } }, { new: true, runValidators: true }).lean();
+  }, { $set: { executionPhase: "executing", workerRunId } }, { returnDocument: "after", runValidators: true }).lean();
 }
 
 /** @param {string} jobId @param {string} workerRunId */

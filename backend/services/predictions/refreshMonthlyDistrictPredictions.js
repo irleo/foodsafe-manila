@@ -15,6 +15,7 @@ import {
   runSerializedForecast,
 } from "./forecastExecution.js";
 import { logServerError } from "../../utils/serverLogger.js";
+import { boundedForecastMap } from "./boundedForecastMap.js";
 
 const MIN_TRAINING_MONTHS = 24;
 const MIN_COMPARABLE_OBSERVATIONS = 3;
@@ -215,7 +216,7 @@ function historicalSeriesIsPrefix(previousHistorical, currentSeries) {
   });
 }
 
-function incrementalBacktestPlan(previousDistrict, series) {
+export function incrementalBacktestPlan(previousDistrict, series) {
   const previousHistorical = previousDistrict?.historicalSeries;
   const previousModel = previousDistrict?.models?.prophet;
   if (
@@ -352,9 +353,9 @@ function compareModels(prophet, seasonalNaive) {
       : "Prophet could not produce an operational forecast for this district.",
   };
 }
-async function attachThreshold({ point, datasetId, disease, district, excludedPeriods }) {
+async function attachThreshold({ point, datasetId, disease, district, excludedPeriods, preparedInput }) {
   if (!point) return null;
-  const threshold = await calculateSurveillanceThreshold({ datasetId, disease, district, targetYear: point.year, targetMonth: point.month, evaluationMode: "forecast", excludedPeriods });
+  const threshold = await calculateSurveillanceThreshold({ datasetId, disease, district, targetYear: point.year, targetMonth: point.month, evaluationMode: "forecast", excludedPeriods, preparedInput });
   const alert = threshold.evaluationThresholds?.alert;
   const epidemic = threshold.evaluationThresholds?.epidemic;
   const thresholdComparisonValue = Number.isFinite(Number(point.rawPredictedCases))
@@ -484,6 +485,9 @@ function pooledEvaluation(districts) {
 function fingerprint(value) { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
 
 async function refreshMonthlyDistrictPredictionsImpl({ trigger = "manual", datasetId, horizonMonths = 1, force = true, predictionRunId, signal, dryRun = false } = {}) {
+  const preparationStarted = performance.now();
+  const concurrency = Number(process.env.FORECAST_MODEL_CONCURRENCY || 1);
+  if (![1, 2].includes(concurrency)) throw new Error("FORECAST_MODEL_CONCURRENCY must be 1 or 2.");
   if (typeof dryRun !== "boolean") throw new TypeError("dryRun must be a boolean.");
   if (dryRun && predictionRunId) throw new Error("Dry runs cannot claim a prediction job.");
   throwIfAborted(signal);
@@ -531,9 +535,11 @@ async function refreshMonthlyDistrictPredictionsImpl({ trigger = "manual", datas
   );
   const settings = await SurveillanceThresholdConfig.findOne({ isActive: true }).sort({ updatedAt: -1 }).select("excludedPeriods").lean();
   const excludedPeriods = settings?.excludedPeriods || [];
+  console.log(`[forecast-timing] preparationMs=${Math.round(performance.now() - preparationStarted)} concurrency=${concurrency}`);
   const diseaseOutputs = [];
   for (const disease of SURVEILLANCE_DISEASES) {
     throwIfAborted(signal);
+    const dataStarted = performance.now();
     const statuses = includedStatusesForDisease(disease);
     const rows = await getAnalyticalCaseRows({
       datasetId: dataset._id,
@@ -541,9 +547,11 @@ async function refreshMonthlyDistrictPredictionsImpl({ trigger = "manual", datas
       statuses,
     });
     assertOfficialCaseRows(rows);
-    const districts = [];
+    console.log(`[forecast-timing] disease=${disease} dataMs=${Math.round(performance.now() - dataStarted)}`);
+    // Reuse exactly these authoritative disease rows and coverage during this run.
+    const preparedInput = { dataset, context, disease, rows };
     const previousDisease = previousDiseases.get(disease);
-    for (const district of DISTRICTS) {
+    const districts = await boundedForecastMap(DISTRICTS, concurrency, async (district) => {
       throwIfAborted(signal);
       const series = completeSeries(rows.filter((row) => row.district === district), coverages.get(district), commonEnd);
       const seasonalNaive = seasonalNaiveModel(series, horizonMonths);
@@ -551,17 +559,21 @@ async function refreshMonthlyDistrictPredictionsImpl({ trigger = "manual", datas
         (item) => item.district === district,
       );
       const backtestPlan = incrementalBacktestPlan(previousDistrict, series);
+      const prophetStarted = performance.now();
       const prophet = await prophetModel(
         series,
         horizonMonths,
         signal,
         backtestPlan,
       );
+      const prophetMs = Math.round(performance.now() - prophetStarted);
+      const thresholdStarted = performance.now();
       const comparison = compareModels(prophet, seasonalNaive);
-      const nextForecast = await attachThreshold({ point: primaryForecast(prophet), datasetId: dataset._id, disease, district, excludedPeriods });
+      const nextForecast = await attachThreshold({ point: primaryForecast(prophet), datasetId: dataset._id, disease, district, excludedPeriods, preparedInput });
       if (nextForecast) prophet.forecast = prophet.forecast.map((point) => point.isPrimaryTarget ? nextForecast : point);
-      districts.push({ district, districtKey: normalizeDistrictKey(district), disease, historicalSeries: series.map(({ y, ...point }) => ({ ...point, cases: y })), models: { prophet, seasonalNaive }, modelComparison: comparison, selectedModel: comparison.bestHistoricalModel, operationalModel: comparison.operationalModel, operationalPolicy: "prophet_only", status: nextForecast ? "success" : "insufficient_data", message: prophet.message || "Prophet could not produce a forecast for the next month.", nextForecast });
-    }
+      console.log(`[forecast-timing] disease=${disease} district=${district} prophetMs=${prophetMs} thresholdMs=${Math.round(performance.now() - thresholdStarted)} requestedBacktests=${backtestPlan.backtestMonths} calculatedBacktests=${prophet.computation?.calculatedBacktestObservations ?? 0}`);
+      return { district, districtKey: normalizeDistrictKey(district), disease, historicalSeries: series.map(({ y, ...point }) => ({ ...point, cases: y })), models: { prophet, seasonalNaive }, modelComparison: comparison, selectedModel: comparison.bestHistoricalModel, operationalModel: comparison.operationalModel, operationalPolicy: "prophet_only", status: nextForecast ? "success" : "insufficient_data", message: prophet.message || "Prophet could not produce a forecast for the next month.", nextForecast };
+    });
     const wholeManila = aggregateWholeManila(districts, horizonMonths);
     if (wholeManila.status === "success") {
       wholeManila.forecast = await Promise.all(
@@ -571,6 +583,7 @@ async function refreshMonthlyDistrictPredictionsImpl({ trigger = "manual", datas
           disease,
           district: undefined,
           excludedPeriods,
+          preparedInput,
         })),
       );
     }

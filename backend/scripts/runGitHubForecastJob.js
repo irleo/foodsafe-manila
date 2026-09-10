@@ -102,7 +102,7 @@ async function main() {
             payload: computed.payload,
           },
         },
-        { new: true, runValidators: true },
+        { returnDocument: "after", runValidators: true },
       ).lean();
       if (!saved || !isUsablePredictionRun(saved, { horizonMonths: 1 }))
         throw new Error(

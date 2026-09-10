@@ -54,6 +54,7 @@ jobs:
           CONFIRM_TEST_WRITE: ${{ inputs.confirmTestWrite }}
           PYTHON_BIN: python
           PROPHET_PROCESS_TIMEOUT_MS: '300000'
+          FORECAST_MODEL_CONCURRENCY: '2'
           OMP_NUM_THREADS: '1'
           OPENBLAS_NUM_THREADS: '1'
           MKL_NUM_THREADS: '1'

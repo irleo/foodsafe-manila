@@ -117,13 +117,16 @@ function baseResult({ disease, district, target, observedCases = null, baselineP
   };
 }
 
-export async function calculateSurveillanceThreshold({ datasetId, disease: requestedDisease, district, targetYear, targetMonth, evaluationMode = "observed", excludedPeriods = [] }) {
+export async function calculateSurveillanceThreshold({ datasetId, disease: requestedDisease, district, targetYear, targetMonth, evaluationMode = "observed", excludedPeriods = [], preparedInput }) {
   const disease = normalizeSurveillanceDisease(requestedDisease);
   if (!disease) { const error = new Error("Select a supported disease."); error.status = 400; throw error; }
-  const dataset = await Dataset.findById(datasetId).select("districtCoverage status filePath formatType providerType providerName").lean();
+  if (preparedInput && (String(preparedInput.dataset._id) !== String(datasetId) || preparedInput.disease !== disease)) {
+    throw new Error("Prepared threshold inputs do not match the requested scope.");
+  }
+  const dataset = preparedInput?.dataset ?? await Dataset.findById(datasetId).select("districtCoverage status filePath formatType providerType providerName").lean();
   if (!dataset) { const error = new Error("Dataset not found"); error.status = 404; throw error; }
   if (dataset.status !== "validated") { const error = new Error("Thresholds require a validated dataset"); error.status = 400; throw error; }
-  const context = await resolveCumulativeDatasetContext(datasetId);
+  const context = preparedInput?.context ?? await resolveCumulativeDatasetContext(datasetId);
   const requiredDistricts = district ? [district] : CITY_DISTRICTS;
   const hasExplicitCoverage = requiredDistricts.every((name) => (
     context?.verifiedCoverageByDistrict?.get(name)?.length > 0
@@ -140,7 +143,7 @@ export async function calculateSurveillanceThreshold({ datasetId, disease: reque
   }
 
   const includedStatuses = includedStatusesForDisease(disease);
-  const rows = await getAnalyticalCaseRows({
+  const rows = preparedInput ? preparedInput.rows.filter((row) => !district || row.district === district) : await getAnalyticalCaseRows({
     datasetId,
     statuses: includedStatuses,
     district: district || undefined,
