@@ -8,6 +8,7 @@ import '../services/session.dart';
 import '../utils/philippine_mobile_number.dart';
 import '../widgets/app_loading.dart';
 import '../widgets/philippine_mobile_prefix.dart';
+import '../widgets/snackbar_widgets.dart';
 
 class AccountInformationScreen extends StatefulWidget {
   const AccountInformationScreen({super.key});
@@ -49,6 +50,8 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
 
     if (user != null) {
       _nameCtrl.text = user!['username'] ?? '';
+      final originalPhone = user!['phoneNumber']?.toString() ?? '';
+      _originalPhoneNumber = toPhilippineMobileInput(originalPhone);
       _phoneCtrl.text = toPhilippineMobileInput(
         user!['phoneNumber']?.toString() ?? '',
       );
@@ -239,7 +242,12 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     // Check if phone number has changed
-    final phoneChanged = _phoneCtrl.text.trim() != (_originalPhoneNumber ?? '');
+    final currentPhone = toLocalPhilippineMobileNumber(_phoneCtrl.text);
+    final originalPhone = toLocalPhilippineMobileNumber(
+      _originalPhoneNumber ?? '',
+    );
+
+    final phoneChanged = currentPhone != originalPhone;
 
     if (phoneChanged) {
       // Enter OTP verification mode
@@ -280,21 +288,24 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
 
       if (updatedUser != null) {
         await Session.saveCurrentUser(updatedUser);
-        if (!mounted) return;
-        _nameCtrl.text = updatedUser['username'] ?? '';
-        _phoneCtrl.text = toPhilippineMobileInput(
-          updatedUser['phoneNumber']?.toString() ?? '',
-        );
-        _emailCtrl.text = updatedUser['email'] ?? '';
-        _updated = true;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Profile updated successfully")),
-        );
+        if (!mounted) return;
+
+        _nameCtrl.text = updatedUser['username'] ?? '';
+
+        final updatedPhone = updatedUser['phoneNumber']?.toString() ?? '';
+
+        _originalPhoneNumber = toPhilippineMobileInput(updatedPhone);
+        _phoneCtrl.text = _originalPhoneNumber!;
+
+        _emailCtrl.text = updatedUser['email'] ?? '';
+
+        _updated = true;
+        _isEditing = false;
+
+        SnackbarWidgets.success(context, "Profile updated successfully");
       } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("Update failed")));
+        SnackbarWidgets.error(context, "Update failed");
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -753,7 +764,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                               context,
                                             ).colorScheme.outline,
                                           ),
-                                          hintText: 'Enter name',
+                                          hintText: 'Juan Dela Cruz',
                                           hintStyle: GoogleFonts.inter(
                                             color: Color(0xFFD1D5DB),
                                           ),
@@ -839,7 +850,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                               context,
                                             ).colorScheme.outline,
                                           ),
-                                          hintText: 'Add a recovery email',
+                                          hintText: 'juandelacruz@example.com',
                                           hintStyle: GoogleFonts.inter(
                                             color: Color(0xFFD1D5DB),
                                           ),

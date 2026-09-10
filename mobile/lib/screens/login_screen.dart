@@ -216,7 +216,7 @@ class _LogInScreenState extends State<LoginScreen> {
                                   onFieldSubmitted: (_) => _signIn(),
                                   style: GoogleFonts.inter(),
                                   decoration: InputDecoration(
-                                    hintText: "Enter password",
+                                    hintText: "••••••••",
                                     hintStyle: GoogleFonts.inter(
                                       color: Color(0xFFD1D5DB),
                                     ),

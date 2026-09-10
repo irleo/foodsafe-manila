@@ -75,6 +75,25 @@ class _SignupScreenState extends State<SignupScreen> {
     super.dispose();
   }
 
+  void _handleOtpKey(int index, KeyEvent event) {
+    if (event is! KeyDownEvent) return;
+
+    if (event.logicalKey == LogicalKeyboardKey.backspace) {
+      if (otpControllers[index].text.isEmpty && index > 0) {
+        otpControllers[index - 1].clear();
+
+        FocusScope.of(context).requestFocus(otpFocusNodes[index - 1]);
+      }
+
+      // Always keep the combined OTP updated.
+      _updateOtp();
+    }
+  }
+
+  void _updateOtp() {
+    _otpCtrl.text = otpControllers.map((c) => c.text).join();
+  }
+
   void _startResendTimer() {
     _resendTimer?.cancel();
     setState(() => _resendSeconds = 60);
@@ -110,8 +129,9 @@ class _SignupScreenState extends State<SignupScreen> {
       SnackbarWidgets.success(context, "Verification code sent");
       return true;
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+      }
       return false;
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -224,8 +244,9 @@ class _SignupScreenState extends State<SignupScreen> {
         Navigator.pop(context); // return to login
       }
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -243,17 +264,15 @@ class _SignupScreenState extends State<SignupScreen> {
         if (!mounted) return;
 
         if (exists) {
-          SnackbarWidgets.error(
-            context,
-            "Please check your information and try again.",
-          );
+          SnackbarWidgets.error(context, "Please check your information and try again.");
           return;
         }
 
         setState(() => _currentStep = 1);
       } catch (error) {
-        if (mounted)
+        if (mounted) {
           SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+        }
       } finally {
         if (mounted) setState(() => _loading = false);
       }
@@ -455,7 +474,7 @@ class _SignupScreenState extends State<SignupScreen> {
             },
             style: GoogleFonts.inter(),
             decoration: InputDecoration(
-              hintText: "Enter name",
+              hintText: "Juan Dela Cruz",
               hintStyle: GoogleFonts.inter(color: Color(0xFFD1D5DB)),
               prefixIcon: Icon(LucideIcons.user),
             ),
@@ -542,7 +561,7 @@ class _SignupScreenState extends State<SignupScreen> {
             },
             style: GoogleFonts.inter(),
             decoration: InputDecoration(
-              hintText: "Enter password",
+              hintText: "••••••••",
               hintStyle: GoogleFonts.inter(color: Color(0xFFD1D5DB)),
               prefixIcon: const Icon(LucideIcons.lock),
               suffixIcon: IconButton(
@@ -570,7 +589,7 @@ class _SignupScreenState extends State<SignupScreen> {
             },
             style: GoogleFonts.inter(),
             decoration: InputDecoration(
-              hintText: "Confirm password",
+              hintText: "••••••••",
               hintStyle: GoogleFonts.inter(color: Color(0xFFD1D5DB)),
               prefixIcon: const Icon(LucideIcons.lock),
               suffixIcon: IconButton(
@@ -641,11 +660,6 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Widget _otpStep() {
-    // Autofill _otpCtrl when all 6 digits are entered.
-    void updateOtp() {
-      _otpCtrl.text = otpControllers.map((c) => c.text).join();
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -659,59 +673,61 @@ class _SignupScreenState extends State<SignupScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: List.generate(6, (index) {
-            return Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(right: index < 5 ? 6 : 0),
-                child: SizedBox(
-                  height: 54,
-                  child: TextFormField(
-                    onChanged: (value) {
-                      if (value.length == 1 && index < 5) {
-                        // Move to next field
-                        FocusScope.of(
-                          context,
-                        ).requestFocus(otpFocusNodes[index + 1]);
-                      } else if (value.isEmpty && index > 0) {
-                        // Move back if deleted
-                        FocusScope.of(
-                          context,
-                        ).requestFocus(otpFocusNodes[index - 1]);
-                      }
-                      updateOtp();
-                    },
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w800),
-                    decoration: InputDecoration(
-                      contentPadding: EdgeInsets.zero,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(
-                          color: Color(0xFF3B82F6),
-                          width: 2,
-                        ),
-                      ),
-                      errorMaxLines: 2,
-                      errorStyle: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: const Color(0xFFDC2626),
+            return SizedBox(
+              height: 54,
+              width: 50,
+              child: KeyboardListener(
+                focusNode: FocusNode(),
+                onKeyEvent: (event) => _handleOtpKey(index, event),
+                child: TextFormField(
+                  controller: otpControllers[index],
+                  focusNode: otpFocusNodes[index],
+
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.next,
+
+                  textAlign: TextAlign.center,
+                  textAlignVertical: TextAlignVertical.center,
+
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w800),
+
+                  inputFormatters: [
+                    LengthLimitingTextInputFormatter(1),
+                    FilteringTextInputFormatter.digitsOnly,
+                  ],
+
+                  onChanged: (value) {
+                    _updateOtp();
+
+                    if (value.isNotEmpty && index < 5) {
+                      FocusScope.of(
+                        context,
+                      ).requestFocus(otpFocusNodes[index + 1]);
+                    }
+                  },
+
+                  decoration: InputDecoration(
+                    contentPadding: EdgeInsets.zero,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF3B82F6),
+                        width: 2,
                       ),
                     ),
-                    keyboardType: TextInputType.number,
-                    controller: otpControllers[index],
-                    focusNode: otpFocusNodes[index],
-                    textAlign: TextAlign.center,
-                    textAlignVertical: TextAlignVertical.center,
-                    inputFormatters: [
-                      LengthLimitingTextInputFormatter(1),
-                      FilteringTextInputFormatter.digitsOnly,
-                    ],
+                    errorMaxLines: 2,
+                    errorStyle: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: const Color(0xFFDC2626),
+                    ),
                   ),
                 ),
               ),

@@ -42,6 +42,7 @@ class InsightsScreenState extends State<InsightsScreen> {
   List<Map<String, dynamic>> districtData = [];
   List<Map<String, dynamic>> diseaseData = [];
 
+  bool _isOverviewLoading = true;
   bool _isDistrictLoading = true;
   bool _isDiseaseLoading = true;
 
@@ -427,25 +428,35 @@ class InsightsScreenState extends State<InsightsScreen> {
   }
 
   Future<void> _loadOverviewData() async {
+    setState(() {
+      _isOverviewLoading = true;
+    });
+
     try {
       final result = await ApiService.getInsightsDistribution(
         period: 'total_cumulative',
       );
 
-      debugPrint('INSIGHTS OVERVIEW RESPONSE: $result');
-
       if (!mounted) return;
 
+      final overview = result['overview'];
+
       setState(() {
-        _overview = result['overview'] is Map
-            ? Map<String, dynamic>.from(result['overview'] as Map)
+        _overview = overview is Map
+            ? Map<String, dynamic>.from(overview)
             : null;
+
+        _isOverviewLoading = false;
+
+        if (_overview == null) {
+        }
       });
     } catch (_) {
       if (!mounted) return;
 
       setState(() {
         _overview = null;
+        _isOverviewLoading = false;
       });
     }
   }
@@ -640,17 +651,14 @@ class InsightsScreenState extends State<InsightsScreen> {
   // OVERVIEW
   // ------------------------------------------------------------
 
-  Widget _buildOverviewCard({
-    required String title,
-  }) {
-    
+  Widget _buildOverviewCard({required String title}) {
     final overview = _overview;
     final currentMonthCases = _safeIntNullable(overview?['currentMonthCases']);
     final cumulativeCases = _safeIntNullable(overview?['cumulativeCases']);
     final topDistrict = overview?['topDistrict'];
     final topDisease = overview?['topDisease'];
 
-    final isLoading = overview == null;
+    final isLoading = _isOverviewLoading;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -672,10 +680,10 @@ class InsightsScreenState extends State<InsightsScreen> {
                       value: currentMonthCases == null
                           ? '—'
                           : '${_formatNumber(currentMonthCases)} cases',
-                      trailing: _formatSignedPercent(overview['monthlyChange']),
+                      trailing: _formatSignedPercent(overview?['monthlyChange']),
                       trailingColor: const Color(0xFF9CA3AF),
                       trailingWidget: _buildChangeIndicator(
-                        overview['monthlyChange'],
+                        overview?['monthlyChange'],
                       ),
                     ),
 
@@ -704,8 +712,8 @@ class InsightsScreenState extends State<InsightsScreen> {
                           ? '—'
                           : '${_formatNumber(cumulativeCases)} cases',
                       trailing: _formatCoverageRange(
-                        overview['coverageStart'],
-                        overview['coverageEnd'],
+                        overview?['coverageStart'],
+                        overview?['coverageEnd'],
                       ),
                       trailingColor: Colors.grey,
                     ),

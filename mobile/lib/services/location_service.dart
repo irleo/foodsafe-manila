@@ -1,42 +1,84 @@
 import 'package:geocoding/geocoding.dart';
 import 'package:location/location.dart' as loc;
+
 import 'debug_location_service.dart';
 import 'manila_geo_service.dart';
 
 class LocationService {
   static final loc.Location _location = loc.Location();
+
   static String? cachedAddress;
   static ManilaLocation? cachedManilaLocation;
 
-  static Future<void> preloadLocation() async {
-    await ManilaGeoService.ensureLoaded();
-    cachedAddress = await getUserAddress();
-  }
+  static bool _permissionInitialized = false;
 
-  static Future<void> clearCache() async {
-    cachedAddress = null;
-    cachedManilaLocation = null;
-  }
-
-  static Future<bool> _handlePermission() async {
-    bool serviceEnabled;
-    loc.PermissionStatus permissionGranted;
-
-    serviceEnabled = await _location.serviceEnabled();
-    if (!serviceEnabled) {
-      serviceEnabled = await _location.requestService();
-      if (!serviceEnabled) return false;
+  /// Initializes the device location service and permission.
+  ///
+  /// Call this once during app startup before runApp().
+  static Future<bool> initializePermission() async {
+    if (_permissionInitialized) {
+      return true;
     }
 
-    permissionGranted = await _location.hasPermission();
-    if (permissionGranted == loc.PermissionStatus.denied) {
-      permissionGranted = await _location.requestPermission();
-      if (permissionGranted != loc.PermissionStatus.granted) {
+    try {
+      // Make sure the device's location service is enabled.
+      var serviceEnabled = await _location.serviceEnabled();
+
+      if (!serviceEnabled) {
+        serviceEnabled = await _location.requestService();
+
+        if (!serviceEnabled) {
+          return false;
+        }
+      }
+
+      // Check the current permission.
+      var permission = await _location.hasPermission();
+
+      // Request permission if it has not been granted yet.
+      if (permission == loc.PermissionStatus.denied) {
+        permission = await _location.requestPermission();
+      }
+
+      if (permission != loc.PermissionStatus.granted) {
         return false;
       }
+
+      _permissionInitialized = true;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Preloads the user's location and resolves it to a Manila barangay.
+  ///
+  /// Permission should already have been initialized by initializePermission().
+  static Future<void> preloadLocation() async {
+    final simulated = await DebugLocationService.getSimulatedLocation();
+
+    if (simulated != null) {
+      cachedManilaLocation = simulated;
+      cachedAddress = simulated.formatted;
+      return;
     }
 
-    return true;
+    final permissionGranted = await initializePermission();
+
+    if (!permissionGranted) {
+      cachedAddress = 'Location unavailable';
+      return;
+    }
+
+    final resolved = await resolveManilaLocation();
+
+    if (resolved != null) {
+      cachedManilaLocation = resolved;
+      cachedAddress = resolved.formatted;
+      return;
+    }
+
+    cachedAddress = await _getFallbackAddress();
   }
 
   static Future<ManilaLocation?> resolveManilaLocation({
@@ -47,74 +89,91 @@ class LocationService {
     }
 
     final simulated = await DebugLocationService.getSimulatedLocation();
+
     if (simulated != null) {
       cachedManilaLocation = simulated;
       cachedAddress = simulated.formatted;
       return simulated;
     }
 
-    final hasPermission = await _handlePermission();
-    if (!hasPermission) return null;
+    final permissionGranted = await initializePermission();
+
+    if (!permissionGranted) {
+      return null;
+    }
 
     try {
       await ManilaGeoService.ensureLoaded();
-      final locData = await _location.getLocation();
-      if (locData.latitude == null || locData.longitude == null) return null;
 
-      final resolved = ManilaGeoService.lookup(
-        locData.latitude!,
-        locData.longitude!,
-      );
+      final locationData = await _location.getLocation();
+
+      final lat = locationData.latitude;
+      final lng = locationData.longitude;
+
+      if (lat == null || lng == null) {
+        return null;
+      }
+
+      final resolved = ManilaGeoService.lookup(lat, lng);
 
       cachedManilaLocation = resolved;
+
       if (resolved != null) {
         cachedAddress = resolved.formatted;
       }
+
       return resolved;
     } catch (_) {
       return null;
     }
   }
 
-  static Future<String> getUserAddress({bool forceRefresh = false}) async {
-    if (cachedAddress != null && !forceRefresh) return cachedAddress!;
+  static Future<String> getUserAddress({
+    bool forceRefresh = false,
+  }) async {
+    if (cachedAddress != null && !forceRefresh) {
+      return cachedAddress!;
+    }
 
     final simulated = await DebugLocationService.getSimulatedLocation();
-    if (simulated != null) return simulated.formatted;
 
-    final hasPermission = await _handlePermission();
-    if (!hasPermission) return 'Location unavailable';
+    if (simulated != null) {
+      cachedManilaLocation = simulated;
+      cachedAddress = simulated.formatted;
+      return simulated.formatted;
+    }
+
+    final permissionGranted = await initializePermission();
+
+    if (!permissionGranted) {
+      return 'Location unavailable';
+    }
 
     try {
-      final locData = await _location.getLocation();
-      if (locData.latitude == null || locData.longitude == null) {
+      await ManilaGeoService.ensureLoaded();
+
+      final locationData = await _location.getLocation();
+
+      final lat = locationData.latitude;
+      final lng = locationData.longitude;
+
+      if (lat == null || lng == null) {
         return 'Location unavailable';
       }
 
-      final resolved = await resolveManilaLocation(forceRefresh: forceRefresh);
-      if (resolved != null) return resolved.formatted;
+      final resolved = ManilaGeoService.lookup(lat, lng);
 
-      final placemarks = await placemarkFromCoordinates(
-        locData.latitude!,
-        locData.longitude!,
-      );
-
-      if (placemarks.isNotEmpty) {
-        final place = placemarks.first;
-
-        String city = place.locality ?? "";
-        String district = place.subLocality ?? "";
-        String country = place.country ?? "";
-
-        String result = "";
-        if (district.isNotEmpty) result += "$district, ";
-        if (city.isNotEmpty) result += city;
-        if (result.isEmpty) result = country;
-
-        return result;
+      if (resolved != null) {
+        cachedManilaLocation = resolved;
+        cachedAddress = resolved.formatted;
+        return resolved.formatted;
       }
 
-      return 'Unknown location';
+      final fallback = await _getPlacemarkAddress(lat, lng);
+
+      cachedAddress = fallback;
+
+      return fallback;
     } catch (_) {
       return 'Location unavailable';
     }
@@ -122,27 +181,100 @@ class LocationService {
 
   static Future<Map<String, double>?> getCurrentCoordinates() async {
     final simulated = await DebugLocationService.getSimulatedCoordinates();
-    if (simulated != null) return simulated;
 
-    final hasPermission = await _handlePermission();
-    if (!hasPermission) return null;
+    if (simulated != null) {
+      return simulated;
+    }
+
+    final permissionGranted = await initializePermission();
+
+    if (!permissionGranted) {
+      return null;
+    }
 
     try {
-      final locData = await _location.getLocation();
-      if (locData.latitude == null || locData.longitude == null) {
+      final locationData = await _location.getLocation();
+
+      final lat = locationData.latitude;
+      final lng = locationData.longitude;
+
+      if (lat == null || lng == null) {
         return null;
       }
 
       return {
-        'lat': locData.latitude!,
-        'lng': locData.longitude!,
+        'lat': lat,
+        'lng': lng,
       };
-    } catch (e) {
+    } catch (_) {
       return null;
     }
   }
 
-  /// True when debug simulation is active (reports may proceed outside real GPS).
-  static Future<bool> isUsingDebugLocation() =>
-      DebugLocationService.isEnabled();
+  static Future<String> _getFallbackAddress() async {
+    try {
+      final locationData = await _location.getLocation();
+
+      final lat = locationData.latitude;
+      final lng = locationData.longitude;
+
+      if (lat == null || lng == null) {
+        return 'Location unavailable';
+      }
+
+      return await _getPlacemarkAddress(lat, lng);
+    } catch (_) {
+      return 'Location unavailable';
+    }
+  }
+
+  static Future<String> _getPlacemarkAddress(
+    double latitude,
+    double longitude,
+  ) async {
+    try {
+      final placemarks = await placemarkFromCoordinates(
+        latitude,
+        longitude,
+      );
+
+      if (placemarks.isEmpty) {
+        return 'Unknown location';
+      }
+
+      final place = placemarks.first;
+
+      final city = place.locality ?? '';
+      final district = place.subLocality ?? '';
+      final country = place.country ?? '';
+
+      String result = '';
+
+      if (district.isNotEmpty) {
+        result += '$district, ';
+      }
+
+      if (city.isNotEmpty) {
+        result += city;
+      }
+
+      if (result.isEmpty) {
+        result = country;
+      }
+
+      return result.isEmpty ? 'Unknown location' : result;
+    } catch (_) {
+      return 'Location unavailable';
+    }
+  }
+
+  static Future<void> clearCache() async {
+    cachedAddress = null;
+    cachedManilaLocation = null;
+  }
+
+  /// True when debug simulation is active.
+  static Future<bool> isUsingDebugLocation() {
+    return DebugLocationService.isEnabled();
+  }
 }

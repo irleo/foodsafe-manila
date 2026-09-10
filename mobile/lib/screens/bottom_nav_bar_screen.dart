@@ -41,6 +41,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
   @override
   void initState() {
     super.initState();
+
     WidgetsBinding.instance.addObserver(this);
   }
 

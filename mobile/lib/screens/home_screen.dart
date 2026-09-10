@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-
+import '../data/facilities.dart';
 import '../services/location_service.dart';
 import 'report_form_screen.dart';
 
@@ -216,7 +216,7 @@ class _ReportBottomSheet extends StatelessWidget {
                           ),
                         ),
                         label: Text(
-                          'Find a Nearby Clinic',
+                          'Find a Nearby Facility',
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
@@ -553,40 +553,10 @@ class HomeScreenState extends State<HomeScreen> {
     super.initState();
 
     locationText = _composeHeaderLocation(
-      LocationService.cachedAddress ?? "Fetching...",
+      LocationService.cachedAddress ?? "Location unavailable",
     );
 
-    // Load cached/current location
-    _loadHeaderLocation();
-
-    // Refresh in background
-    LocationService.getUserAddress(forceRefresh: true).then((updated) {
-      if (!mounted) return;
-
-      setState(() {
-        locationText = _composeHeaderLocation(updated);
-        isLocationLoading = false;
-      });
-    });
-  }
-
-  Future<void> _loadHeaderLocation() async {
-    try {
-      final address = await LocationService.getUserAddress();
-
-      if (!mounted) return;
-
-      setState(() {
-        locationText = _composeHeaderLocation(address);
-        isLocationLoading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        isLocationLoading = false;
-      });
-    }
+    isLocationLoading = false;
   }
 
   Future<void> refreshData() async {
@@ -1107,7 +1077,7 @@ class HomeScreenState extends State<HomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Find a Nearby Clinic',
+          'Find a Nearby Facility',
           style: GoogleFonts.inter(
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -1146,7 +1116,7 @@ class HomeScreenState extends State<HomeScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Clinics & Hospitals',
+                                  'Health Centers & Hospitals',
                                   style: GoogleFonts.inter(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
@@ -1155,7 +1125,7 @@ class HomeScreenState extends State<HomeScreen> {
                                 ),
                                 SizedBox(height: 3),
                                 Text(
-                                  '12 facilities in Manila',
+                                  '${facilities.length} facilities in Manila',
                                   style: GoogleFonts.inter(
                                     fontSize: 12,
                                     color: Color(0xFF0284C7),

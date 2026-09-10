@@ -356,13 +356,15 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
   }
 
   final List<String> symptoms = [
-    'Nausea',
-    'Vomiting',
-    'Diarrhea',
-    'Abdominal cramps',
-    'Fever',
+    'Watery diarrhea',
+    'Bloody diarrhea',
+    'Severe dehydration',
+    'Sustained fever',
     'Headache',
-    'Dehydration',
+    'Malaise',
+    'Loss of appetite',
+    'Constipation',
+    'Non-productive cough',
   ];
 
   final List<String> foodSources = [

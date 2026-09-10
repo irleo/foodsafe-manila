@@ -4,11 +4,11 @@ import 'package:google_fonts/google_fonts.dart';
 import '../utils/philippine_mobile_number.dart';
 
 class PhilippineMobilePrefix extends StatelessWidget {
-  final Color color;
+  final Color? color;
 
   const PhilippineMobilePrefix({
     super.key,
-    this.color = const Color(0xFF6B7280),
+    this.color,
   });
 
   @override

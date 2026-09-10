@@ -600,7 +600,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
               },
               style: GoogleFonts.inter(),
               decoration: InputDecoration(
-                hintText: "Enter your email",
+                hintText: "juandelacruz@example.com",
                 hintStyle: GoogleFonts.inter(color: const Color(0xFFD1D5DB)),
                 prefixIcon: const Icon(
                   LucideIcons.mail,
@@ -623,7 +623,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
               decoration: InputDecoration(
                 hintText: philippineMobileHint,
                 hintStyle: GoogleFonts.inter(color: const Color(0xFFD1D5DB)),
-                prefixIcon: const PhilippineMobilePrefix(),
+                prefixIcon: PhilippineMobilePrefix(
+                  color: Theme.of(context).colorScheme.outline,
+                ),
                 prefixIconConstraints: const BoxConstraints(minWidth: 88),
               ),
             ),

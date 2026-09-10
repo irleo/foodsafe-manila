@@ -4,18 +4,19 @@ import 'screens/bottom_nav_bar_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/signup_screen.dart';
 import 'screens/change_password_screen.dart';
-import 'services/location_service.dart';
 import 'services/api_client.dart';
+import 'services/location_service.dart';
 import 'services/session.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Session.initialize();
-  await ApiClient.warmSession();
+  await LocationService.initializePermission();
   await LocationService.preloadLocation();
   runApp(
     MainApp(),
   );
+  ApiClient.warmSession();
 }
 
 class MainApp extends StatelessWidget {
