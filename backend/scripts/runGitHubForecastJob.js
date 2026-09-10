@@ -1,19 +1,16 @@
 // @ts-check
 import mongoose from "mongoose";
 import {
-  readForecastTrialConfiguration,
-  safeForecastTrialDiagnostic,
-  ForecastTrialSetupError,
-} from "../services/predictions/forecastWriteTrialDiagnostics.js";
-import { validateForecastWriteTrial } from "../services/predictions/forecastWriteTrialValidation.js";
+  readGitHubForecastConfiguration,
+  safeGitHubForecastDiagnostic,
+  ForecastConfigurationError,
+} from "../services/predictions/githubForecastConfiguration.js";
+import { validateForecastOutput } from "../services/predictions/forecastOutputValidation.js";
 
 let stage = "configuration";
 async function main() {
-  const { uri, expectedDatabase, datasetId, runId } =
-    readForecastTrialConfiguration(process.env);
-  const jobId = process.env.PREDICTION_RUN_ID?.trim();
-  if (!jobId || !/^[a-f\d]{24}$/i.test(jobId))
-    throw new Error("Invalid prediction job ID.");
+  const { uri, expectedDatabase, datasetId, runId, jobId } =
+    readGitHubForecastConfiguration(process.env);
   mongoose.set("autoCreate", false);
   mongoose.set("autoIndex", false);
   const abort = new AbortController();
@@ -31,7 +28,7 @@ async function main() {
       socketTimeoutMS: 60_000,
     });
     if (mongoose.connection.name !== expectedDatabase)
-      throw new ForecastTrialSetupError("DATABASE_MISMATCH");
+      throw new ForecastConfigurationError("DATABASE_MISMATCH");
     const { default: PredictionRun } =
       await import("../models/PredictionRun.js");
     const { claimGitHubForecast, failGitHubForecast, ownedGitHubJobFilter } =
@@ -74,7 +71,7 @@ async function main() {
         signal: abort.signal,
       });
       stage = "validate";
-      validateForecastWriteTrial(
+      validateForecastOutput(
         computed,
         datasetId,
         SURVEILLANCE_DISEASES,
@@ -122,7 +119,7 @@ async function main() {
 }
 main().catch((error) => {
   console.error(
-    `[github-forecast] stage=${stage}; ${safeForecastTrialDiagnostic(error)}`,
+    `[github-forecast] stage=${stage}; ${safeGitHubForecastDiagnostic(error)}`,
   );
   process.exitCode = 1;
 });

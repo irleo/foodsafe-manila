@@ -23,14 +23,16 @@ test("local is the default; unrecognized execution modes fail closed", () => {
   }
 });
 
-test("dispatch selects testing and sends IDs as JSON; transport errors hide credentials", async () => {
+test("dispatch selects the configured environment and sends IDs as JSON; transport errors hide credentials", async () => {
+  const previousEnvironment = process.env.GITHUB_FORECAST_ENVIRONMENT;
+  process.env.GITHUB_FORECAST_ENVIRONMENT = "testing";
   const before = { token: process.env.GITHUB_FORECAST_TOKEN, repo: process.env.GITHUB_FORECAST_REPOSITORY };
   process.env.GITHUB_FORECAST_TOKEN = "test-secret";
   process.env.GITHUB_FORECAST_REPOSITORY = "example/repo";
   try {
     await dispatchGitHubForecast(jobId, datasetId, async (url, options) => {
-      assert.match(url, /forecast-testing-auto.yml\/dispatches$/);
-      assert.deepEqual(JSON.parse(options.body), { ref: "testing", inputs: { datasetId, predictionRunId: jobId } });
+      assert.match(url, /forecast-job.yml\/dispatches$/);
+      assert.deepEqual(JSON.parse(options.body), { ref: "testing", inputs: { environment: "testing", datasetId, predictionRunId: jobId } });
       return new Response(null, { status: 204 });
     });
     await assert.rejects(dispatchGitHubForecast(jobId, datasetId, async () => {
@@ -41,7 +43,21 @@ test("dispatch selects testing and sends IDs as JSON; transport errors hide cred
         (error) => error.message.includes(`HTTP_${status}`) && !error.message.includes("secret response body"));
     }
     await dispatchGitHubForecast(jobId, datasetId, async () => new Response("{}", { status: 200 }));
+    process.env.GITHUB_FORECAST_ENVIRONMENT = "production";
+    await dispatchGitHubForecast(jobId, datasetId, async (_url, options) => {
+      assert.deepEqual(JSON.parse(options.body), { ref: "production", inputs: { environment: "production", datasetId, predictionRunId: jobId } });
+      return new Response(null, { status: 204 });
+    });
+    for (const environment of [undefined, "main", "typo"]) {
+      if (environment === undefined) delete process.env.GITHUB_FORECAST_ENVIRONMENT;
+      else process.env.GITHUB_FORECAST_ENVIRONMENT = environment;
+      await assert.rejects(dispatchGitHubForecast(jobId, datasetId, async () => {
+        assert.fail("Invalid environment must not dispatch");
+      }), /GITHUB_FORECAST_CONFIG/);
+    }
   } finally {
+    if (previousEnvironment === undefined) delete process.env.GITHUB_FORECAST_ENVIRONMENT;
+    else process.env.GITHUB_FORECAST_ENVIRONMENT = previousEnvironment;
     for (const [name, value] of [["GITHUB_FORECAST_TOKEN", before.token], ["GITHUB_FORECAST_REPOSITORY", before.repo]]) {
       if (value === undefined) delete process.env[name]; else process.env[name] = value;
     }

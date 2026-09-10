@@ -14,7 +14,7 @@ function dispatchStatusMessage(status) {
     [401, "Token is invalid or expired."],
     [403, "Check Actions write permission, repository access, organization approval, and rate limits."],
     [404, "Check repository name, token repository access, and workflow presence on the default branch."],
-    [422, "Check the testing branch, workflow_dispatch trigger, and datasetId/predictionRunId inputs."],
+    [422, "Check the configured environment branch, workflow_dispatch trigger, and environment/datasetId/predictionRunId inputs."],
     [400, "GitHub rejected the request format or API version."],
     [429, "GitHub rate limit reached."],
   ]);
@@ -31,19 +31,23 @@ export function usesGitHubForecasts() {
 export async function dispatchGitHubForecast(jobId, datasetId, request = fetch) {
   const repository = process.env.GITHUB_FORECAST_REPOSITORY?.trim() || "";
   const token = process.env.GITHUB_FORECAST_TOKEN?.trim();
+  const environment = process.env.GITHUB_FORECAST_ENVIRONMENT?.trim();
+  if (environment !== "testing" && environment !== "production") {
+    throw new ForecastDispatchError("GITHUB_FORECAST_CONFIG: Set GITHUB_FORECAST_ENVIRONMENT to testing or production on the API backend.");
+  }
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
     throw new ForecastDispatchError("GITHUB_FORECAST_CONFIG: Set GITHUB_FORECAST_REPOSITORY on the API backend to owner/repository (not a URL).");
   }
   if (!token) throw new ForecastDispatchError("GITHUB_FORECAST_CONFIG: Set GITHUB_FORECAST_TOKEN on the API backend, not only in GitHub Environment secrets.");
   try {
-    const response = await request(`https://api.github.com/repos/${repository}/actions/workflows/forecast-testing-auto.yml/dispatches`, {
+    const response = await request(`https://api.github.com/repos/${repository}/actions/workflows/forecast-job.yml/dispatches`, {
       method: "POST",
       redirect: "error",
       headers: {
         Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`,
         "Content-Type": "application/json", "X-GitHub-Api-Version": "2026-03-10",
       },
-      body: JSON.stringify({ ref: "testing", inputs: { datasetId, predictionRunId: jobId } }),
+      body: JSON.stringify({ ref: environment, inputs: { environment, datasetId, predictionRunId: jobId } }),
       signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) throw new ForecastDispatchError(dispatchStatusMessage(response.status));

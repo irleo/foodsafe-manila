@@ -6,7 +6,7 @@ export function registerPredictionCron() {
   // Monthly fallback: first day of each month at 01:00 server time.
   cron.schedule("0 1 1 * *", async () => {
     try {
-      // Uploads/manual refresh drive the testing trial. Never start local Python
+      // Uploads/manual refresh drive GitHub execution. Never start local Python
       // behind an API configured for remote execution.
       if (usesGitHubForecasts()) return;
       await refreshMonthlyDistrictPredictions({

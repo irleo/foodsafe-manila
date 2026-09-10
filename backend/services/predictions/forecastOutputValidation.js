@@ -14,14 +14,14 @@ function integer(value) {
   return value;
 }
 
-/** Validate complete one-month output before the write trial publishes it.
+/** Validate complete one-month output before a worker publishes it.
  * @param {unknown} value
  * @param {string} datasetId
  * @param {readonly string[]} expectedDiseases
  * @param {number} schemaVersion
  * @returns {void}
  */
-export function validateForecastWriteTrial(value, datasetId, expectedDiseases, schemaVersion) {
+export function validateForecastOutput(value, datasetId, expectedDiseases, schemaVersion) {
   const result = record(value);
   const payload = record(result.payload);
   if (result.dryRun !== true || result.status !== "success"
@@ -30,7 +30,7 @@ export function validateForecastWriteTrial(value, datasetId, expectedDiseases, s
     || payload.datasetScope !== datasetId
     || payload.schemaVersion !== schemaVersion
     || result.forecastHorizonMonths !== 1 || payload.forecastHorizonMonths !== 1) {
-    throw new Error("Forecast output does not match the requested testing scope.");
+    throw new Error("Forecast output does not match the requested dataset scope.");
   }
   const year = integer(result.forecastTargetYear);
   const month = integer(result.forecastTargetMonth);
@@ -46,7 +46,7 @@ export function validateForecastWriteTrial(value, datasetId, expectedDiseases, s
   function point(scope) {
     const model = record(scope);
     if (model.status !== "success" || !Array.isArray(model.forecast) || model.forecast.length !== 1) {
-      throw new Error("Write trial requires complete successful forecasts.");
+      throw new Error("Forecast publication requires complete successful forecasts.");
     }
     const forecast = record(model.forecast[0]);
     const cases = integer(forecast.predictedCases);
@@ -56,7 +56,7 @@ export function validateForecastWriteTrial(value, datasetId, expectedDiseases, s
     return cases;
   }
   if (!Array.isArray(payload.diseases) || payload.diseases.length !== expectedDiseases.length) {
-    throw new Error("Write trial requires every supported disease.");
+    throw new Error("Forecast publication requires every supported disease.");
   }
   const seenDiseases = new Set();
   for (const item of payload.diseases) {
@@ -66,7 +66,7 @@ export function validateForecastWriteTrial(value, datasetId, expectedDiseases, s
     }
     seenDiseases.add(disease.disease);
     if (!Array.isArray(disease.districts) || disease.districts.length !== 6) {
-      throw new Error("Write trial requires all six districts.");
+      throw new Error("Forecast publication requires all six districts.");
     }
     const seenDistricts = new Set();
     let total = 0;

@@ -19,6 +19,7 @@ backend/scripts/*
 !backend/scripts/runMonthlyForecastWriteTrial.js
 !backend/scripts/runGitHubForecastJob.js
 !docs/forecast-testing.md
+!docs/forecast-production.md
 /forecast-artifacts/
 /forecast-write-artifacts/
 

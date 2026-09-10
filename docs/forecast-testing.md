@@ -1,5 +1,9 @@
 # Manual forecast trial on GitHub Actions
 
+The automatic worker is now shared: see [GitHub forecast deployment](forecast-production.md)
+for the current `forecast-job.yml` workflow, generic worker secrets, and production
+rollout. The manual trial instructions below still apply to testing only.
+
 ## Performance comparison
 
 GitHub testing workflows set `FORECAST_MODEL_CONCURRENCY=2`; local API execution
@@ -60,8 +64,8 @@ The data must have verified complete district coverage stored in MongoDB.
 Historical datasets that depend on a local workbook path unavailable on the runner
 need to be prepared in the testing environment before this trial.
 
-The workflow installs the repository's pinned Prophet dependencies, runs districts
-sequentially, and retains `forecast.json` and `summary.json` for three days.
+The workflow installs the repository's pinned Prophet dependencies with uv, runs
+up to two districts concurrently, and retains JSON artifacts for three days.
 Only one trial runs at a time. GitHub may replace an older pending run when another
 is submitted; this concurrency setting is not a durable application job queue.
 
@@ -143,7 +147,7 @@ and a controlled switch from local execution.
 
 ## Third trial: automatic dispatch from the testing API
 
-The testing backend can now dispatch `.github/workflows/forecast-testing-auto.yml`
+The testing backend can now dispatch `.github/workflows/forecast-job.yml`
 after a validated upload. The new upload's ID is the cumulative-history anchor,
 matching the latest-dataset scope requested by the Predictions page.
 
@@ -161,13 +165,14 @@ matching the latest-dataset scope requested by the Predictions page.
 
    ```text
    FORECAST_EXECUTION_MODE=github
+   GITHUB_FORECAST_ENVIRONMENT=testing
    GITHUB_FORECAST_REPOSITORY=irleo/foodsafe-manila
    GITHUB_FORECAST_TOKEN=<fine-grained token>
    ```
 
 4. The API's `MONGO_URI` and the GitHub environment's
-   `TEST_FORECAST_WRITE_MONGO_URI` must address the same isolated testing database.
-   Keep `TEST_FORECAST_DB_NAME` configured in the GitHub environment. Extend the
+   `FORECAST_MONGO_URI` must address the same isolated testing database.
+   Keep `FORECAST_DB_NAME` configured in the GitHub environment. Extend the
    worker user's custom role to include **update** on `predictionRuns`, in addition
    to find/insert and read access to input data. A testing-database readWrite user
    already has the necessary permissions.
@@ -182,8 +187,8 @@ fields are backward compatible with old records, which remain local by default.
 
 ### Expected behavior
 
-Upload one valid testing workbook and open Actions → **Forecast testing (automatic
-job)**. The upload remains successful even if dispatch fails; inspect Predictions
+Upload one valid testing workbook and open Actions → **Forecast generation**.
+The upload remains successful even if dispatch fails; inspect Predictions
 for the forecast outcome. Dispatch has a ten-second network timeout.
 
 The backend inserts a job under `status: running`, `executionBackend: github`,
@@ -202,7 +207,7 @@ request will not launch local Python for an existing GitHub-owned job.
 
 Remote refreshes currently support only a one-month horizon. The in-process monthly
 cron skips local execution in GitHub mode; this testing phase is upload/manual driven.
-Production mode preserves the existing monthly cron.
+Local execution preserves the existing monthly cron; GitHub execution skips it in both environments.
 
 ### Verification and recovery
 

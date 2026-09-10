@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import mongoose from "mongoose";
-import { validateForecastWriteTrial } from "../services/predictions/forecastWriteTrialValidation.js";
+import { validateForecastOutput } from "../services/predictions/forecastOutputValidation.js";
 import {
   ForecastTrialSetupError,
   readForecastTrialConfiguration,
@@ -85,7 +85,7 @@ async function main() {
         signal: controller.signal,
       });
       reportStage("forecast_validation");
-      validateForecastWriteTrial(
+      validateForecastOutput(
         computed,
         datasetId,
         SURVEILLANCE_DISEASES,
@@ -138,7 +138,7 @@ async function main() {
         "Saved forecast could not be verified using the API eligibility check.",
       );
     }
-    validateForecastWriteTrial(
+    validateForecastOutput(
       { ...saved, dryRun: true },
       datasetId,
       SURVEILLANCE_DISEASES,
