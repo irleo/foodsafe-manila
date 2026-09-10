@@ -9,6 +9,7 @@ import { paginationMeta, parsePagination } from "../utils/pagination.js";
 import { logActivity } from "../utils/logActivity.js";
 import { importOfficialCasesXlsx } from "../services/officialCaseImportService.js";
 import { refreshMonthlyDistrictPredictions } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
+import { startGitHubForecast, usesGitHubForecasts } from "../services/predictions/githubForecastJobs.js";
 import { createNotification } from "../services/notificationService.js";
 import { resolveCumulativeDatasetSummaries } from "../services/cumulativeOfficialCaseService.js";
 import {
@@ -62,6 +63,15 @@ function predictionRefreshTimeoutMs() {
 }
 
 async function startDatasetPredictionRefresh(datasetId) {
+  try {
+    if (usesGitHubForecasts()) {
+      await startGitHubForecast({ datasetId, trigger: "official_upload" });
+      return;
+    }
+  } catch (error) {
+    logServerError(error, { code: "PREDICTION_DISPATCH_FAILED", route: "dataset:upload" });
+    return;
+  }
   if (!mongoose.Types.ObjectId.isValid(datasetId)) {
     logServerError(new Error("Prediction refresh received an invalid dataset ID."), {
       code: "PREDICTION_JOB_INVALID_DATASET_ID",

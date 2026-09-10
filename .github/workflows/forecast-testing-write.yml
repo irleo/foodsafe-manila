@@ -1,0 +1,71 @@
+name: Forecast testing (save to database)
+
+on:
+  workflow_dispatch:
+    inputs:
+      datasetId:
+        description: Validated dataset ObjectId in the testing database
+        required: true
+        type: string
+      confirmTestWrite:
+        description: Save a new forecast to the testing database
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: forecast-testing
+  cancel-in-progress: false
+
+jobs:
+  forecast:
+    if: github.ref == 'refs/heads/testing' && inputs.confirmTestWrite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: forecast-testing
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: '0.12.12'
+          enable-cache: true
+          cache-dependency-glob: backend/services/prophet/requirements.txt
+      - name: Install Node dependencies
+        run: npm ci --omit=dev
+        working-directory: backend
+      - name: Install Python dependencies
+        run: uv pip install --system --python python -r backend/services/prophet/requirements.txt
+      - name: Compute, save, and verify testing forecast
+        run: node backend/scripts/runMonthlyForecastWriteTrial.js
+        env:
+          TEST_FORECAST_WRITE_MONGO_URI: ${{ secrets.TEST_FORECAST_WRITE_MONGO_URI }}
+          TEST_FORECAST_DB_NAME: ${{ vars.TEST_FORECAST_DB_NAME }}
+          DATASET_ID: ${{ inputs.datasetId }}
+          CONFIRM_TEST_WRITE: ${{ inputs.confirmTestWrite }}
+          PYTHON_BIN: python
+          PROPHET_PROCESS_TIMEOUT_MS: '300000'
+          FORECAST_MODEL_CONCURRENCY: '2'
+          OMP_NUM_THREADS: '1'
+          OPENBLAS_NUM_THREADS: '1'
+          MKL_NUM_THREADS: '1'
+      - name: Save verification summary
+        uses: actions/upload-artifact@v7
+        with:
+          name: forecast-write-testing-${{ github.run_id }}-${{ github.run_attempt }}
+          path: forecast-write-artifacts/summary.json
+          if-no-files-found: error
+          retention-days: 3

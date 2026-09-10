@@ -15,6 +15,13 @@ docs/*
 !backend/scripts/
 backend/scripts/*
 !backend/scripts/reviewIndexes.js
+!backend/scripts/runMonthlyForecastDryRun.js
+!backend/scripts/runMonthlyForecastWriteTrial.js
+!backend/scripts/runGitHubForecastJob.js
+!docs/forecast-testing.md
+!docs/forecast-production.md
+/forecast-artifacts/
+/forecast-write-artifacts/
 
 # Logs
 logs

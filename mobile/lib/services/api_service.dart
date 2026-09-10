@@ -76,10 +76,7 @@ class ApiService {
   }) async {
     final response = await ApiClient.post(
       '/auth/email/otp/send',
-      body: {
-        'email': email,
-        'purpose': purpose,
-      },
+      body: {'email': email, 'purpose': purpose},
       auth: false,
     );
 
@@ -132,10 +129,7 @@ class ApiService {
       auth: false,
     );
 
-    ApiClient.throwIfError(
-      response,
-      fallback: 'Failed to check email address',
-    );
+    ApiClient.throwIfError(response, fallback: 'Failed to check email address');
 
     final data = ApiClient.decodeMap(response);
     return data['exists'] as bool? ?? false;
@@ -148,27 +142,17 @@ class ApiService {
   }) async {
     final response = await ApiClient.post(
       '/auth/email/otp/verify',
-      body: {
-        'email': email,
-        'purpose': purpose,
-        'otp': otp,
-      },
+      body: {'email': email, 'purpose': purpose, 'otp': otp},
       auth: false,
     );
 
-    ApiClient.throwIfError(
-      response,
-      fallback: 'Failed to verify code',
-    );
+    ApiClient.throwIfError(response, fallback: 'Failed to verify code');
 
     final data = ApiClient.decodeMap(response);
     final token = data['verificationToken'] as String?;
 
     if (token == null || token.isEmpty) {
-      throw ApiException(
-        response.statusCode,
-        'Verification token is missing',
-      );
+      throw ApiException(response.statusCode, 'Verification token is missing');
     }
 
     return token;
@@ -180,10 +164,7 @@ class ApiService {
   }) async {
     final response = await ApiClient.post(
       '/auth/email/otp/cancel',
-      body: {
-        'email': email,
-        'purpose': purpose,
-      },
+      body: {'email': email, 'purpose': purpose},
       auth: false,
     );
 
@@ -210,10 +191,7 @@ class ApiService {
       auth: false,
     );
 
-    ApiClient.throwIfError(
-      response,
-      fallback: 'Failed to update password',
-    );
+    ApiClient.throwIfError(response, fallback: 'Failed to update password');
 
     return response.statusCode == 200;
   }
@@ -325,18 +303,16 @@ class ApiService {
     String? disease,
   }) async {
     final response = await ApiClient.get(
-      '/official-cases/analytics',
+      '/insights/analytics',
       query: {
         'period': period,
         if (district != null && district.isNotEmpty) 'district': district,
         if (disease != null && disease.isNotEmpty) 'disease': disease,
       },
+      auth: false,
     );
 
-    ApiClient.throwIfError(
-      response,
-      fallback: 'Failed to load insights data',
-    );
+    ApiClient.throwIfError(response, fallback: 'Failed to load insights data');
 
     return ApiClient.decodeMap(response);
   }
@@ -353,8 +329,9 @@ class ApiService {
     };
 
     final response = await ApiClient.get(
-      '/predictions',
+      '/insights/predictions',
       query: query.isNotEmpty ? query : null,
+      auth: false,
     );
 
     ApiClient.throwIfError(response, fallback: 'Prediction request failed');

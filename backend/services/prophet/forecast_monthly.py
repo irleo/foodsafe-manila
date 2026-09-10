@@ -152,7 +152,8 @@ def main() -> None:
         payload = json.loads(raw) if raw.strip() else {}
         series = payload.get("series") or []
         horizon = int(payload.get("horizonMonths") or 1)
-        backtest_months = int(payload.get("backtestMonths") or 19)
+        # Zero explicitly requests reuse of validated historical backtests.
+        backtest_months = int(payload.get("backtestMonths", 19))
         out = run_forecast(series, horizon, backtest_months)
         print(json.dumps(out), flush=True)
     except Exception as e:
