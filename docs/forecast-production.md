@@ -46,7 +46,8 @@ artifact workflow is introduced.
 ## Configure the Render backend
 
 First migrate testing to the new workflow and verify one fresh upload/refresh.
-Deploy matching code to production with local execution still enabled, then set:
+Configure the matching production backend for GitHub execution before deploying
+the Node-only Render build:
 
 ```text
 FORECAST_EXECUTION_MODE=github
@@ -62,7 +63,16 @@ No new frontend environment variables are required.
 
 Coordinate backend deployment with the workflow rename: an old backend still
 dispatches the removed filename. Let existing jobs complete before switching.
-Keep Python/local deployment support for rollback until production verification.
+The Render backend build command is now `npm ci`; Prophet dependencies are installed
+only by the GitHub workflows. Ensure the live service's Build Command also matches
+`npm ci` if it is managed separately from this blueprint. Keep
+`FORECAST_EXECUTION_MODE=github`. `PYTHON_BIN` may remain configured but is unused
+for remote execution; this change does not uninstall a system Python runtime.
+
+Local rollback now requires restoring the backend build command to
+`npm ci && python3 -m pip install -r services/prophet/requirements.txt`, rebuilding
+successfully with a working `PYTHON_BIN`, and only then switching execution to
+`local`. Keep GitHub execution enabled during dependency restoration.
 
 ## Verify and recover
 

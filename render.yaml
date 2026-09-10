@@ -72,7 +72,9 @@ services:
   - key: NODE_ENV
     sync: false
   region: oregon
-  buildCommand: npm ci && python3 -m pip install -r services/prophet/requirements.txt
+  # Prophet dependencies are installed by the GitHub Actions worker.
+  # Requires FORECAST_EXECUTION_MODE=github on the backend service.
+  buildCommand: npm ci
   startCommand: npm start
   healthCheckPath: /api/health
   autoDeployTrigger: checksPass
