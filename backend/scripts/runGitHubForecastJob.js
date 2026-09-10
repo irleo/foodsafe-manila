@@ -1,13 +1,19 @@
 // @ts-check
 import mongoose from "mongoose";
-import { readForecastTrialConfiguration, safeForecastTrialDiagnostic, ForecastTrialSetupError } from "../services/predictions/forecastWriteTrialDiagnostics.js";
+import {
+  readForecastTrialConfiguration,
+  safeForecastTrialDiagnostic,
+  ForecastTrialSetupError,
+} from "../services/predictions/forecastWriteTrialDiagnostics.js";
 import { validateForecastWriteTrial } from "../services/predictions/forecastWriteTrialValidation.js";
 
 let stage = "configuration";
 async function main() {
-  const { uri, expectedDatabase, datasetId, runId } = readForecastTrialConfiguration(process.env);
+  const { uri, expectedDatabase, datasetId, runId } =
+    readForecastTrialConfiguration(process.env);
   const jobId = process.env.PREDICTION_RUN_ID?.trim();
-  if (!jobId || !/^[a-f\d]{24}$/i.test(jobId)) throw new Error("Invalid prediction job ID.");
+  if (!jobId || !/^[a-f\d]{24}$/i.test(jobId))
+    throw new Error("Invalid prediction job ID.");
   mongoose.set("autoCreate", false);
   mongoose.set("autoIndex", false);
   const abort = new AbortController();
@@ -17,40 +23,91 @@ async function main() {
   process.once("SIGINT", cancel);
   try {
     stage = "database_connection";
-    await mongoose.connect(uri, { autoCreate: false, autoIndex: false, maxPoolSize: 3, serverSelectionTimeoutMS: 15_000, socketTimeoutMS: 60_000 });
-    if (mongoose.connection.name !== expectedDatabase) throw new ForecastTrialSetupError("DATABASE_MISMATCH");
-    const { default: PredictionRun } = await import("../models/PredictionRun.js");
-    const { claimGitHubForecast, failGitHubForecast, ownedGitHubJobFilter } = await import("../services/predictions/githubForecastWorkerStore.js");
-    const { refreshMonthlyDistrictPredictions, FORECAST_SCHEMA_VERSION, isUsablePredictionRun } = await import("../services/predictions/refreshMonthlyDistrictPredictions.js");
-    const { SURVEILLANCE_DISEASES } = await import("../constants/surveillanceMethodology.js");
+    await mongoose.connect(uri, {
+      autoCreate: false,
+      autoIndex: false,
+      maxPoolSize: 3,
+      serverSelectionTimeoutMS: 15_000,
+      socketTimeoutMS: 60_000,
+    });
+    if (mongoose.connection.name !== expectedDatabase)
+      throw new ForecastTrialSetupError("DATABASE_MISMATCH");
+    const { default: PredictionRun } =
+      await import("../models/PredictionRun.js");
+    const { claimGitHubForecast, failGitHubForecast, ownedGitHubJobFilter } =
+      await import("../services/predictions/githubForecastWorkerStore.js");
+    const {
+      refreshMonthlyDistrictPredictions,
+      FORECAST_SCHEMA_VERSION,
+      isUsablePredictionRun,
+    } =
+      await import("../services/predictions/refreshMonthlyDistrictPredictions.js");
+    const { SURVEILLANCE_DISEASES } =
+      await import("../constants/surveillanceMethodology.js");
     stage = "claim";
     const job = await claimGitHubForecast(jobId, datasetId, runId);
     if (!job) {
       const prior = await PredictionRun.findById(jobId).lean();
-      if (prior?.status === "success" && prior.executionBackend === "github"
-        && String(prior.basisDatasetId) === datasetId && isUsablePredictionRun(prior, { horizonMonths: 1 })) {
-        console.log("[github-forecast] Job already completed; nothing to recompute.");
+      if (
+        prior?.status === "success" &&
+        prior.executionBackend === "github" &&
+        String(prior.basisDatasetId) === datasetId &&
+        isUsablePredictionRun(prior, { horizonMonths: 1 })
+      ) {
+        console.log(
+          "[github-forecast] Job already completed; nothing to recompute.",
+        );
         return;
       }
-      throw new Error("Job is already claimed, expired, failed, or does not match this dataset.");
+      throw new Error(
+        "Job is already claimed, expired, failed, or does not match this dataset.",
+      );
     }
     try {
       stage = "compute";
       console.log(`[github-forecast] Computing claimed job ${jobId}.`);
-      const computed = await refreshMonthlyDistrictPredictions({ datasetId, horizonMonths: 1, force: true, dryRun: true, signal: abort.signal });
+      const computed = await refreshMonthlyDistrictPredictions({
+        datasetId,
+        horizonMonths: 1,
+        force: true,
+        dryRun: true,
+        signal: abort.signal,
+      });
       stage = "validate";
-      validateForecastWriteTrial(computed, datasetId, SURVEILLANCE_DISEASES, FORECAST_SCHEMA_VERSION);
+      validateForecastWriteTrial(
+        computed,
+        datasetId,
+        SURVEILLANCE_DISEASES,
+        FORECAST_SCHEMA_VERSION,
+      );
       abort.signal.throwIfAborted();
       stage = "save";
-      const saved = await PredictionRun.findOneAndUpdate({
-        ...ownedGitHubJobFilter(jobId, runId), executionExpiresAt: { $gt: new Date() },
-      }, { $set: {
-        status: "success", executionPhase: "finished", finishedAt: new Date(), generatedAt: new Date(),
-        errorMessage: null, basisYear: computed.basisYear, basisMonth: computed.basisMonth,
-        forecastTargetYear: computed.forecastTargetYear, forecastTargetMonth: computed.forecastTargetMonth,
-        inputFingerprint: computed.inputFingerprint, payload: computed.payload,
-      } }, { new: true, runValidators: true }).lean();
-      if (!saved || !isUsablePredictionRun(saved, { horizonMonths: 1 })) throw new Error("Job is no longer active or output verification failed.");
+      const saved = await PredictionRun.findOneAndUpdate(
+        {
+          ...ownedGitHubJobFilter(jobId, runId),
+          executionExpiresAt: { $gt: new Date() },
+        },
+        {
+          $set: {
+            status: "success",
+            executionPhase: "finished",
+            finishedAt: new Date(),
+            generatedAt: new Date(),
+            errorMessage: null,
+            basisYear: computed.basisYear,
+            basisMonth: computed.basisMonth,
+            forecastTargetYear: computed.forecastTargetYear,
+            forecastTargetMonth: computed.forecastTargetMonth,
+            inputFingerprint: computed.inputFingerprint,
+            payload: computed.payload,
+          },
+        },
+        { new: true, runValidators: true },
+      ).lean();
+      if (!saved || !isUsablePredictionRun(saved, { horizonMonths: 1 }))
+        throw new Error(
+          "Job is no longer active or output verification failed.",
+        );
       console.log(`[github-forecast] Saved predictionRunId=${jobId}.`);
     } catch (error) {
       await failGitHubForecast(jobId, runId);
@@ -64,6 +121,8 @@ async function main() {
   }
 }
 main().catch((error) => {
-  console.error(`[github-forecast] stage=${stage}; ${safeForecastTrialDiagnostic(error)}`);
+  console.error(
+    `[github-forecast] stage=${stage}; ${safeForecastTrialDiagnostic(error)}`,
+  );
   process.exitCode = 1;
 });

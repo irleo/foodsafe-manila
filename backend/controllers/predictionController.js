@@ -433,6 +433,13 @@ export const refreshPredictions = async (req, res) => {
     });
   } catch (error) {
     const message = error?.message || "Server error";
+    logServerError(error, {
+      errorId: req.errorId,
+      code: "FORECAST_REFRESH_FAILED",
+      method: req.method,
+      route: req.baseUrl,
+      userId: req.user?.id,
+    });
     const setupError = /Prophet|Python|prophet_import|PYTHON_BIN/i.test(message);
     const eligibilityError =
       /verified complete coverage|required|months|unavailable/i.test(message);

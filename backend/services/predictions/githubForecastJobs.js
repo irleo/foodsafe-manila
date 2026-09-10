@@ -4,6 +4,23 @@ import PredictionRun from "../../models/PredictionRun.js";
 
 export const GITHUB_JOB_LIFETIME_MS = 45 * 60_000;
 
+class ForecastDispatchError extends Error {}
+
+/** Fixed server-log diagnostics; never include GitHub response bodies or tokens.
+ * @param {number} status
+ */
+function dispatchStatusMessage(status) {
+  const hints = new Map([
+    [401, "Token is invalid or expired."],
+    [403, "Check Actions write permission, repository access, organization approval, and rate limits."],
+    [404, "Check repository name, token repository access, and workflow presence on the default branch."],
+    [422, "Check the testing branch, workflow_dispatch trigger, and datasetId/predictionRunId inputs."],
+    [400, "GitHub rejected the request format or API version."],
+    [429, "GitHub rate limit reached."],
+  ]);
+  return `GITHUB_FORECAST_HTTP_${status}: ${hints.get(status) || "GitHub rejected the dispatch request."}`;
+}
+
 export function usesGitHubForecasts() {
   const mode = process.env.FORECAST_EXECUTION_MODE || "local";
   if (!["local", "github"].includes(mode)) throw new Error("Invalid forecast execution mode.");
@@ -12,11 +29,12 @@ export function usesGitHubForecasts() {
 
 /** @param {string} jobId @param {string} datasetId @param {typeof fetch} request */
 export async function dispatchGitHubForecast(jobId, datasetId, request = fetch) {
-  const repository = process.env.GITHUB_FORECAST_REPOSITORY || "";
-  const token = process.env.GITHUB_FORECAST_TOKEN;
-  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) || !token) {
-    throw new Error("GitHub forecast dispatch is not configured.");
+  const repository = process.env.GITHUB_FORECAST_REPOSITORY?.trim() || "";
+  const token = process.env.GITHUB_FORECAST_TOKEN?.trim();
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
+    throw new ForecastDispatchError("GITHUB_FORECAST_CONFIG: Set GITHUB_FORECAST_REPOSITORY on the API backend to owner/repository (not a URL).");
   }
+  if (!token) throw new ForecastDispatchError("GITHUB_FORECAST_CONFIG: Set GITHUB_FORECAST_TOKEN on the API backend, not only in GitHub Environment secrets.");
   try {
     const response = await request(`https://api.github.com/repos/${repository}/actions/workflows/forecast-testing-auto.yml/dispatches`, {
       method: "POST",
@@ -28,11 +46,12 @@ export async function dispatchGitHubForecast(jobId, datasetId, request = fetch) 
       body: JSON.stringify({ ref: "testing", inputs: { datasetId, predictionRunId: jobId } }),
       signal: AbortSignal.timeout(10_000),
     });
-    if (!response.ok) throw new Error("GitHub rejected forecast dispatch.");
-    await response.body?.cancel();
-  } catch {
+    if (!response.ok) throw new ForecastDispatchError(dispatchStatusMessage(response.status));
+    // Dispatch has been accepted. Body cleanup must not turn it into a failed job.
+  } catch (error) {
+    if (error instanceof ForecastDispatchError) throw error;
     // Do not expose response bodies, request credentials, or transport errors.
-    throw new Error("Forecast could not be dispatched to GitHub. Check the workflow and token configuration.");
+    throw new ForecastDispatchError("GITHUB_FORECAST_NETWORK: Dispatch timed out or GitHub could not be reached. Check API-backend outbound connectivity.");
   }
 }
 

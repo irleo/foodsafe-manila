@@ -36,6 +36,11 @@ test("dispatch selects testing and sends IDs as JSON; transport errors hide cred
     await assert.rejects(dispatchGitHubForecast(jobId, datasetId, async () => {
       throw new Error("test-secret");
     }), (error) => !error.message.includes("test-secret"));
+    for (const status of [400, 401, 403, 404, 422, 429, 500]) {
+      await assert.rejects(dispatchGitHubForecast(jobId, datasetId, async () => new Response("secret response body", { status })),
+        (error) => error.message.includes(`HTTP_${status}`) && !error.message.includes("secret response body"));
+    }
+    await dispatchGitHubForecast(jobId, datasetId, async () => new Response("{}", { status: 200 }));
   } finally {
     for (const [name, value] of [["GITHUB_FORECAST_TOKEN", before.token], ["GITHUB_FORECAST_REPOSITORY", before.repo]]) {
       if (value === undefined) delete process.env[name]; else process.env[name] = value;
