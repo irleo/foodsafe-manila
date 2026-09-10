@@ -3,22 +3,18 @@ import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import mongoose from "mongoose";
 import { validateForecastWriteTrial } from "../services/predictions/forecastWriteTrialValidation.js";
+import { ForecastTrialSetupError, readForecastTrialConfiguration, safeForecastTrialDiagnostic } from "../services/predictions/forecastWriteTrialDiagnostics.js";
+
+let stage = "configuration";
+/** @param {string} nextStage */
+function reportStage(nextStage) {
+  stage = nextStage;
+  console.log(`[forecast-write-trial] stage=${stage}`);
+}
 
 /** Compute first, insert one successful record, then verify it. @returns {Promise<void>} */
 async function main() {
-  const uri = process.env.TEST_FORECAST_WRITE_MONGO_URI?.trim();
-  const expectedDatabase = process.env.TEST_FORECAST_DB_NAME?.trim();
-  const datasetId = process.env.DATASET_ID?.trim();
-  const runId = process.env.GITHUB_RUN_ID;
-  const repository = process.env.GITHUB_REPOSITORY;
-  if (process.env.GITHUB_ACTIONS !== "true" || process.env.GITHUB_REF !== "refs/heads/testing"
-    || process.env.CONFIRM_TEST_WRITE !== "true" || !runId || !repository) {
-    throw new Error("Write trials require a confirmed GitHub Actions run on testing.");
-  }
-  if (!uri || !expectedDatabase || ["admin", "config", "local"].includes(expectedDatabase)
-    || !datasetId || !/^[a-f\d]{24}$/i.test(datasetId)) {
-    throw new Error("Configure the testing write secret, expected database name, and dataset ID.");
-  }
+  const { uri, expectedDatabase, datasetId, runId, repository } = readForecastTrialConfiguration(process.env);
   mongoose.set("autoCreate", false);
   mongoose.set("autoIndex", false);
   const controller = new AbortController();
@@ -28,36 +24,43 @@ async function main() {
   process.once("SIGINT", cancel);
   const started = performance.now();
   try {
+    reportStage("database_connection");
     await mongoose.connect(uri, {
       autoCreate: false, autoIndex: false, maxPoolSize: 3,
       serverSelectionTimeoutMS: 15_000, socketTimeoutMS: 60_000,
     });
     if (mongoose.connection.name !== expectedDatabase) {
-      throw new Error("Connected database does not match TEST_FORECAST_DB_NAME.");
+      throw new ForecastTrialSetupError("DATABASE_MISMATCH");
     }
+    reportStage("module_loading");
     const { default: Dataset } = await import("../models/Dataset.js");
     const { default: PredictionRun } = await import("../models/PredictionRun.js");
     const { SURVEILLANCE_DISEASES } = await import("../constants/surveillanceMethodology.js");
     const { refreshMonthlyDistrictPredictions, FORECAST_SCHEMA_VERSION, isUsablePredictionRun } = await import("../services/predictions/refreshMonthlyDistrictPredictions.js");
+    reportStage("dataset_lookup");
     const dataset = await Dataset.findOne({
       _id: datasetId, status: "validated", providerType: "cesu",
     }).select("_id").lean();
-    if (!dataset) throw new Error("Validated CESU dataset not found in testing.");
+    if (!dataset) throw new ForecastTrialSetupError("DATASET_NOT_FOUND");
 
     // Stable within one workflow run (including retries), unique across new runs.
     const id = new mongoose.Types.ObjectId(createHash("sha256")
       .update(`forecast-write-trial:${repository}:${runId}:${datasetId}`)
       .digest("hex").slice(0, 24));
+    reportStage("existing_result_lookup");
     let saved = await PredictionRun.findById(id).lean();
     let reused = Boolean(saved);
     if (!saved) {
+      reportStage("forecast_computation");
       const computed = await refreshMonthlyDistrictPredictions({
         datasetId, horizonMonths: 1, force: true, dryRun: true, signal: controller.signal,
       });
+      reportStage("forecast_validation");
       validateForecastWriteTrial(computed, datasetId, SURVEILLANCE_DISEASES, FORECAST_SCHEMA_VERSION);
       controller.signal.throwIfAborted();
       // Whitelist fields; append a new success record without replacing prior forecasts.
       try {
+        reportStage("database_insert");
         await PredictionRun.create({
           _id: id, model: "prophet", granularity: "monthly_disease_district_cases",
           datasetScope: dataset._id, basisDatasetId: dataset._id, trigger: "manual",
@@ -73,12 +76,15 @@ async function main() {
         // Another attempt may have completed the same run; verify the exact record below.
         reused = true;
       }
+      reportStage("database_read_back");
       saved = await PredictionRun.findById(id).lean();
     }
+    reportStage("saved_result_validation");
     if (!saved || saved.status !== "success" || !isUsablePredictionRun(saved, { horizonMonths: 1 })) {
       throw new Error("Saved forecast could not be verified using the API eligibility check.");
     }
     validateForecastWriteTrial({ ...saved, dryRun: true }, datasetId, SURVEILLANCE_DISEASES, FORECAST_SCHEMA_VERSION);
+    reportStage("summary_export");
     await mkdir("forecast-write-artifacts", { recursive: true });
     await writeFile("forecast-write-artifacts/summary.json", JSON.stringify({
       predictionRunId: String(id), datasetId, status: saved.status, verifiedReadBack: true,
@@ -95,7 +101,7 @@ async function main() {
   }
 }
 
-main().catch(() => {
-  console.error("[forecast-write-trial] Failed. Check testing configuration, dataset coverage, and database permissions. If persistence completed, rerun this same workflow run to verify without duplicating it.");
+main().catch((error) => {
+  console.error(`[forecast-write-trial] stage=${stage}; ${safeForecastTrialDiagnostic(error)}`);
   process.exitCode = 1;
 });
