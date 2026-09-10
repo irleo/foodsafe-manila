@@ -110,10 +110,89 @@ class _SignupScreenState extends State<SignupScreen> {
       SnackbarWidgets.success(context, "Verification code sent");
       return true;
     } catch (error) {
-      if (mounted) SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+      if (mounted)
+        SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
       return false;
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _confirmCancelSignup() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          "Cancel registration?",
+          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+        ),
+        content: Text(
+          "Your account registration will be cancelled. "
+          "The verification code will no longer be used. Are you sure?",
+          style: GoogleFonts.inter(),
+        ),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    Navigator.pop(context, true);
+                  },
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    side: const BorderSide(color: Color(0xFF2563EB)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: Text(
+                    "Yes",
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF2563EB),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context, false);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: Text(
+                    "No",
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirm != true) return;
+    _resendTimer?.cancel();
+    for (final controller in otpControllers) {
+      controller.clear();
+    }
+    _otpCtrl.clear();
+    if (mounted) {
+      Navigator.pop(context);
     }
   }
 
@@ -145,7 +224,8 @@ class _SignupScreenState extends State<SignupScreen> {
         Navigator.pop(context); // return to login
       }
     } catch (error) {
-      if (mounted) SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+      if (mounted)
+        SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -163,13 +243,14 @@ class _SignupScreenState extends State<SignupScreen> {
         if (!mounted) return;
 
         if (exists) {
-          SnackbarWidgets.error(context, "Phone number already registered");
+          SnackbarWidgets.error(context, "Please check your information and try again.");
           return;
         }
 
         setState(() => _currentStep = 1);
       } catch (error) {
-        if (mounted) SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+        if (mounted)
+          SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
       } finally {
         if (mounted) setState(() => _loading = false);
       }
@@ -195,73 +276,92 @@ class _SignupScreenState extends State<SignupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        top: true,
-        child: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+      body: PopScope(
+        canPop: _currentStep != 2,
+        onPopInvokedWithResult: (didPop, result) async {
+          if (didPop) return;
+
+          if (_currentStep == 2) {
+            await _confirmCancelSignup();
+          }
+        },
+        child: SafeArea(
+          top: true,
+          child: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+              ),
             ),
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                /// HEADER
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-                  child: Column(
-                    children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: InkWell(
-                          onTap: () => Navigator.pop(context),
-                          child: Row(
-                            children: [
-                              Icon(
-                                LucideIcons.chevronLeft,
-                                color: Colors.white70,
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                "Back",
-                                style: GoogleFonts.inter(color: Colors.white70),
-                              ),
-                            ],
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  /// HEADER
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+                    child: Column(
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: InkWell(
+                            onTap: () async {
+                              if (_currentStep == 2) {
+                                await _confirmCancelSignup();
+                                return;
+                              }
+
+                              Navigator.pop(context);
+                            },
+                            child: Row(
+                              children: [
+                                Icon(
+                                  LucideIcons.chevronLeft,
+                                  color: Colors.white70,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  "Back",
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      Image.asset('assets/foodsafe_logo.png'),
-                    ],
-                  ),
-                ),
-
-                /// WHITE SHEET
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(24),
-                    ),
-                  ),
-                  child: Form(
-                    key: _formKey,
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 20),
-                        _stepProgressBar(),
-                        const SizedBox(height: 20),
-                        _buildStepContent(),
+                        const SizedBox(height: 16),
+                        Image.asset('assets/foodsafe_logo.png'),
                       ],
                     ),
                   ),
-                ),
-              ],
+
+                  /// WHITE SHEET
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(24),
+                      ),
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 20),
+                          _stepProgressBar(),
+                          const SizedBox(height: 20),
+                          _buildStepContent(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -336,16 +436,17 @@ class _SignupScreenState extends State<SignupScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle("Create your account", "Fill up your personal information"),
+        _sectionTitle(
+          "Create your account",
+          "Fill up your personal information",
+        ),
         _LabeledField(
           label: "Name",
           child: TextFormField(
             controller: _usernameCtrl,
             textInputAction: TextInputAction.next,
             validator: (v) {
-              return (v == null ||
-                      v.isEmpty ||
-                      v.trim().isEmpty)
+              return (v == null || v.isEmpty || v.trim().isEmpty)
                   ? "Name is required"
                   : null;
             },
@@ -414,7 +515,10 @@ class _SignupScreenState extends State<SignupScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle("Set your password", 'Must be at least 8 characters with uppercase, lowercase, numbers, and symbols'),
+        _sectionTitle(
+          "Set your password",
+          'Must be at least 8 characters with uppercase, lowercase, numbers, and symbols',
+        ),
         _LabeledField(
           label: "Password",
           child: TextFormField(
@@ -543,7 +647,7 @@ class _SignupScreenState extends State<SignupScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "OTP Verification",
+          "Verification code",
           style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 10),
@@ -553,8 +657,8 @@ class _SignupScreenState extends State<SignupScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: List.generate(6, (index) {
             return SizedBox(
-              height: 64,
-              width: 44,
+              height: 54,
+              width: 50,
               child: TextFormField(
                 onChanged: (value) {
                   if (value.length == 1 && index < 5) {
@@ -572,7 +676,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 },
                 style: GoogleFonts.inter(fontWeight: FontWeight.w800),
                 decoration: InputDecoration(
-                  contentPadding: const EdgeInsets.symmetric(vertical: 18),
+                  contentPadding: EdgeInsets.zero,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
@@ -607,9 +711,8 @@ class _SignupScreenState extends State<SignupScreen> {
             );
           }),
         ),
-        SizedBox(height: 10),
+        SizedBox(height: 16),
         Row(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text('Did not receive code?', style: GoogleFonts.inter()),
             TextButton(
@@ -635,56 +738,33 @@ class _SignupScreenState extends State<SignupScreen> {
             ),
           ],
         ),
-        SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () => setState(() => _currentStep--),
-                style: OutlinedButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  side: const BorderSide(color: Color(0xFFD1D5DB)),
-                ),
-                child: Text(
-                  "Back",
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black87,
-                  ),
-                ),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _submit,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
               ),
+              elevation: 0,
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+            child: _loading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: AppLoadingIndicator(
+                      size: 20,
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Text(
+                    "Submit",
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w800),
                   ),
-                  elevation: 0,
-                ),
-                child: _loading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: AppLoadingIndicator(
-                          size: 20,
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        "Submit",
-                        style: GoogleFonts.inter(fontWeight: FontWeight.w800),
-                      ),
-              ),
-            ),
-          ],
+          ),
         ),
       ],
     );

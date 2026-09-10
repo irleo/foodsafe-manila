@@ -314,6 +314,55 @@ export const getPredictions = async (req, res) => {
   }
 };
 
+export const getMobilePublicPredictions = async (req, res) => {
+  try {
+    const horizonMonths = parseForecastHorizon(req.query.forecastHorizonMonths);
+    if (!horizonMonths) {
+      return res.status(400).json({
+        message: `Forecast horizon must be a whole number from 1 to ${MAX_FORECAST_HORIZON_MONTHS}.`,
+      });
+    }
+
+    const dataset = await resolveDataset(req.query.datasetId);
+    const datasetError = invalidRequestedDatasetResponse(
+      req.query.datasetId,
+      dataset,
+    );
+    if (datasetError) {
+      return res.status(datasetError.status).json(datasetError.body);
+    }
+
+    const datasetScope = dataset?._id || "all";
+    const run = await latestUsablePrediction(datasetScope, horizonMonths);
+
+    if (!run) {
+      return res.json({
+        success: true,
+        hasPrediction: false,
+        message:
+          "No saved forecast is available yet.",
+      });
+    }
+
+    return res.json({
+      success: true,
+      hasPrediction: true,
+      payload: sanitizePredictionPayload(run.payload || {}),
+    });
+  } catch (error) {
+    logServerError(error, {
+      errorId: req.errorId,
+      code: "PREDICTION_SERVICE_ERROR",
+      method: req.method,
+      route: req.baseUrl,
+    });
+    return res.status(500).json({
+      code: "PREDICTION_SERVICE_ERROR",
+      message: "Prediction data is currently unavailable.",
+    });
+  }
+};
+
 export const refreshPredictions = async (req, res) => {
   try {
     const horizonMonths = parseForecastHorizon(req.body?.forecastHorizonMonths);

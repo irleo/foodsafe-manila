@@ -351,7 +351,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
               ),
             ),
             InsightsScreen(
-              key: _homeKey,
+              key: _insightsKey,
               onProfilePressed: () {
                 if (Session.currentUser == null) {
                   Navigator.pushNamed(context, '/login');
