@@ -243,7 +243,10 @@ class _SignupScreenState extends State<SignupScreen> {
         if (!mounted) return;
 
         if (exists) {
-          SnackbarWidgets.error(context, "Please check your information and try again.");
+          SnackbarWidgets.error(
+            context,
+            "Please check your information and try again.",
+          );
           return;
         }
 
@@ -656,57 +659,61 @@ class _SignupScreenState extends State<SignupScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: List.generate(6, (index) {
-            return SizedBox(
-              height: 54,
-              width: 50,
-              child: TextFormField(
-                onChanged: (value) {
-                  if (value.length == 1 && index < 5) {
-                    // Move to next field
-                    FocusScope.of(
-                      context,
-                    ).requestFocus(otpFocusNodes[index + 1]);
-                  } else if (value.isEmpty && index > 0) {
-                    // Move back if deleted
-                    FocusScope.of(
-                      context,
-                    ).requestFocus(otpFocusNodes[index - 1]);
-                  }
-                  updateOtp();
-                },
-                style: GoogleFonts.inter(fontWeight: FontWeight.w800),
-                decoration: InputDecoration(
-                  contentPadding: EdgeInsets.zero,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(
-                      color: Color(0xFF3B82F6),
-                      width: 2,
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(right: index < 5 ? 6 : 0),
+                child: SizedBox(
+                  height: 54,
+                  child: TextFormField(
+                    onChanged: (value) {
+                      if (value.length == 1 && index < 5) {
+                        // Move to next field
+                        FocusScope.of(
+                          context,
+                        ).requestFocus(otpFocusNodes[index + 1]);
+                      } else if (value.isEmpty && index > 0) {
+                        // Move back if deleted
+                        FocusScope.of(
+                          context,
+                        ).requestFocus(otpFocusNodes[index - 1]);
+                      }
+                      updateOtp();
+                    },
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w800),
+                    decoration: InputDecoration(
+                      contentPadding: EdgeInsets.zero,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF3B82F6),
+                          width: 2,
+                        ),
+                      ),
+                      errorMaxLines: 2,
+                      errorStyle: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: const Color(0xFFDC2626),
+                      ),
                     ),
-                  ),
-                  errorMaxLines: 2,
-                  errorStyle: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: const Color(0xFFDC2626),
+                    keyboardType: TextInputType.number,
+                    controller: otpControllers[index],
+                    focusNode: otpFocusNodes[index],
+                    textAlign: TextAlign.center,
+                    textAlignVertical: TextAlignVertical.center,
+                    inputFormatters: [
+                      LengthLimitingTextInputFormatter(1),
+                      FilteringTextInputFormatter.digitsOnly,
+                    ],
                   ),
                 ),
-                keyboardType: TextInputType.number,
-                controller: otpControllers[index],
-                focusNode: otpFocusNodes[index],
-                textAlign: TextAlign.center,
-                textAlignVertical: TextAlignVertical.center,
-                inputFormatters: [
-                  LengthLimitingTextInputFormatter(1),
-                  FilteringTextInputFormatter.digitsOnly,
-                ],
               ),
             );
           }),

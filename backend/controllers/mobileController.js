@@ -18,6 +18,14 @@ const surveillanceThresholdCache = createAsyncTtlCache({
   defaultTtlMs: 60_000,
 });
 
+// One shared history load per minute, including simultaneous guest requests.
+const officialAnalyticsRowsCache = createAsyncTtlCache({
+  name: "mobile-official-analytics-rows", defaultTtlMs: 60_000,
+});
+const officialAnalyticsResponseCache = createAsyncTtlCache({
+  name: "mobile-official-analytics-responses", defaultTtlMs: 60_000,
+});
+
 function positiveInteger(value, fallback) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -227,201 +235,211 @@ export const getMobileNearbyRisk = async (req, res) => {
 // GET /api/official-cases/analytics
 export const getMobileOfficialAnalytics = async (req, res) => {
   try {
-    const period = String(req.query.period || "total_cumulative");
-
-    const now = new Date();
-    let startDate = null;
-    let endDate = null;
-
-    if (period === "last_7_days" || period === "last_28_days") {
-      const days = period === "last_7_days" ? 7 : 28;
-
-      endDate = now;
-      startDate = new Date(
-        now.getTime() - days * 24 * 60 * 60 * 1000,
-      );
+    const { period = "total_cumulative", district = "", disease = "" } = req.query;
+    // Finite keys prevent arbitrary public query strings growing the cache.
+    if (typeof period !== "string" || !["total_cumulative", "last_7_days", "last_28_days"].includes(period)
+      || typeof district !== "string" || (district !== "" && !/^District [1-6]$/.test(district))
+      || typeof disease !== "string" || (disease !== "" && !SURVEILLANCE_DISEASES.includes(disease))) {
+      return res.status(400).json({ message: "Invalid analytics filters." });
     }
+    const result = await officialAnalyticsResponseCache.getOrLoad(
+      JSON.stringify([period, district, disease]), async () => {
 
-    const rows = await getAnalyticalCaseRows({
-      statuses: [
-        "suspected",
-        "probable",
-        "confirmed",
-      ],
-    });
+        const now = new Date();
+        let startDate = null;
+        let endDate = null;
 
-    const filtered = rows.filter((row) => {
-      if (startDate && endDate) {
-        const rowDateValue = row.surveillanceDate || row.weekStartDate;
-        const rowDate = new Date(rowDateValue);
+        if (period === "last_7_days" || period === "last_28_days") {
+          const days = period === "last_7_days" ? 7 : 28;
 
-        if (
-          Number.isNaN(rowDate.getTime()) ||
-          rowDate < startDate ||
-          rowDate >= endDate
-        ) {
-          return false;
+          endDate = now;
+          startDate = new Date(
+            now.getTime() - days * 24 * 60 * 60 * 1000,
+          );
         }
-      }
 
-      const district = req.query.district?.toString().trim();
-      const disease = req.query.disease?.toString().trim();
+        const rows = await officialAnalyticsRowsCache.getOrLoad("official-history", () => getAnalyticalCaseRows({
+          statuses: [
+            "suspected",
+            "probable",
+            "confirmed",
+          ],
+        }));
 
-      if (district && row.district !== district) return false;
-      if (disease && row.disease !== disease) return false;
+        const filtered = rows.filter((row) => {
+          if (startDate && endDate) {
+            const rowDateValue = row.surveillanceDate || row.weekStartDate;
+            const rowDate = new Date(rowDateValue);
 
-      return true;
-    });
-
-    const allRows = rows.filter((row) => {
-      const district = req.query.district?.toString().trim();
-      const disease = req.query.disease?.toString().trim();
-
-      if (district && row.district !== district) return false;
-      if (disease && row.disease !== disease) return false;
-
-      return true;
-    });
-
-    const validDates = allRows
-      .map((row) => ({
-        year: Number(row.year),
-        month: Number(row.month),
-      }))
-      .filter(
-        ({ year, month }) =>
-          Number.isInteger(year) && Number.isInteger(month) && month >= 1 && month <= 12,
-      );
-
-    const currentDate = new Date();
-    const currentYear = currentDate.getUTCFullYear();
-    const currentMonth = currentDate.getUTCMonth() + 1;
-
-    const previousDate = new Date(
-      Date.UTC(currentYear, currentMonth - 2, 1),
-    );
-
-    const currentMonthCases = allRows
-      .filter(
-        (row) =>
-          Number(row.year) === currentYear &&
-          Number(row.month) === currentMonth,
-      )
-      .reduce((sum, row) => sum + Number(row.cases || 0), 0);
-
-    const previousMonthCases = allRows
-      .filter(
-        (row) =>
-          Number(row.year) === previousDate.getUTCFullYear() &&
-          Number(row.month) === previousDate.getUTCMonth() + 1,
-      )
-      .reduce((sum, row) => sum + Number(row.cases || 0), 0);
-
-    const firstDate = validDates.sort(
-      (a, b) => a.year * 12 + a.month - (b.year * 12 + b.month),
-    )[0];
-
-    const lastDate = validDates.length
-      ? validDates[validDates.length - 1]
-      : null;
-
-    const groupTotals = (items, selector) => {
-      const totals = new Map();
-
-      for (const item of items) {
-        const key = selector(item);
-        if (!key) continue;
-
-        totals.set(
-          key,
-          (totals.get(key) || 0) + Number(item.cases || 0),
-        );
-      }
-
-      return [...totals.entries()]
-        .map(([name, cases]) => ({ name, cases }))
-        .sort((a, b) => b.cases - a.cases);
-    };
-
-    const overviewDistricts = groupTotals(allRows, (row) => row.district);
-    const overviewDiseases = groupTotals(allRows, (row) => row.disease);
-
-    const cumulativeCases = allRows.reduce(
-      (sum, row) => sum + Number(row.cases || 0),
-      0,
-    );
-
-    const monthlyChange =
-      previousMonthCases > 0
-        ? ((currentMonthCases - previousMonthCases) / previousMonthCases) * 100
-        : null;
-
-    const group = (items, selector) => {
-      const totals = new Map();
-
-      for (const item of items) {
-        const key = selector(item);
-        if (!key) continue;
-
-        totals.set(
-          key,
-          (totals.get(key) || 0) + Number(item.cases || 0),
-        );
-      }
-
-      return totals;
-    };
-
-    const districtTotals = group(filtered, (row) => row.district);
-    const diseaseTotals = group(filtered, (row) => row.disease);
-
-    const districts = [
-      "District 1",
-      "District 2",
-      "District 3",
-      "District 4",
-      "District 5",
-      "District 6",
-    ];
-
-    const districtData = districts.map((district) => ({
-      _id: district,
-      total: districtTotals.get(district) || 0,
-    }));
-
-    const diseaseDistribution = [...diseaseTotals.entries()]
-      .map(([_id, total]) => ({ _id, total }))
-      .sort((a, b) => b.total - a.total);
-
-    return res.json({
-      period,
-      totalCases: filtered.reduce(
-        (sum, row) => sum + Number(row.cases || 0),
-        0,
-      ),
-      districtData,
-      diseaseDistribution,
-      overview: {
-        currentMonthCases,
-        previousMonthCases,
-        monthlyChange,
-        cumulativeCases,
-        coverageStart: firstDate
-          ? {
-              year: firstDate.year,
-              month: firstDate.month,
+            if (
+              Number.isNaN(rowDate.getTime()) ||
+              rowDate < startDate ||
+              rowDate >= endDate
+            ) {
+              return false;
             }
-          : null,
-        coverageEnd: lastDate
-          ? {
-              year: lastDate.year,
-              month: lastDate.month,
-            }
-          : null,
-        topDistrict: overviewDistricts[0] || null,
-        topDisease: overviewDiseases[0] || null,
-      },
+          }
+
+          const district = req.query.district?.toString().trim();
+          const disease = req.query.disease?.toString().trim();
+
+          if (district && row.district !== district) return false;
+          if (disease && row.disease !== disease) return false;
+
+          return true;
+        });
+
+        const allRows = rows.filter((row) => {
+          const district = req.query.district?.toString().trim();
+          const disease = req.query.disease?.toString().trim();
+
+          if (district && row.district !== district) return false;
+          if (disease && row.disease !== disease) return false;
+
+          return true;
+        });
+
+        const validDates = allRows
+          .map((row) => ({
+            year: Number(row.year),
+            month: Number(row.month),
+          }))
+          .filter(
+            ({ year, month }) =>
+              Number.isInteger(year) && Number.isInteger(month) && month >= 1 && month <= 12,
+          );
+
+        const currentDate = new Date();
+        const currentYear = currentDate.getUTCFullYear();
+        const currentMonth = currentDate.getUTCMonth() + 1;
+
+        const previousDate = new Date(
+          Date.UTC(currentYear, currentMonth - 2, 1),
+        );
+
+        const currentMonthCases = allRows
+          .filter(
+            (row) =>
+              Number(row.year) === currentYear &&
+              Number(row.month) === currentMonth,
+          )
+          .reduce((sum, row) => sum + Number(row.cases || 0), 0);
+
+        const previousMonthCases = allRows
+          .filter(
+            (row) =>
+              Number(row.year) === previousDate.getUTCFullYear() &&
+              Number(row.month) === previousDate.getUTCMonth() + 1,
+          )
+          .reduce((sum, row) => sum + Number(row.cases || 0), 0);
+
+        const firstDate = validDates.sort(
+          (a, b) => a.year * 12 + a.month - (b.year * 12 + b.month),
+        )[0];
+
+        const lastDate = validDates.length
+          ? validDates[validDates.length - 1]
+          : null;
+
+        const groupTotals = (items, selector) => {
+          const totals = new Map();
+
+          for (const item of items) {
+            const key = selector(item);
+            if (!key) continue;
+
+            totals.set(
+              key,
+              (totals.get(key) || 0) + Number(item.cases || 0),
+            );
+          }
+
+          return [...totals.entries()]
+            .map(([name, cases]) => ({ name, cases }))
+            .sort((a, b) => b.cases - a.cases);
+        };
+
+        const overviewDistricts = groupTotals(allRows, (row) => row.district);
+        const overviewDiseases = groupTotals(allRows, (row) => row.disease);
+
+        const cumulativeCases = allRows.reduce(
+          (sum, row) => sum + Number(row.cases || 0),
+          0,
+        );
+
+        const monthlyChange =
+          previousMonthCases > 0
+            ? ((currentMonthCases - previousMonthCases) / previousMonthCases) * 100
+            : null;
+
+        const group = (items, selector) => {
+          const totals = new Map();
+
+          for (const item of items) {
+            const key = selector(item);
+            if (!key) continue;
+
+            totals.set(
+              key,
+              (totals.get(key) || 0) + Number(item.cases || 0),
+            );
+          }
+
+          return totals;
+        };
+
+        const districtTotals = group(filtered, (row) => row.district);
+        const diseaseTotals = group(filtered, (row) => row.disease);
+
+        const districts = [
+          "District 1",
+          "District 2",
+          "District 3",
+          "District 4",
+          "District 5",
+          "District 6",
+        ];
+
+        const districtData = districts.map((district) => ({
+          _id: district,
+          total: districtTotals.get(district) || 0,
+        }));
+
+        const diseaseDistribution = [...diseaseTotals.entries()]
+          .map(([_id, total]) => ({ _id, total }))
+          .sort((a, b) => b.total - a.total);
+
+        return {
+          period,
+          totalCases: filtered.reduce(
+            (sum, row) => sum + Number(row.cases || 0),
+            0,
+          ),
+          districtData,
+          diseaseDistribution,
+          overview: {
+            currentMonthCases,
+            previousMonthCases,
+            monthlyChange,
+            cumulativeCases,
+            coverageStart: firstDate
+              ? {
+                  year: firstDate.year,
+                  month: firstDate.month,
+                }
+              : null,
+            coverageEnd: lastDate
+              ? {
+                  year: lastDate.year,
+                  month: lastDate.month,
+                }
+              : null,
+            topDistrict: overviewDistricts[0] || null,
+            topDisease: overviewDiseases[0] || null,
+          },
+        };
     });
+    return res.json(result);
   } catch (error) {
     logRequestError(error, req, "ANALYTICS_SERVICE_ERROR");
 
