@@ -9,6 +9,7 @@ import {
 } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
 import { logServerError } from "../utils/serverLogger.js";
 import { isSafePublicMessage } from "../middleware/errorHandler.js";
+import { startGitHubForecast, usesGitHubForecasts } from "../services/predictions/githubForecastJobs.js";
 
 const MODEL = "prophet";
 const GRANULARITY = "monthly_disease_district_cases";
@@ -75,7 +76,7 @@ function invalidRequestedDatasetResponse(datasetId, dataset) {
   };
 }
 
-function publicRefreshJob(run) {
+export function publicRefreshJob(run) {
   if (!run) {
     return {
       jobId: null,
@@ -91,12 +92,13 @@ function publicRefreshJob(run) {
     jobId: String(run._id),
     datasetId: run.basisDatasetId ? String(run.basisDatasetId) : null,
     status: run.status === "success" ? "succeeded" : run.status,
+    executionPhase: run.executionPhase || null,
     workerActive:
       run.status === "running"
-      && isMonthlyDistrictPredictionRefreshActive({
+      && (run.executionBackend === "github" || isMonthlyDistrictPredictionRefreshActive({
         datasetId: run.basisDatasetId,
         predictionRunId: run._id,
-      }),
+      })),
     requestedAt: run.startedAt || run.createdAt || null,
     completedAt: run.finishedAt || null,
     errorMessage: isSafePublicMessage(run.errorMessage)
@@ -140,13 +142,15 @@ async function latestRefresh(datasetScope, horizonMonths) {
     forecastHorizonMonths: horizonMonths,
   })
     .sort({ startedAt: -1, _id: -1 })
-    .select("status startedAt finishedAt createdAt errorMessage basisDatasetId")
+    .select("status startedAt finishedAt createdAt errorMessage basisDatasetId executionBackend executionPhase executionExpiresAt")
     .lean();
 
   const startedAt = new Date(run?.startedAt || run?.createdAt || 0).getTime();
   if (
     run?.status === "running"
-    && Date.now() - startedAt >= refreshTimeoutMs()
+    && (run.executionBackend === "github"
+      ? Date.now() >= new Date(run.executionExpiresAt || startedAt).getTime()
+      : Date.now() - startedAt >= refreshTimeoutMs())
   ) {
     run = await PredictionRun.findOneAndUpdate(
       { _id: run._id, status: "running" },
@@ -160,7 +164,7 @@ async function latestRefresh(datasetScope, horizonMonths) {
       },
       { new: true, runValidators: true },
     )
-      .select("status startedAt finishedAt createdAt errorMessage basisDatasetId")
+      .select("status startedAt finishedAt createdAt errorMessage basisDatasetId executionBackend executionPhase executionExpiresAt")
       .lean();
   }
 
@@ -192,6 +196,7 @@ async function latestUsablePrediction(datasetScope, horizonMonths) {
 }
 
 function launchRefreshWorker({ job, datasetId, horizonMonths, trigger, req }) {
+  if (job.executionBackend === "github") return;
   const timeoutMs = refreshTimeoutMs();
   const abortController = new AbortController();
   const timeout = setTimeout(() => {
@@ -342,7 +347,7 @@ export const refreshPredictions = async (req, res) => {
     const force = req.body?.force === true;
     const existing = await latestRefresh(datasetId, horizonMonths);
     if (existing?.status === "running") {
-      const workerIsActive = isMonthlyDistrictPredictionRefreshActive({
+      const workerIsActive = existing.executionBackend === "github" || isMonthlyDistrictPredictionRefreshActive({
         datasetId,
         predictionRunId: existing._id,
       });
@@ -379,6 +384,11 @@ export const refreshPredictions = async (req, res) => {
     }
 
     let job;
+    if (usesGitHubForecasts()) {
+      if (horizonMonths !== 1) return res.status(400).json({ message: "GitHub testing forecasts currently support a one-month horizon." });
+      job = await startGitHubForecast({ datasetId, trigger: "manual" });
+      return res.status(202).json({ success: true, accepted: true, message: "Forecast queued for GitHub execution.", refreshJob: publicRefreshJob(job) });
+    }
     try {
       job = await PredictionRun.create({
         model: MODEL,

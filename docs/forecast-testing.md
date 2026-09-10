@@ -118,3 +118,90 @@ worker does not replace which result appears newest.
 After the write trial and app verification, the next change can introduce shared
 job ownership, durable queued/running/failed states, automatic dispatch and recovery,
 and a controlled switch from local execution.
+
+## Third trial: automatic dispatch from the testing API
+
+The testing backend can now dispatch `.github/workflows/forecast-testing-auto.yml`
+after a validated upload. The new upload's ID is the cumulative-history anchor,
+matching the latest-dataset scope requested by the Predictions page.
+
+### Configuration and rollout
+
+1. Commit/push the reviewed code to `testing`, register the new manual-dispatch
+   workflow on the default branch if necessary, and deploy the matching testing
+   backend. Keep production `FORECAST_EXECUTION_MODE=local` (also the default).
+2. In GitHub, create a fine-grained token restricted to this repository with
+   **Actions: read and write** permission. Put it in the **testing backend's**
+   environment as `GITHUB_FORECAST_TOKEN`, not in the frontend. The dispatch API
+   requires Actions write permission:
+   https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event
+3. Set these on the testing backend:
+
+   ```text
+   FORECAST_EXECUTION_MODE=github
+   GITHUB_FORECAST_REPOSITORY=irleo/foodsafe-manila
+   GITHUB_FORECAST_TOKEN=<fine-grained token>
+   ```
+
+4. The API's `MONGO_URI` and the GitHub environment's
+   `TEST_FORECAST_WRITE_MONGO_URI` must address the same isolated testing database.
+   Keep `TEST_FORECAST_DB_NAME` configured in the GitHub environment. Extend the
+   worker user's custom role to include **update** on `predictionRuns`, in addition
+   to find/insert and read access to input data. A testing-database readWrite user
+   already has the necessary permissions.
+5. Retain the environment restriction to `testing`. Any required environment
+   reviewer must approve each automatic job before it can execute. Long approval
+   or GitHub queue delays count toward the job's 45-minute deadline.
+
+No Render build changes or index migrations are performed by this patch. The
+existing `predictionRunsActiveScopeUnique` partial unique index must exist in the
+testing database; it protects active jobs. No new index is added. Optional ownership
+fields are backward compatible with old records, which remain local by default.
+
+### Expected behavior
+
+Upload one valid testing workbook and open Actions → **Forecast testing (automatic
+job)**. The upload remains successful even if dispatch fails; inspect Predictions
+for the forecast outcome. Dispatch has a ten-second network timeout.
+
+The backend inserts a job under `status: running`, `executionBackend: github`,
+`executionPhase: queued`. Keeping the existing status protects the queue window
+with the existing unique index and preserves frontend polling compatibility.
+The worker atomically claims that record (`executionPhase: executing`), computes
+using accumulated history, validates complete disease/district output, and updates
+the same job to `status: success`, `executionPhase: finished`. Errors after claim
+mark that owned job failed. Predictions retains the prior successful forecast while
+polling and switches to the new record after success.
+
+The API reports GitHub-owned active jobs as `workerActive: true` to prevent the
+frontend's local-resume request. That compatibility flag means managed remotely;
+use `executionPhase` to distinguish queued from executing. Even a direct refresh
+request will not launch local Python for an existing GitHub-owned job.
+
+Remote refreshes currently support only a one-month horizon. The in-process monthly
+cron skips local execution in GitHub mode; this testing phase is upload/manual driven.
+Production mode preserves the existing monthly cron.
+
+### Verification and recovery
+
+- Confirm upload, database job, GitHub job, and Predictions response share the same
+  `basisDatasetId`/dataset scope and `predictionRunId`.
+- A duplicate dispatch cannot claim an executing job. A duplicate workflow for an
+  already successful job exits without recomputation. Different dataset jobs have
+  independent concurrency groups, avoiding discarded pending uploads.
+- Dispatch rejection fails an unclaimed job. An ambiguous dispatch failure does
+  not mark an already claimed worker failed. No blind dispatch retry is attempted.
+- Dependency/setup failures or a hard runner termination can leave an active job.
+  On the next Predictions read for its scope (or next dispatch for that scope), an
+  expired job is marked failed. The deadline is 45 minutes from creation, including
+  queue/setup time; the worker also has a 30-minute computation timeout. Expired,
+  failed, or differently owned jobs cannot publish a late result.
+- After failure, use the app's forecast refresh to create a new GitHub job. Do not
+  manually dispatch this workflow with an invented job ID. A dead claimed job
+  remains locked until its deadline; it is not automatically reclaimed.
+- Before switching the testing backend back to local mode, let remote jobs finish
+  or expire. Existing GitHub jobs remain recognized as remote even after rollback.
+
+The GitHub network call and database writes have not been executed from this local
+implementation task. The upload-to-display test requires these environment settings
+and the published workflow/backend.

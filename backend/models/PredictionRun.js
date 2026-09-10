@@ -69,6 +69,13 @@ const predictionRunSchema = new mongoose.Schema(
       default: null,
     },
 
+    // Keep queued GitHub jobs under status=running so the existing unique
+    // active-scope index also protects the dispatch-to-claim window.
+    executionBackend: { type: String, enum: ["local", "github"], default: "local" },
+    executionPhase: { type: String, enum: ["queued", "executing", "finished"], default: null },
+    executionExpiresAt: { type: Date, default: null },
+    workerRunId: { type: String, default: null },
+
     basisDatasetId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Dataset",

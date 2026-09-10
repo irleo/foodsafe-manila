@@ -17,6 +17,7 @@ backend/scripts/*
 !backend/scripts/reviewIndexes.js
 !backend/scripts/runMonthlyForecastDryRun.js
 !backend/scripts/runMonthlyForecastWriteTrial.js
+!backend/scripts/runGitHubForecastJob.js
 !docs/forecast-testing.md
 /forecast-artifacts/
 /forecast-write-artifacts/

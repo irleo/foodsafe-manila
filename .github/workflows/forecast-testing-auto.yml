@@ -1,0 +1,57 @@
+name: Forecast testing (automatic job)
+
+on:
+  workflow_dispatch:
+    inputs:
+      datasetId:
+        required: true
+        type: string
+      predictionRunId:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Per-job groups avoid replacing unrelated pending uploads. The database's
+# atomic claim also prevents duplicate workflow invocations executing a job.
+concurrency:
+  group: forecast-job-${{ inputs.predictionRunId }}
+  cancel-in-progress: false
+
+jobs:
+  forecast:
+    if: github.ref == 'refs/heads/testing'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    environment: forecast-testing
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/services/prophet/requirements.txt
+      - run: npm ci --omit=dev
+        working-directory: backend
+      - run: python -m pip install -r backend/services/prophet/requirements.txt
+      - name: Claim and execute forecast job
+        run: node backend/scripts/runGitHubForecastJob.js
+        env:
+          TEST_FORECAST_WRITE_MONGO_URI: ${{ secrets.TEST_FORECAST_WRITE_MONGO_URI }}
+          TEST_FORECAST_DB_NAME: ${{ vars.TEST_FORECAST_DB_NAME }}
+          CONFIRM_TEST_WRITE: 'true'
+          DATASET_ID: ${{ inputs.datasetId }}
+          PREDICTION_RUN_ID: ${{ inputs.predictionRunId }}
+          PYTHON_BIN: python
+          PROPHET_PROCESS_TIMEOUT_MS: '300000'
+          OMP_NUM_THREADS: '1'
+          OPENBLAS_NUM_THREADS: '1'
+          MKL_NUM_THREADS: '1'
