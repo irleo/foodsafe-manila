@@ -35,15 +35,15 @@ flutter_launcher_icons:
   android: true
   image_path: assets/foodsafe_icon.png
 
-  adaptive_icon_background: assets/foodsafe_icon_background.png
+  adaptive_icon_background: "#134c8c"
   adaptive_icon_foreground: assets/foodsafe_icon_foreground.png
 
 flutter_native_splash:
-  color: "#2563EB"
+  color: "#134c8c"
   image: assets/foodsafe_icon.png
 
   android_12:
-      color: "#2563EB"
+      color: "#134c8c"
       image: assets/foodsafe_icon.png
 
 

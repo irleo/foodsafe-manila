@@ -601,11 +601,7 @@ class InsightsScreenState extends State<InsightsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 28),
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
-        ),
+        color: Color(0xFF134c8c),
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(28),
           bottomRight: Radius.circular(28),
@@ -685,20 +681,6 @@ class InsightsScreenState extends State<InsightsScreen> {
                       trailingWidget: _buildChangeIndicator(
                         overview?['monthlyChange'],
                       ),
-                    ),
-
-              _divider(),
-
-              isLoading
-                  ? _overviewSkeletonRow()
-                  : _overviewRow(
-                      icon: LucideIcons.calendar,
-                      label: 'Forecast',
-                      value: _primaryForecast() == null
-                          ? '—'
-                          : '${_formatNumber(_safeInt(_primaryForecast()?['predicted']))} cases',
-                      trailing: _formatMonthYear(_primaryForecast()),
-                      trailingColor: Colors.grey,
                     ),
 
               _divider(),

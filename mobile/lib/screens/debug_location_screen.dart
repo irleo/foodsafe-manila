@@ -237,7 +237,7 @@ class _DebugLocationScreenState extends State<DebugLocationScreen> {
                   child: ElevatedButton(
                     onPressed: _apply,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
+                      backgroundColor: const Color(0xFF134c8c),
                       foregroundColor: Colors.white,
                       shape: const StadiumBorder(),
                     ),

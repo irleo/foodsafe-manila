@@ -177,7 +177,7 @@ class _ReportBottomSheet extends StatelessWidget {
                           ),
                         ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2563EB),
+                          backgroundColor: const Color(0xFF134c8c),
                           foregroundColor: Colors.white,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(vertical: 14),
@@ -607,7 +607,7 @@ class HomeScreenState extends State<HomeScreen> {
         bottom: false,
         child: RefreshIndicator(
           onRefresh: refreshData,
-          color: const Color(0xFF2563EB),
+          color: const Color(0xFF134c8c),
           child: SingleChildScrollView(
             child: Column(
               children: [
@@ -644,11 +644,7 @@ class HomeScreenState extends State<HomeScreen> {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 28),
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
-        ),
+        color: Color(0xFF134c8c),
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(28),
           bottomRight: Radius.circular(28),

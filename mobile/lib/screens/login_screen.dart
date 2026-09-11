@@ -101,11 +101,7 @@ class _LogInScreenState extends State<LoginScreen> {
         top: true,
         child: Container(
             decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
-              ),
+              color: Color(0xFF134c8c),
             ),
             child: SingleChildScrollView(
               child: Column(
@@ -254,7 +250,7 @@ class _LogInScreenState extends State<LoginScreen> {
                                     child: Text(
                                       "Forgot Password?",
                                       style: GoogleFonts.inter(
-                                        color: Color(0xFF2563EB),
+                                        color: Color(0xFF134c8c),
                                         fontWeight: FontWeight.w700,
                                       ),
                                     ),
@@ -270,7 +266,7 @@ class _LogInScreenState extends State<LoginScreen> {
                                 child: ElevatedButton(
                                   onPressed: _loading ? null : _signIn,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF2563EB),
+                                    backgroundColor: const Color(0xFF134c8c),
                                     foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(14),
@@ -325,7 +321,7 @@ class _LogInScreenState extends State<LoginScreen> {
                             },
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(
-                                color: Color(0xFF2563EB),
+                                color: Color(0xFF134c8c),
                                 width: 2,
                               ),
                               shape: RoundedRectangleBorder(
@@ -335,7 +331,7 @@ class _LogInScreenState extends State<LoginScreen> {
                             child: Text(
                               "Create Account",
                               style: GoogleFonts.inter(
-                                color: Color(0xFF2563EB),
+                                color: Color(0xFF134c8c),
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -391,7 +387,7 @@ class _LabeledField extends StatelessWidget {
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: const BorderSide(
-                  color: Color(0xFF3B82F6),
+                  color: Color(0xFF134c8c),
                   width: 2,
                 ),
               ),

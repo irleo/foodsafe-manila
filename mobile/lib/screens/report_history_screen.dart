@@ -559,7 +559,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(4),
-                borderSide: const BorderSide(color: Color(0xFF2563EB)),
+                borderSide: const BorderSide(color: Color(0xFF134c8c)),
               ),
             ),
             onSubmitted: (value) {
@@ -637,7 +637,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(4),
-                borderSide: const BorderSide(color: Color(0xFF2563EB)),
+                borderSide: const BorderSide(color: Color(0xFF134c8c)),
               ),
             ),
             onSubmitted: (value) {
@@ -706,7 +706,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
           height: 32,
           decoration: const BoxDecoration(
             shape: BoxShape.circle,
-            color: Color(0xFF2563EB),
+            color: Color(0xFF134c8c),
           ),
           child: InkWell(
             onTap: onPressed,
@@ -767,7 +767,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
               style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: _currentPage > 0 ? const Color(0xFF2563EB) : Colors.grey,
+                color: _currentPage > 0 ? const Color(0xFF134c8c) : Colors.grey,
               ),
             ),
           ),
@@ -808,7 +808,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
                 color: _currentPage < _totalPages - 1
-                    ? const Color(0xFF2563EB)
+                    ? const Color(0xFF134c8c)
                     : Colors.grey,
               ),
             ),

@@ -102,9 +102,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
             children: [
               Container(
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
-                  ),
+                  color: Color(0xFF134c8c),
                 ),
                 child: Container(
                   padding: EdgeInsets.all(20),
@@ -123,7 +121,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
                                 ? user!['username'][0].toUpperCase()
                                 : 'J',
                             style: GoogleFonts.inter(
-                              color: Color(0xFF3B82F6),
+                              color: Color(0xFF134c8c),
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
                             ),
@@ -224,7 +222,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     side: const BorderSide(
-                                      color: Color(0xFF2563EB),
+                                      color: Color(0xFF134c8c),
                                     ),
                                     padding: const EdgeInsets.symmetric(
                                       vertical: 12,
@@ -234,7 +232,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
                                     "Cancel",
                                     style: GoogleFonts.inter(
                                       fontWeight: FontWeight.w500,
-                                      color: Color(0xFF2563EB),
+                                      color: Color(0xFF134c8c),
                                     ),
                                   ),
                                 ),
@@ -246,7 +244,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
                                     Navigator.pop(context, true);
                                   },
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF2563EB),
+                                    backgroundColor: const Color(0xFF134c8c),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(10),
                                     ),
@@ -424,11 +422,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
           child: Ink(
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: Color(0xFF134c8c),
             ),
             child: const Center(
               child: Icon(Icons.campaign, color: Colors.white, size: 36),
@@ -462,7 +456,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
             Icon(
               icon,
               size: 22,
-              color: isSelected ? Colors.blue : Colors.black45,
+              color: isSelected ? Color(0xFF134c8c) : Colors.black45,
             )
           else
             const SizedBox(height: 24),
@@ -474,7 +468,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
             style: GoogleFonts.inter(
               fontSize: 10,
               fontWeight: FontWeight.w500,
-              color: isSelected ? Colors.blue : Colors.black45,
+              color: isSelected ? Color(0xFF134c8c) : Colors.black45,
             ),
           ),
         ],
@@ -518,7 +512,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          splashColor: const Color(0xFF2563EB).withValues(alpha: 0.15),
+          splashColor: const Color(0xFF134c8c).withValues(alpha: 0.15),
           highlightColor: Colors.black.withValues(alpha: 0.04),
           onTap: () async {
             if (Session.currentUser == null) {

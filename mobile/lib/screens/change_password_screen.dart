@@ -200,14 +200,14 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    side: const BorderSide(color: Color(0xFF2563EB)),
+                    side: const BorderSide(color: Color(0xFF134c8c)),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   child: Text(
                     "Yes",
                     style: GoogleFonts.inter(
                       fontWeight: FontWeight.w500,
-                      color: const Color(0xFF2563EB),
+                      color: const Color(0xFF134c8c),
                     ),
                   ),
                 ),
@@ -220,7 +220,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     Navigator.pop(context, false);
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
+                    backgroundColor: const Color(0xFF134c8c),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -433,11 +433,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           top: true,
           child: Container(
             decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
-              ),
+              color: Color(0xFF134c8c),
             ),
             child: SingleChildScrollView(
               child: Column(
@@ -528,7 +524,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
             margin: const EdgeInsets.symmetric(horizontal: 4),
             height: 6,
             decoration: BoxDecoration(
-              color: isActive ? const Color(0xFF2563EB) : Colors.grey.shade300,
+              color: isActive ? const Color(0xFF134c8c) : Colors.grey.shade300,
               borderRadius: BorderRadius.circular(3),
             ),
           ),
@@ -664,7 +660,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
             style: GoogleFonts.inter(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: const Color(0xFF2563EB),
+              color: const Color(0xFF134c8c),
             ),
           ),
         ),
@@ -676,7 +672,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           child: ElevatedButton(
             onPressed: _loading ? null : _nextStep,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2563EB),
+              backgroundColor: const Color(0xFF134c8c),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -775,7 +771,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
                       borderSide: const BorderSide(
-                        color: Color(0xFF3B82F6),
+                        color: Color(0xFF134c8c),
                         width: 2,
                       ),
                     ),
@@ -813,7 +809,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   fontWeight: FontWeight.w600,
                   color: _resendSeconds > 0
                       ? Colors.grey
-                      : const Color(0xFF2563EB),
+                      : const Color(0xFF134c8c),
                 ),
               ),
             ),
@@ -825,7 +821,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           child: ElevatedButton(
             onPressed: _loading ? null : _nextStep,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2563EB),
+              backgroundColor: const Color(0xFF134c8c),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -949,7 +945,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
               child: ElevatedButton(
                 onPressed: _loading ? null : _nextStep,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
+                  backgroundColor: const Color(0xFF134c8c),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -1038,7 +1034,7 @@ class _LabeledField extends StatelessWidget {
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: const BorderSide(
-                  color: Color(0xFF3B82F6),
+                  color: Color(0xFF134c8c),
                   width: 2,
                 ),
               ),

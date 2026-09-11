@@ -8,7 +8,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../data/facilities.dart';
 import '../models/facility.dart';
 import '../services/location_service.dart';
-import '../widgets/snackbar_widgets.dart';
 
 class MapScreen extends StatefulWidget {
   final VoidCallback? onBackPressed;
@@ -269,11 +268,7 @@ class _MapScreenState extends State<MapScreen> {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
-        ),
+        color: Color(0xFF134c8c),
       ),
       clipBehavior: Clip.antiAlias,
       child: Row(
@@ -445,7 +440,7 @@ class _MapScreenState extends State<MapScreen> {
               height: 22,
               child: CircularProgressIndicator(
                 strokeWidth: 2.5,
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF134c8c)),
               ),
             ),
 
@@ -530,7 +525,7 @@ class _MapScreenState extends State<MapScreen> {
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
               borderSide: const BorderSide(
-                color: Color(0xFF2563EB),
+                color: Color(0xFF134c8c),
                 width: 1.2,
               ),
             ),
@@ -555,7 +550,7 @@ class _MapScreenState extends State<MapScreen> {
       final isSelected = _selectedFacility == facility;
 
       final markerColor = facility.type == FacilityType.hospital
-          ? const Color(0xFF2563EB)
+          ? const Color(0xFF134c8c)
           : const Color(0xFF0D9488);
 
       return Marker(
@@ -640,7 +635,7 @@ class _MapScreenState extends State<MapScreen> {
           width: 19,
           height: 19,
           decoration: BoxDecoration(
-            color: const Color(0xFF2563EB),
+            color: const Color(0xFF134c8c),
             shape: BoxShape.circle,
             border: Border.all(color: Colors.white, width: 3),
             boxShadow: const [
@@ -916,7 +911,7 @@ class _MapScreenState extends State<MapScreen> {
     final selected = _selectedFilter == filter;
 
     return Material(
-      color: selected ? const Color(0xFF2563EB) : Colors.white,
+      color: selected ? const Color(0xFF134c8c) : Colors.white,
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
@@ -938,7 +933,7 @@ class _MapScreenState extends State<MapScreen> {
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: selected
-                  ? const Color(0xFF2563EB)
+                  ? const Color(0xFF134c8c)
                   : const Color(0xFFE5E7EB),
             ),
           ),
@@ -975,7 +970,7 @@ class _MapScreenState extends State<MapScreen> {
     final selected = _selectedFacility == facility;
 
     final accent = facility.type == FacilityType.hospital
-        ? const Color(0xFF2563EB)
+        ? const Color(0xFF134c8c)
         : const Color(0xFF0D9488);
 
     final background = facility.type == FacilityType.hospital
@@ -1120,7 +1115,7 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _showFacilityDetails(Facility facility) async {
     final accent = facility.type == FacilityType.hospital
-        ? const Color(0xFF2563EB)
+        ? const Color(0xFF134c8c)
         : const Color(0xFF0D9488);
 
     // Lower the nearby facilities sheet first.
@@ -1286,7 +1281,7 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
+                      backgroundColor: const Color(0xFF134c8c),
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(

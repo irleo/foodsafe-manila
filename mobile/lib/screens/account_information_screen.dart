@@ -157,7 +157,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
                       borderSide: const BorderSide(
-                        color: Color(0xFF3B82F6),
+                        color: Color(0xFF134c8c),
                         width: 2,
                       ),
                     ),
@@ -192,7 +192,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                   fontWeight: FontWeight.w600,
                   color: _resendSeconds > 0
                       ? Colors.grey
-                      : const Color(0xFF2563EB),
+                      : const Color(0xFF134c8c),
                 ),
               ),
             ),
@@ -207,7 +207,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                     ? null
                     : () {}, // Implement verify OTP logic here
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
+                  backgroundColor: const Color(0xFF134c8c),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -355,14 +355,14 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              side: const BorderSide(color: Color(0xFF2563EB)),
+                              side: const BorderSide(color: Color(0xFF134c8c)),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
                             child: Text(
                               "Yes",
                               style: GoogleFonts.inter(
                                 fontWeight: FontWeight.w500,
-                                color: Color(0xFF2563EB),
+                                color: Color(0xFF134c8c),
                               ),
                             ),
                           ),
@@ -374,7 +374,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                               Navigator.pop(context, false);
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF2563EB),
+                              backgroundColor: const Color(0xFF134c8c),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
@@ -435,14 +435,14 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            side: const BorderSide(color: Color(0xFF2563EB)),
+                            side: const BorderSide(color: Color(0xFF134c8c)),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                           child: Text(
                             "Yes",
                             style: GoogleFonts.inter(
                               fontWeight: FontWeight.w500,
-                              color: Color(0xFF2563EB),
+                              color: Color(0xFF134c8c),
                             ),
                           ),
                         ),
@@ -454,7 +454,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                             Navigator.pop(context, false);
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB),
+                            backgroundColor: const Color(0xFF134c8c),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
@@ -490,14 +490,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
               Container(
                 padding: const EdgeInsets.fromLTRB(16, 36, 16, 36),
                 decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Color(0xFF2563EB),
-                      Color(0xFF1D4ED8),
-                    ], // from-blue-600 to-blue-700
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  color: Color(0xFF134c8c)
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -537,7 +530,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                                     BorderRadius.circular(10),
                                               ),
                                               side: const BorderSide(
-                                                color: Color(0xFF2563EB),
+                                                color: Color(0xFF134c8c),
                                               ),
                                               padding:
                                                   const EdgeInsets.symmetric(
@@ -548,7 +541,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                               "Yes",
                                               style: GoogleFonts.inter(
                                                 fontWeight: FontWeight.w500,
-                                                color: Color(0xFF2563EB),
+                                                color: Color(0xFF134c8c),
                                               ),
                                             ),
                                           ),
@@ -560,9 +553,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                               Navigator.pop(context, false);
                                             },
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(
-                                                0xFF2563EB,
-                                              ),
+                                              backgroundColor: Color(0xFF134c8c),
                                               shape: RoundedRectangleBorder(
                                                 borderRadius:
                                                     BorderRadius.circular(10),
@@ -629,7 +620,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                                     BorderRadius.circular(10),
                                               ),
                                               side: const BorderSide(
-                                                color: Color(0xFF2563EB),
+                                                color: Color(0xFF134c8c),
                                               ),
                                               padding:
                                                   const EdgeInsets.symmetric(
@@ -640,7 +631,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                               "Yes",
                                               style: GoogleFonts.inter(
                                                 fontWeight: FontWeight.w500,
-                                                color: Color(0xFF2563EB),
+                                                color: Color(0xFF134c8c),
                                               ),
                                             ),
                                           ),
@@ -652,9 +643,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                               Navigator.pop(context, false);
                                             },
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(
-                                                0xFF2563EB,
-                                              ),
+                                              backgroundColor: const Color(0xFF134c8c),
                                               shape: RoundedRectangleBorder(
                                                 borderRadius:
                                                     BorderRadius.circular(10),
@@ -882,9 +871,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                                 });
                                               },
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(
-                                            0xFF2563EB,
-                                          ),
+                                          backgroundColor: const Color(0xFF134c8c),
                                           foregroundColor: Colors.white,
                                           shape: RoundedRectangleBorder(
                                             borderRadius: BorderRadius.circular(
@@ -986,7 +973,7 @@ class _InputField extends StatelessWidget {
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: const BorderSide(
-                  color: Color(0xFF3B82F6),
+                  color: Color(0xFF134c8c),
                   width: 2,
                 ),
               ),

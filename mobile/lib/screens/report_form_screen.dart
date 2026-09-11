@@ -185,7 +185,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
     }
   }
 
-  static const Duration reportCooldown = Duration(hours: 8);
+  static const Duration reportCooldown = Duration(hours: 0);
 
   Duration? _remainingCooldown;
   Timer? _cooldownTimer;
@@ -446,14 +446,14 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      side: const BorderSide(color: Color(0xFF2563EB)),
+                      side: const BorderSide(color: Color(0xFF134c8c)),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                     child: Text(
                       "Cancel",
                       style: GoogleFonts.inter(
                         fontWeight: FontWeight.w500,
-                        color: Color(0xFF2563EB),
+                        color: Color(0xFF134c8c),
                       ),
                     ),
                   ),
@@ -465,7 +465,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                       Navigator.pop(context, true);
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
+                      backgroundColor: const Color(0xFF134c8c),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -650,7 +650,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                               },
                               label: const Text('View reports'),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF2563EB),
+                                backgroundColor: const Color(0xFF134c8c),
                                 foregroundColor: Colors.white,
                                 elevation: 0,
                                 padding: const EdgeInsets.symmetric(
@@ -782,9 +782,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                                             width: 32,
                                             height: 32,
                                             decoration: BoxDecoration(
-                                              color: const Color(
-                                                0xFF2563EB,
-                                              ), // bg-blue-600
+                                              color: const Color(0xFF134c8c),// bg-blue-600
                                               borderRadius:
                                                   BorderRadius.circular(
                                                     8,
@@ -856,7 +854,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
             height: 6,
             decoration: BoxDecoration(
               color: isCurrent
-                  ? const Color(0xFF2563EB)
+                  ? const Color(0xFF134c8c)
                   : isActive
                   ? const Color(0xFF93C5FD)
                   : Colors.grey.shade300,
@@ -925,7 +923,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: isSelected
-                        ? const Color(0xFF2563EB)
+                        ? const Color(0xFF134c8c)
                         : const Color(0xFFE5E7EB),
                     width: 2,
                   ),
@@ -948,12 +946,12 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: isSelected
-                              ? const Color(0xFF2563EB)
+                              ? const Color(0xFF134c8c)
                               : const Color(0xFFD1D5DB),
                           width: 2,
                         ),
                         color: isSelected
-                            ? const Color(0xFF2563EB)
+                            ? const Color(0xFF134c8c)
                             : Colors.transparent,
                       ),
                       child: isSelected
@@ -1009,7 +1007,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
             icon: const Icon(LucideIcons.arrowRight),
             label: const Text('Next'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2563EB),
+              backgroundColor: const Color(0xFF134c8c),
               disabledBackgroundColor: const Color(0xFF87ABFB),
               foregroundColor: Colors.white,
               disabledForegroundColor: Colors.white70,
@@ -1056,7 +1054,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: Color(0xFF2563EB),
+                  color: Color(0xFF134c8c),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(LucideIcons.mapPin, color: Colors.white, size: 20),
@@ -1114,7 +1112,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: isSelected
-                        ? const Color(0xFF2563EB)
+                        ? const Color(0xFF134c8c)
                         : const Color(0xFFE5E7EB),
                     width: 2,
                   ),
@@ -1137,12 +1135,12 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: isSelected
-                              ? const Color(0xFF2563EB)
+                              ? const Color(0xFF134c8c)
                               : const Color(0xFFD1D5DB),
                           width: 2,
                         ),
                         color: isSelected
-                            ? const Color(0xFF2563EB)
+                            ? const Color(0xFF134c8c)
                             : Colors.transparent,
                       ),
                       child: isSelected
@@ -1242,7 +1240,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
+              borderSide: const BorderSide(color: Color(0xFF134c8c), width: 2),
             ),
           ),
         ),
@@ -1266,7 +1264,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
             icon: const Icon(LucideIcons.arrowRight),
             label: const Text('Next'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2563EB),
+              backgroundColor: const Color(0xFF134c8c),
               disabledBackgroundColor: const Color(0xFF87ABFB),
               foregroundColor: Colors.white,
               disabledForegroundColor: Colors.white70,
@@ -1308,11 +1306,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
           padding: const EdgeInsets.all(2), // border thickness
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            gradient: const LinearGradient(
-              colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            color: Color(0xFF134c8c),
           ),
           child: Container(
             decoration: BoxDecoration(
@@ -1338,9 +1332,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                     borderRadius: BorderRadius.vertical(
                       top: Radius.circular(18),
                     ),
-                    gradient: LinearGradient(
-                      colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
-                    ),
+                    color: Color(0xFF134c8c),
                   ),
                   child: Row(
                     children: [
@@ -1642,7 +1634,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                                           ),
                                         ),
                                         side: const BorderSide(
-                                          color: Color(0xFF2563EB),
+                                          color: Color(0xFF134c8c),
                                         ),
                                         padding: const EdgeInsets.symmetric(
                                           vertical: 12,
@@ -1652,7 +1644,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                                         "Cancel",
                                         style: GoogleFonts.inter(
                                           fontWeight: FontWeight.w500,
-                                          color: Color(0xFF2563EB),
+                                          color: Color(0xFF134c8c),
                                         ),
                                       ),
                                     ),
@@ -1664,9 +1656,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                                         Navigator.pop(context, true);
                                       },
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(
-                                          0xFF2563EB,
-                                        ),
+                                        backgroundColor: const Color(0xFF134c8c),
                                         shape: RoundedRectangleBorder(
                                           borderRadius: BorderRadius.circular(
                                             10,
@@ -1711,7 +1701,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                       )
                     : const Text('Confirm & Submit'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
+                  backgroundColor: const Color(0xFF134c8c),
                   disabledBackgroundColor: const Color(0xFF87ABFB),
                   foregroundColor: Colors.white,
                   disabledForegroundColor: Colors.white70,
@@ -1820,7 +1810,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
             },
             label: const Text('View reports'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2563EB),
+              backgroundColor: const Color(0xFF134c8c),
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1846,13 +1836,13 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
             label: const Text('Done'),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
-              foregroundColor: Color(0xFF2563EB),
+              foregroundColor: Color(0xFF134c8c),
               elevation: 0,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              side: BorderSide(color: Color(0xFF2563EB)),
+              side: BorderSide(color: Color(0xFF134c8c)),
               textStyle: GoogleFonts.inter(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
@@ -1920,7 +1910,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
 
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
+            borderSide: const BorderSide(color: Color(0xFF134c8c), width: 2),
           ),
         ),
 
