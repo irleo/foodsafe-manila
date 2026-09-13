@@ -25,7 +25,7 @@ export default function RecentDatasetsList({
   const totalPages = pagination?.totalPages || 1;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="font-semibold">Recent Datasets</h2>
@@ -65,11 +65,11 @@ export default function RecentDatasetsList({
                 className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <DocumentIcon className="w-8 h-6 text-gray-700" />
-                    <div>
+                  <div className="flex min-w-0 items-start gap-3">
+                    <DocumentIcon className="h-6 w-8 shrink-0 text-gray-700" />
+                    <div className="min-w-0 break-words">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-medium">{d.name || d.originalFileName || d.storedFileName || "Unnamed file"}</p>
+                        <p className="min-w-0 break-all font-medium">{d.name || d.originalFileName || d.storedFileName || "Unnamed file"}</p>
                         {d.dataMode === "development" && (
                           <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-800">
                             <FlaskConical className="h-3 w-3" />
@@ -164,7 +164,7 @@ export default function RecentDatasetsList({
                   </div>
 
                   <button
-                    className="p-2.5 hover:bg-gray-100 rounded-lg disabled:opacity-50"
+                    className="shrink-0 rounded-lg p-2.5 hover:bg-gray-100 disabled:opacity-50"
                     onClick={() => onDownload(d._id)}
                     disabled={d.status !== "validated" || downloadingId === d._id}
                     title={

@@ -101,7 +101,7 @@ function ThresholdGauge({ result, accent }) {
       <div className="relative">
         <span
           className="absolute bottom-full mb-2 -translate-x-1/2 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
-          style={{ left: `${observedPercent}%`, backgroundColor: accent }}
+          style={{ left: `clamp(3.5rem, ${observedPercent}%, calc(100% - 3.5rem))`, backgroundColor: accent }}
         >
           Observed: {formatThresholdValue(observed)}
         </span>
@@ -122,12 +122,12 @@ function ThresholdGauge({ result, accent }) {
           style={{ left: `${percent(observed)}%` }}
         />
       </div>
-      <div className="relative mt-1.5 h-5 text-[11px] font-medium text-slate-600">
-        <span className="absolute left-0">0</span>
-        <span className="absolute -translate-x-1/2" style={{ left: `${alertPercent}%` }}>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] font-medium text-slate-600">
+        <span>0</span>
+        <span>
           Alert: {formatThresholdValue(alert)}
         </span>
-        <span className="absolute right-0">Epidemic: {formatThresholdValue(epidemic)}</span>
+        <span>Epidemic: {formatThresholdValue(epidemic)}</span>
       </div>
     </div>
   );
@@ -241,7 +241,7 @@ export default function Dashboard() {
   const coverageRange = formatCoverageRange(dataset);
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <header>
         <h1 className="text-2xl font-bold text-slate-950">Dashboard Overview</h1>
         <p className="mt-1 text-slate-600">Overview of foodborne disease burden and trends</p>
@@ -264,7 +264,7 @@ export default function Dashboard() {
                       <button type="button" aria-label="About threshold methodology" className="rounded-full opacity-60 transition hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300">
                         <InformationCircleIcon className="h-4 w-4" />
                       </button>
-                      <div role="tooltip" className="pointer-events-none invisible absolute left-0 top-6 z-20 w-80 rounded-lg bg-slate-950 px-3 py-2 text-xs font-normal normal-case leading-5 tracking-normal text-white opacity-0 shadow-xl transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+                      <div role="tooltip" className="pointer-events-none invisible absolute left-0 top-6 z-20 w-[min(20rem,calc(100vw-6rem))] rounded-lg bg-slate-950 px-3 py-2 text-xs font-normal normal-case leading-5 tracking-normal text-white opacity-0 shadow-xl transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
                         The latest complete month is compared with the same calendar month from exactly five eligible previous years. A count must be higher than a threshold to cross it.
                       </div>
                     </div>
@@ -278,11 +278,11 @@ export default function Dashboard() {
                     </span>
                   )}
                 </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <select aria-label="Threshold disease" value={thresholdDisease} onChange={(event) => setThresholdDisease(event.target.value)} className="min-h-10 rounded-lg border border-white/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-800 shadow-sm outline-none focus:ring-2 focus:ring-blue-300">
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <select aria-label="Threshold disease" value={thresholdDisease} onChange={(event) => setThresholdDisease(event.target.value)} className="min-h-11 min-w-0 w-full rounded-lg border border-white/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-800 shadow-sm outline-none focus:ring-2 focus:ring-blue-300 sm:w-auto">
                     {SURVEILLANCE_DISEASES.map((disease) => <option key={disease} value={disease}>{disease}</option>)}
                   </select>
-                  <select aria-label="Threshold geographic scope" value={thresholdScope} onChange={(event) => setThresholdScope(event.target.value)} className="min-h-10 rounded-lg border border-white/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-800 shadow-sm outline-none focus:ring-2 focus:ring-blue-300">
+                  <select aria-label="Threshold geographic scope" value={thresholdScope} onChange={(event) => setThresholdScope(event.target.value)} className="min-h-11 min-w-0 w-full rounded-lg border border-white/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-800 shadow-sm outline-none focus:ring-2 focus:ring-blue-300 sm:w-auto">
                     <option value={THRESHOLD_SCOPE_ALL}>Whole Manila</option>
                     {MANILA_DISTRICTS.map((district) => <option key={district} value={district}>{district}</option>)}
                   </select>
@@ -339,7 +339,7 @@ export default function Dashboard() {
 
       <DataCoverageNotice dataset={dataset} />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-2">
         <YearlyLineChart
           title={`Confirmed Cases${coverageRange ? ` (${coverageRange})` : " — Available Period"}`}
           data={yearlyData}

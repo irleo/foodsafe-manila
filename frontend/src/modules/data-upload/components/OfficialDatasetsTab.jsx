@@ -195,9 +195,9 @@ export default function OfficialDatasetsTab() {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className="space-y-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="min-w-0 space-y-6">
+        <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
           <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="font-semibold text-xl">Upload official dataset</h2>
 
@@ -248,7 +248,7 @@ export default function OfficialDatasetsTab() {
               />
             </div>
 
-            <fieldset className="rounded-lg border border-blue-200 bg-blue-50/60 p-4">
+            <fieldset className="min-w-0 rounded-lg border border-blue-200 bg-blue-50/60 p-4">
               <legend className="px-1 text-sm font-semibold text-blue-950">
                 Official reporting coverage
               </legend>
@@ -256,7 +256,7 @@ export default function OfficialDatasetsTab() {
                 Enter the complete period represented by CESU. These dates establish coverage independently of the earliest and latest valid case rows in the workbook.
               </p>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className="text-sm text-gray-700">
+                <label className="min-w-0 text-sm text-gray-700">
                   Coverage start
                   <input
                     required
@@ -267,10 +267,10 @@ export default function OfficialDatasetsTab() {
                       setCoverageStart(event.target.value);
                       setCoverageVerified(false);
                     }}
-                    className="mt-1 min-h-11 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm"
+                    className="mt-1 min-h-11 min-w-0 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm"
                   />
                 </label>
-                <label className="text-sm text-gray-700">
+                <label className="min-w-0 text-sm text-gray-700">
                   Coverage end
                   <input
                     required
@@ -282,7 +282,7 @@ export default function OfficialDatasetsTab() {
                       setCoverageEnd(event.target.value);
                       setCoverageVerified(false);
                     }}
-                    className="mt-1 min-h-11 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm"
+                    className="mt-1 min-h-11 min-w-0 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm"
                   />
                 </label>
               </div>
@@ -305,15 +305,15 @@ export default function OfficialDatasetsTab() {
               <p className="text-sm font-semibold text-blue-950">Source and reporting details</p>
               <p className="mt-1 text-xs text-blue-700">CESU is the authoritative source for every official dataset uploaded to FoodSafe.</p>
               <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div className="text-sm text-gray-700">
+                <div className="min-w-0 text-sm text-gray-700">
                   Official source
-                  <div className="mt-1 w-max flex min-h-11 items-center rounded-md border border-blue-200 bg-white px-3 py-2.5 font-medium text-blue-950">
+                  <div className="mt-1 flex min-h-11 w-full min-w-0 items-center rounded-md border border-blue-200 bg-white px-3 py-2.5 font-medium break-words text-blue-950">
                     City Epidemiology and Surveillance Unit (CESU)
                   </div>
                 </div>
-                <label className="text-sm text-gray-700 md:col-span-2">
+                <label className="min-w-0 text-sm text-gray-700 md:col-span-2">
                   Reporting frequency
-                  <select value={reportingFrequency} onChange={(event) => setReportingFrequency(event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm">
+                  <select value={reportingFrequency} onChange={(event) => setReportingFrequency(event.target.value)} className="mt-1 min-h-11 min-w-0 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm">
                     <option value="weekly">Weekly</option>
                     <option value="monthly">Monthly historical aggregate</option>
                   </select>
@@ -355,7 +355,7 @@ export default function OfficialDatasetsTab() {
         </div>
       </div>
 
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6">
         <RecentDatasetsList
           recent={recent}
           pagination={pagination}

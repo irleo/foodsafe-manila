@@ -82,10 +82,10 @@ export default function Sidebar({ isOpen, onClose, isCollapsed = false }) {
       id="dashboard-navigation"
       aria-label="Primary navigation"
       className={`
-        fixed left-0 top-16 z-20 h-[calc(100dvh-4rem)] w-64 overflow-y-auto border-r border-gray-200 bg-white
+        fixed left-0 top-16 z-20 h-[calc(100dvh-4rem)] w-64 max-w-[calc(100vw-2rem)] overflow-y-auto border-r border-gray-200 bg-white
         transition-[transform,width] duration-300 lg:sticky lg:shrink-0
-        ${isOpen ? "translate-x-0" : "-translate-x-full"}
-        lg:translate-x-0
+        ${isOpen ? "visible translate-x-0" : "invisible -translate-x-full"}
+        lg:visible lg:max-w-none lg:translate-x-0
         ${isCollapsed ? "lg:w-20" : "lg:w-64"}
       `}
     >

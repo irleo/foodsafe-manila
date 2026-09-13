@@ -623,7 +623,7 @@ const RequestAccessPage = () => {
       )}
 
       {showCancelOtpConfirm && (
-        <div className="fixed inset-0 z-[1010] bg-black/50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-1010 bg-black/50 flex items-center justify-center p-4">
           <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl p-6">
             <h3 className="text-lg font-semibold">Cancel Verification?</h3>
             <p className="text-sm text-gray-600 mt-2">

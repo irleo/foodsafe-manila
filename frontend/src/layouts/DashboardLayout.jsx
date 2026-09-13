@@ -21,8 +21,15 @@ export default function DashboardLayout() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isSidebarOpen]);
 
+  useEffect(() => {
+    if (!isSidebarOpen || !window.matchMedia("(max-width: 1023px)").matches) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [isSidebarOpen]);
+
   return (
-    <div className="min-h-[100dvh] bg-gray-50">
+    <div className="min-h-[100dvh] overflow-x-clip bg-gray-50">
       <div className="flex min-h-[100dvh] flex-col">
         {/* Navbar */}
         <Navbar
@@ -44,7 +51,7 @@ export default function DashboardLayout() {
             />
           )}
           {/* Main content */}
-          <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
+          <main className="w-full min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
             <Outlet />
           </main>
         </div>

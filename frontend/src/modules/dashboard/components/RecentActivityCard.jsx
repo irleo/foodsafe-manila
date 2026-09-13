@@ -23,7 +23,7 @@ export default function RecentActivityCard({
   const visibleItems = items.slice(0, 4);
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+    <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
       <div className="mb-3">
         <h2 className="font-semibold">{title}</h2>
       </div>
