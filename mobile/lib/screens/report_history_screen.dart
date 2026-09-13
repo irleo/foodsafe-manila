@@ -443,7 +443,71 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                                     report['exposureDescription'] as String?;
 
                                 final reportStatus =
-                                    (report['currentStatus'] as String?) ?? 'reported';
+                                    (report['currentStatus'] as String?) ??
+                                    'reported';
+
+                                final investigation =
+                                    report['investigation'] is Map
+                                    ? Map<String, dynamic>.from(
+                                        report['investigation'],
+                                      )
+                                    : <String, dynamic>{};
+
+                                final suspectedDecision =
+                                    report['suspectedDecision'] is Map
+                                    ? Map<String, dynamic>.from(
+                                        report['suspectedDecision'],
+                                      )
+                                    : <String, dynamic>{};
+
+                                final validation = report['validation'] is Map
+                                    ? Map<String, dynamic>.from(
+                                        report['validation'],
+                                      )
+                                    : <String, dynamic>{};
+
+                                final investigationFindings =
+                                    investigation['findings'] as String?;
+
+                                final suspectedFindings =
+                                    suspectedDecision['investigationFindings']
+                                        as String?;
+
+                                final validationFindings =
+                                    validation['supportingFindings'] as String?;
+
+                                final findings = <Map<String, String>>[];
+
+                                void addFinding(String type, dynamic value) {
+                                  if (value is String &&
+                                      value.trim().isNotEmpty) {
+                                    final text = value.trim();
+
+                                    final alreadyExists = findings.any(
+                                      (finding) => finding['text'] == text,
+                                    );
+
+                                    if (!alreadyExists) {
+                                      findings.add({
+                                        'type': type,
+                                        'text': text,
+                                      });
+                                    }
+                                  }
+                                }
+
+                                addFinding(
+                                  'Investigation Findings',
+                                  investigation['findings'],
+                                );
+                                addFinding(
+                                  'Suspected Decision Findings',
+                                  suspectedDecision['investigationFindings'],
+                                );
+                                addFinding(
+                                  'Validation Findings',
+                                  validation['supportingFindings'],
+                                );
 
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 16),
@@ -462,6 +526,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                                     exposureBarangay: exposureBarangay,
                                     exposureDescription: exposureDescription,
                                     foodSource: foodSource,
+                                    findings: findings,
                                   ),
                                 );
                               },
@@ -830,6 +895,7 @@ class ReportCard extends StatelessWidget {
   final String? exposureBarangay;
   final String? exposureDescription;
   final String foodSource;
+  final List<Map<String, String>> findings;
   final VoidCallback? onDetailsTap;
 
   const ReportCard({
@@ -844,6 +910,7 @@ class ReportCard extends StatelessWidget {
     this.exposureBarangay,
     this.exposureDescription,
     required this.foodSource,
+    required this.findings,
     this.onDetailsTap,
   });
 
@@ -863,6 +930,32 @@ class ReportCard extends StatelessWidget {
         return Colors.red;
       default:
         return Colors.grey;
+    }
+  }
+
+  IconData _findingIcon(String type) {
+    switch (type) {
+      case 'Investigation Findings':
+        return LucideIcons.searchCheck;
+      case 'Suspected Decision Findings':
+        return LucideIcons.stethoscope;
+      case 'Validation Findings':
+        return LucideIcons.badgeCheck;
+      default:
+        return LucideIcons.clipboardCheck;
+    }
+  }
+
+  Color _findingIconColor(String type) {
+    switch (type) {
+      case 'Investigation Findings':
+        return Colors.blue.shade600;
+      case 'Suspected Decision Findings':
+        return Colors.orange.shade600;
+      case 'Validation Findings':
+        return Colors.green.shade600;
+      default:
+        return Colors.blueGrey.shade600;
     }
   }
 
@@ -1045,10 +1138,18 @@ class ReportCard extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        LucideIcons.utensilsCrossed,
-                        size: 18,
-                        color: Colors.teal.shade600,
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: Colors.teal.shade600.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          LucideIcons.utensilsCrossed,
+                          size: 18,
+                          color: Colors.teal.shade600,
+                        ),
                       ),
                       const SizedBox(width: 8),
 
@@ -1094,10 +1195,20 @@ class ReportCard extends StatelessWidget {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            LucideIcons.mapPin,
-                            size: 18,
-                            color: Colors.blue.shade600,
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade600.withValues(
+                                alpha: 0.1,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              LucideIcons.mapPin,
+                              size: 18,
+                              color: Colors.blue.shade600,
+                            ),
                           ),
                           const SizedBox(width: 8),
 
@@ -1118,7 +1229,7 @@ class ReportCard extends StatelessWidget {
                                   style: GoogleFonts.inter(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
-                                    color: Colors.grey.shade900,
+                                    color: Colors.blue.shade600,
                                   ),
                                 ),
                               ],
@@ -1138,10 +1249,20 @@ class ReportCard extends StatelessWidget {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(
-                              LucideIcons.map,
-                              size: 18,
-                              color: Colors.orange.shade600,
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Colors.purple.shade600.withValues(
+                                  alpha: 0.1,
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                LucideIcons.map,
+                                size: 18,
+                                color: Colors.orange.shade600,
+                              ),
                             ),
                             const SizedBox(width: 8),
 
@@ -1185,10 +1306,20 @@ class ReportCard extends StatelessWidget {
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(
-                                LucideIcons.notebookPen,
-                                size: 18,
-                                color: Colors.purple.shade600
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: Colors.purple.shade600.withValues(
+                                    alpha: 0.1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  LucideIcons.notebookPen,
+                                  size: 18,
+                                  color: Colors.purple.shade600,
+                                ),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
@@ -1207,7 +1338,7 @@ class ReportCard extends StatelessWidget {
                                       exposureDescription!,
                                       style: GoogleFonts.inter(
                                         fontSize: 14,
-                                        fontWeight: FontWeight.w500,
+                                        fontWeight: FontWeight.w700,
                                         color: Colors.grey.shade900,
                                       ),
                                     ),
@@ -1221,6 +1352,89 @@ class ReportCard extends StatelessWidget {
                     ],
                   ),
                 ),
+
+                if (findings.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade100),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ...findings.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final finding = entry.value;
+                          final type = finding['type'] ?? '';
+                          final text = finding['text'] ?? '';
+
+                          return Container(
+                            width: double.infinity,
+                            margin: EdgeInsets.only(top: index == 0 ? 0 : 12),
+                            padding: EdgeInsets.only(top: index == 0 ? 0 : 12),
+                            decoration: index == 0
+                                ? null
+                                : BoxDecoration(
+                                    border: Border(
+                                      top: BorderSide(
+                                        color: Colors.grey.shade200,
+                                      ),
+                                    ),
+                                  ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: _findingIconColor(
+                                      type,
+                                    ).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    _findingIcon(type),
+                                    size: 17,
+                                    color: _findingIconColor(type),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        type,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade500,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        text,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.grey.shade900,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

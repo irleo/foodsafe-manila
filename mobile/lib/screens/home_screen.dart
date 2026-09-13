@@ -319,7 +319,7 @@ class _ReportBottomSheet extends StatelessWidget {
           icon: LucideIcons.shieldAlert,
           iconBackground: Color(0xFFF97316),
           description:
-              'If two or more people became ill after sharing the same food, drink, or water source, this may be a foodborne illness cluster. Health officers are also authorized to sample and stop the sale of doubtful food or water on their own — you don\'t need lab-confirmed proof to report.',
+              'If two or more people became ill after sharing the same food, drink, or water source, this may be a foodborne disease cluster. Health officers are also authorized to sample and stop the sale of doubtful food or water on their own — you don\'t need lab-confirmed proof to report.',
           section1Title: 'What to Do',
           section1Items: [
             'Each affected person should file a separate report',

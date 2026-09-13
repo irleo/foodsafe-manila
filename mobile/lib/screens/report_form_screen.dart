@@ -185,7 +185,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
     }
   }
 
-  static const Duration reportCooldown = Duration(hours: 0);
+  static const Duration reportCooldown = Duration(hours: 8);
 
   Duration? _remainingCooldown;
   Timer? _cooldownTimer;
@@ -356,15 +356,13 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
   }
 
   final List<String> symptoms = [
-    'Watery diarrhea',
-    'Bloody diarrhea',
-    'Severe dehydration',
-    'Sustained fever',
+    'Nausea',
+    'Vomiting',
+    'Diarrhea',
+    'Abdominal cramps',
+    'Fever',
     'Headache',
-    'Malaise',
-    'Loss of appetite',
-    'Constipation',
-    'Non-productive cough',
+    'Dehydration',
   ];
 
   final List<String> foodSources = [
