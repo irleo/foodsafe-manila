@@ -33,12 +33,24 @@ android {
     }
 
     buildTypes {
-        release {
+        getByName("debug") {
+            // Appends ".debug" to your application ID (making it com.example.foodsafe_manila.debug)
+            applicationIdSuffix = ".debug"
+            
+            // Optional: Changes the app name on your phone screen so you can tell them apart
+            resValue("string", "app_name", "FoodSafe Debug")
+        }
+        
+        getByName("release") {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            
+            // The production app name
+            resValue("string", "app_name", "FoodSafe Manila")
         }
     }
+
 }
 
 dependencies {
