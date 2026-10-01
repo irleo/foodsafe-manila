@@ -106,6 +106,13 @@ def run_forecast(series: list, horizon_months: int, backtest_months: int) -> dic
     backtest = []
     backtest_start = max(MIN_TRAINING_MONTHS, len(rows) - backtest_months)
     for i in range(backtest_start, len(rows)):
+        target = rows[i]
+        previous = rows[i - 1]
+        # Score only genuine one-calendar-month-ahead targets. Missing
+        # reporting months stay missing; never relabel a forecast across a gap.
+        if (target["year"] * 12 + target["month"]
+                - previous["year"] * 12 - previous["month"]) != 1:
+            continue
         rolling_train_df = pd.DataFrame(
             {
                 "ds": [_to_ds(int(r["year"]), int(r["month"])) for r in rows[:i]],
@@ -113,7 +120,9 @@ def run_forecast(series: list, horizon_months: int, backtest_months: int) -> dic
             }
         )
         one_step = _fit_predict(rolling_train_df, 1)
-        target = rows[i]
+        predicted_date = pd.Timestamp(one_step["ds"].iloc[0])
+        if predicted_date != _to_ds(int(target["year"]), int(target["month"])):
+            raise ValueError("backtest_target_date_mismatch")
         backtest.append(
             {
                 "year": int(target["year"]),

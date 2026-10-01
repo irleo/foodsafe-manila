@@ -1,3 +1,5 @@
+import { isRequiredText, isValidEmail } from "./utils/accessFieldValidation";
+import { isValidName, normalizeName, hasSupportedNameCharacters, NAME_MESSAGE } from "./utils/nameValidation";
 import axios from "axios";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -40,7 +42,8 @@ const RequestAccessPage = () => {
   const [devOtpExpiry, setDevOtpExpiry] = useState(null);
 
   const [form, setForm] = useState({
-    username: "",
+    firstName: "",
+    lastName: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -67,12 +70,13 @@ const RequestAccessPage = () => {
 
   const canRequestOtp = useMemo(() => {
     const requiredFilled =
-      form.username.trim() &&
-      form.email.trim() &&
+      isValidName(form.firstName) &&
+      isValidName(form.lastName) &&
+      isValidEmail(form.email) &&
       form.password &&
       form.confirmPassword &&
-      form.organization.trim() &&
-      form.position.trim() &&
+      isRequiredText(form.organization) &&
+      isRequiredText(form.position) &&
       form.requestedRole;
 
     return (
@@ -96,6 +100,10 @@ const RequestAccessPage = () => {
   const setField = (key) => (e) => {
     setError(null);
     const value = e.target.value;
+    if (["firstName", "lastName"].includes(key) && !hasSupportedNameCharacters(value)) {
+      setError(NAME_MESSAGE);
+      return;
+    }
     if (key === "email") {
       setOtpSent(false);
       setOtpModalOpen(false);
@@ -128,7 +136,8 @@ const RequestAccessPage = () => {
   };
 
   const buildPayload = () => ({
-    username: form.username.trim(),
+    firstName: normalizeName(form.firstName),
+    lastName: normalizeName(form.lastName),
     email: form.email.trim(),
     password: form.password,
     organization: form.organization.trim(),
@@ -187,7 +196,7 @@ const RequestAccessPage = () => {
   };
 
   const handleVerifyAndSubmit = async () => {
-    if (loading || submitted) return;
+    if (!canRequestOtp || loading || submitted) return;
 
     if (accessOtp.trim().length !== 6) {
       setError("Please enter the 6-digit email verification code.");
@@ -288,25 +297,26 @@ const RequestAccessPage = () => {
                 Personal Information
               </h2>
 
-              <div>
-                <label htmlFor="username" className="block mb-2 text-sm text-gray-700">
-                  Full Name <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    id="username"
-                    name="username"
-                    type="text"
-                    className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent transition-all border-gray-300"
-                    placeholder="Juan Dela Cruz"
-                    value={form.username}
-                    onChange={setField("username")}
-                    disabled={loading}
-                    required
-                  />
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[["firstName", "First Name", "Juan"], ["lastName", "Last Name", "Dela Cruz"]].map(([field, label, placeholder]) => (
+                  <div key={field}>
+                    <label htmlFor={field} className="block mb-2 text-sm text-gray-700">
+                      {label} <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input id={field} name={field} type="text"
+                        autoComplete={field === "firstName" ? "given-name" : "family-name"}
+                        className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent border-gray-300"
+                        placeholder={placeholder} value={form[field]} onChange={setField(field)}
+                        maxLength={80} disabled={loading} required
+                        aria-describedby="name-help"
+                        aria-invalid={Boolean(form[field]) && !isValidName(form[field])} />
+                    </div>
+                  </div>
+                ))}
               </div>
+              <p id="name-help" className="text-xs text-gray-500">{NAME_MESSAGE}</p>
 
               <div>
                 <label htmlFor="email" className="block mb-2 text-sm text-gray-700">
@@ -316,6 +326,7 @@ const RequestAccessPage = () => {
                   <EnvelopeIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     id="email"
+                    maxLength={254}
                     name="email"
                     type="email"
                     className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent transition-all border-gray-300"
@@ -449,6 +460,7 @@ const RequestAccessPage = () => {
                   <BuildingOffice2Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     id="organization"
+                    maxLength={120}
                     name="organization"
                     type="text"
                     className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent transition-all border-gray-300"
@@ -469,6 +481,7 @@ const RequestAccessPage = () => {
                   <IdentificationIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     id="position"
+                    maxLength={120}
                     name="position"
                     type="text"
                     className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent transition-all border-gray-300"

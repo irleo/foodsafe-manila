@@ -5,6 +5,7 @@ import { groupReportRowsByStatus } from "../services/reportAnalyticsService.js";
 import {
   aggregateWholeManila,
   isUsablePredictionRun,
+  FORECAST_SCHEMA_VERSION,
 } from "../services/predictions/refreshMonthlyDistrictPredictions.js";
 
 test("official analytics rejects report-shaped rows regardless of validation state", () => {
@@ -43,7 +44,7 @@ test("prediction cache accepts only current, populated, horizon-matched forecast
     forecastTargetYear: 2026,
     forecastTargetMonth: 3,
     payload: {
-      schemaVersion: 10,
+      schemaVersion: FORECAST_SCHEMA_VERSION,
       forecastHorizonMonths: 1,
       forecastTargetYear: 2026,
       forecastTargetMonth: 3,
@@ -76,7 +77,7 @@ test("prediction cache requires every consecutive month in the requested horizon
     forecastTargetYear: 2026,
     forecastTargetMonth: 11,
     payload: {
-      schemaVersion: 10,
+      schemaVersion: FORECAST_SCHEMA_VERSION,
       forecastHorizonMonths: 3,
       diseases: [{
         disease: "Cholera",

@@ -32,19 +32,24 @@ export async function fetchDatasets({ token, status, providerType, page = 1, lim
 export async function uploadDataset({
   file,
   name,
-  reportingFrequency,
   coverageStart,
   coverageEnd,
   token,
+  validationToken,
+  confirmSkipMissing = false,
+  preview = false,
+  coverageVerified,
 }) {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("name", name);
-  formData.append("reportingFrequency", reportingFrequency);
   formData.append("coverageStart", coverageStart);
   formData.append("coverageEnd", coverageEnd);
+  formData.append("coverageVerified", String(coverageVerified));
+  formData.append("confirmSkipMissing", String(confirmSkipMissing));
+  if (validationToken) formData.append("validationToken", validationToken);
 
-  const res = await fetch(`${API_BASE}/api/datasets/upload`, {
+  const res = await fetch(`${API_BASE}/api/datasets/${preview ? "validate" : "upload"}`, {
     method: "POST",
     headers: {
       Authorization: token ? `Bearer ${token}` : "",

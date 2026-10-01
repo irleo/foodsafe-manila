@@ -1,4 +1,5 @@
 export function modelLabel(model) {
+  if (model === "tie") return "Equal mean absolute error";
   if (model === "prophet") return "Trend-based method (Prophet)";
   if (model === "seasonal_naive") return "Same month last year";
   if (model === "mixed") return "Best method for each district";

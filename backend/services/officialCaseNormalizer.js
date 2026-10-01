@@ -108,6 +108,7 @@ export function isBlankRow(obj = {}) {
 }
 
 export function normalizeRawHealthOfficeRow({ sheetName, row }) {
+  const errors = [];
   let { barangay, barangayNo } = normalizeBarangay(row["Barangay"]);
   const reportedAt = parseExcelDate(
     row["Report date"] ?? row["report_date"] ?? row["Report Date"],
@@ -138,51 +139,45 @@ export function normalizeRawHealthOfficeRow({ sheetName, row }) {
   const disease = normalizeDisease(sheetName);
 
   if (!reportedAt)
-    return {
-      ok: false,
+    errors.push({
       field: "reportDate",
-      message: "Report date is required.",
-    };
+      message: "Report date must be a valid Excel date or YYYY-MM-DD value.",
+    });
   if (!district)
-    return { ok: false, field: "district", message: "District is required." };
+    errors.push({ field: "district", message: "District is required." });
   if (!ALLOWED_DISTRICTS.has(district))
-    return {
-      ok: false,
+    errors.push({
       field: "district",
       message: "District must be District 1 through District 6.",
-    };
+    });
   if (!cls)
-    return {
-      ok: false,
+    errors.push({
       field: "caseClassification",
       message: "Invalid case classification.",
-    };
+    });
   if (!disease)
-    return {
-      ok: false,
+    errors.push({
       field: "disease",
       message: `Unsupported disease sheet: ${String(sheetName || "(blank)")}.`,
-    };
+    });
 
-  const year = reportedAt.getUTCFullYear();
+  const year = reportedAt?.getUTCFullYear();
   if (year < MIN_YEAR || year > MAX_YEAR)
-    return {
-      ok: false,
+    errors.push({
       field: "reportDate",
       message: `Report date year must be ${MIN_YEAR}–${MAX_YEAR}.`,
-    };
+    });
   if (row["Barangay"] && !barangayNo)
-    return {
-      ok: false,
+    errors.push({
       field: "barangay",
       message: "Barangay must contain a number from 1 to 905.",
-    };
-  if (barangayNo && legislativeDistrictFromBarangayNo(barangayNo) !== district)
-    return {
-      ok: false,
+    });
+  if (barangayNo && ALLOWED_DISTRICTS.has(district) && legislativeDistrictFromBarangayNo(barangayNo) !== district)
+    errors.push({
       field: "barangay",
       message: `Barangay ${barangayNo} does not belong to ${district}.`,
-    };
+    });
+  if (errors.length) return { ok: false, ...errors[0], errors };
   const month = reportedAt.getUTCMonth() + 1;
   const weekData = getDohMorbidityWeek(reportedAt);
 
@@ -209,6 +204,7 @@ export function normalizeRawHealthOfficeRow({ sheetName, row }) {
 }
 
 export function normalizeTemplateRow(row = {}) {
+  const errors = [];
   const district = normalizeDistrict(row.district);
   const { barangay, barangayNo } = normalizeBarangay(
     row.barangay ?? row.Barangay,
@@ -222,53 +218,48 @@ export function normalizeTemplateRow(row = {}) {
   const cases = parseNumber(row.cases);
 
   if (!district)
-    return { ok: false, field: "district", message: "District is required." };
+    errors.push({ field: "district", message: "District is required." });
   if (!ALLOWED_DISTRICTS.has(district))
-    return {
-      ok: false,
+    errors.push({
       field: "district",
       message: "District must be District 1 through District 6.",
-    };
+    });
   if (!String(row.barangay ?? row.Barangay ?? "").trim())
-    return { ok: false, field: "barangay", message: "Barangay is required." };
+    errors.push({ field: "barangay", message: "Barangay is required." });
   if (!barangayNo)
-    return {
-      ok: false,
+    errors.push({
       field: "barangay",
       message: "Barangay must contain a number from 1 to 905.",
-    };
+    });
   if (barangayNo && (barangayNo < 1 || barangayNo > 905))
-    return {
-      ok: false,
+    errors.push({
       field: "barangay",
       message: "Barangay number must be 1–905.",
-    };
-  if (barangayNo && legislativeDistrictFromBarangayNo(barangayNo) !== district)
-    return {
-      ok: false,
+    });
+  if (barangayNo && ALLOWED_DISTRICTS.has(district) && legislativeDistrictFromBarangayNo(barangayNo) !== district)
+    errors.push({
       field: "barangay",
       message: `Barangay ${barangayNo} does not belong to ${district}.`,
-    };
+    });
   if (!disease)
-    return { ok: false, field: "disease", message: "Disease is missing or unsupported." };
+    errors.push({ field: "disease", message: "Disease is missing or unsupported." });
   if (!reportDate)
-    return { ok: false, field: "reportDate", message: "Report date must be a valid Excel date or YYYY-MM-DD value." };
-  const year = reportDate.getUTCFullYear();
+    errors.push({ field: "reportDate", message: "Report date must be a valid Excel date or YYYY-MM-DD value." });
+  const year = reportDate?.getUTCFullYear();
   if (year < MIN_YEAR || year > MAX_YEAR)
-    return { ok: false, field: "reportDate", message: `Report date year must be ${MIN_YEAR}–${MAX_YEAR}.` };
+    errors.push({ field: "reportDate", message: `Report date year must be ${MIN_YEAR}–${MAX_YEAR}.` });
   if (!cls)
-    return {
-      ok: false,
+    errors.push({
       field: "caseClassification",
       message: "Invalid case classification.",
-    };
+    });
   if (!Number.isInteger(cases) || cases < 1)
-    return {
-      ok: false,
+    errors.push({
       field: "cases",
       message: "Cases must be a positive whole number.",
-    };
+    });
 
+  if (errors.length) return { ok: false, ...errors[0], errors };
   const weekData = getDohMorbidityWeek(reportDate);
 
   return {

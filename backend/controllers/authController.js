@@ -1,3 +1,5 @@
+import { isRequiredText, isValidEmail } from "../utils/accessFieldValidation.js";
+import { isValidName, normalizeName, NAME_MESSAGE } from "../utils/nameValidation.js";
 import User from "../models/WebUser.js";
 import EmailOtp from "../models/EmailOtp.js";
 import bcrypt from "bcryptjs";
@@ -90,23 +92,19 @@ async function findRequestAccessConflict(email) {
 }
 
 function validateAccessRequestFields({
-  username,
+  firstName,
+  lastName,
   email,
   password,
   organization,
   position,
   requestedRole,
 }) {
-  if (
-    !username ||
-    !email ||
-    !password ||
-    !organization ||
-    !position ||
-    !requestedRole
-  ) {
-    return "All fields are required";
-  }
+  if (!isValidName(firstName) || !isValidName(lastName)) return `First and last name: ${NAME_MESSAGE}`;
+  if (!isValidEmail(email)) return "A valid email address of up to 254 characters is required.";
+  if (!isRequiredText(organization)) return "Organization must contain 1-120 characters.";
+  if (!isRequiredText(position)) return "Position must contain 1-120 characters.";
+  if (typeof password !== "string") return "Password is required.";
 
   const passwordValidation = validatePassword(password);
   if (!passwordValidation.isValid) return passwordValidation.message;
@@ -171,15 +169,14 @@ async function verifyAccessOtpOrResponse(email, otp) {
 
 // POST /api/auth/request-access/send-otp
 export const sendRequestAccessOtp = async (req, res) => {
-  const { username, email, password, organization, position, requestedRole } =
-    req.body;
-  const normalizedEmail = String(email || "")
-    .trim()
-    .toLowerCase();
+  const { firstName, lastName, email, password, organization, position, requestedRole } =
+    (req.body ?? {});
+  const normalizedEmail = (typeof email === "string" ? email.trim().toLowerCase() : "");
 
   const validationMessage = validateAccessRequestFields({
-    username,
-    email: normalizedEmail,
+    firstName,
+    lastName,
+    email,
     password,
     organization,
     position,
@@ -265,22 +262,22 @@ export const sendRequestAccessOtp = async (req, res) => {
 // POST /api/auth/request-access
 export const requestAccess = async (req, res) => {
   const {
-    username,
+    firstName,
+    lastName,
     email,
     password,
     organization,
     position,
     requestedRole,
     accessOtp,
-  } = req.body;
-  const normalizedEmail = String(email || "")
-    .trim()
-    .toLowerCase();
-  const normalizedUsername = String(username || "").trim();
+  } = req.body ?? {};
+  const normalizedEmail = (typeof email === "string" ? email.trim().toLowerCase() : "");
+  const normalizedUsername = `${normalizeName(firstName)} ${normalizeName(lastName)}`;
 
   const validationMessage = validateAccessRequestFields({
-    username: normalizedUsername,
-    email: normalizedEmail,
+    firstName,
+    lastName,
+    email,
     password,
     organization,
     position,
@@ -311,6 +308,8 @@ export const requestAccess = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         existingUser.username = normalizedUsername;
+        existingUser.firstName = normalizeName(firstName);
+        existingUser.lastName = normalizeName(lastName);
         existingUser.password = hashedPassword;
         existingUser.organization = organization.trim();
         existingUser.position = position.trim();
@@ -353,6 +352,8 @@ export const requestAccess = async (req, res) => {
 
     const user = new User({
       username: normalizedUsername,
+      firstName: normalizeName(firstName),
+      lastName: normalizeName(lastName),
       email: normalizedEmail,
       password: hashedPassword,
       organization: organization.trim(),
@@ -405,8 +406,8 @@ export const login = async (req, res) => {
     return loginCitizen(req, res);
   }
 
-  const { email, password } = req.body;
-  if (!email || !password) {
+  const { email, password } = req.body ?? {};
+  if (!isValidEmail(email) || typeof password !== "string" || !password) {
     return res.status(400).json({ message: "Email and password are required" });
   }
 

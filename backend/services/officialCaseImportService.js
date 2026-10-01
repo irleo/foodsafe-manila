@@ -1,3 +1,4 @@
+import { validateWorkbookIsolated } from "./validateWorkbookIsolated.js";
 import path from "path";
 import XLSX from "xlsx";
 import mongoose from "mongoose";
@@ -5,11 +6,6 @@ import mongoose from "mongoose";
 import Dataset from "../models/Dataset.js";
 import OfficialCase from "../models/OfficialCase.js";
 import { refreshDashboardSummaryAfterWrite } from "./dashboardSummaryService.js";
-import {
-  isBlankRow,
-  normalizeRawHealthOfficeRow,
-  normalizeTemplateRow,
-} from "./officialCaseNormalizer.js";
 
 const TEMPLATE_REQUIRED = [
   "district",
@@ -21,7 +17,6 @@ const TEMPLATE_REQUIRED = [
 ];
 
 const RAW_REQUIRED = ["Report date", "District", "Case Classification"];
-const MAX_STORED_VALIDATION_ERRORS = 500;
 
 function normalizeHeaderKey(k) {
   return String(k || "")
@@ -71,62 +66,6 @@ export function detectOfficialCaseXlsxFormat(wb) {
   };
 }
 
-function validateRawWorkbook(wb) {
-  const errors = [];
-  let validSheets = 0;
-  let totalRows = 0;
-
-  for (const sn of wb.SheetNames || []) {
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: "" });
-    if (!rows.length) continue;
-    totalRows += rows.length;
-    const headers = worksheetHeaders(wb.Sheets[sn]);
-    if (!hasAllHeaders(headers, RAW_REQUIRED)) continue;
-    validSheets += 1;
-  }
-
-  if (!validSheets) {
-    errors.push({
-      sheet: null,
-      row: null,
-      field: "workbook",
-      message: `No valid raw sheets found. Required columns: ${RAW_REQUIRED.join(", ")}`,
-    });
-  }
-
-  return { ok: errors.length === 0, errors, totalRows, validSheets };
-}
-
-function validateTemplateWorkbook(wb, preferredSheetName) {
-  const errors = [];
-  const sheetName =
-    (preferredSheetName && wb.SheetNames.includes(preferredSheetName)
-      ? preferredSheetName
-      : wb.SheetNames.find((sn) => {
-          const headers = worksheetHeaders(wb.Sheets[sn]);
-          return hasAllHeaders(headers, TEMPLATE_REQUIRED);
-        })) || null;
-
-  if (!sheetName) {
-    return {
-      ok: false,
-      sheetName: null,
-      errors: [
-        {
-          sheet: null,
-          row: null,
-          field: "workbook",
-          message: `No sheet found with required columns: ${TEMPLATE_REQUIRED.join(", ")}`,
-        },
-      ],
-      totalRows: 0,
-    };
-  }
-
-  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "" });
-  return { ok: errors.length === 0, sheetName, errors, totalRows: rows.length };
-}
-
 function minMaxYearMonth(records) {
   let coverageStart = null;
   let coverageEnd = null;
@@ -144,53 +83,6 @@ function minMaxYearMonth(records) {
   if (!coverageStart || !coverageEnd)
     return { coverageStart: null, coverageEnd: null };
   return { coverageStart, coverageEnd };
-}
-
-function exactRecordBounds(records) {
-  const dates = records
-    .map((record) => {
-      const exact = record?.surveillanceDate || record?.weekStartDate;
-      if (exact) return new Date(exact);
-      if (Number.isInteger(record?.year) && Number.isInteger(record?.month)) {
-        return new Date(Date.UTC(record.year, record.month - 1, 1));
-      }
-      return null;
-    })
-    .filter((date) => date && !Number.isNaN(date.getTime()));
-  if (!dates.length) return { start: null, end: null };
-  return {
-    start: new Date(Math.min(...dates.map((date) => date.getTime()))),
-    end: new Date(Math.max(...dates.map((date) => date.getTime()))),
-  };
-}
-
-function validateDeclaredCoverage(records, coverageStart, coverageEnd) {
-  const start = coverageStart ? new Date(coverageStart) : null;
-  const end = coverageEnd ? new Date(coverageEnd) : null;
-  if (
-    !start
-    || !end
-    || Number.isNaN(start.getTime())
-    || Number.isNaN(end.getTime())
-    || start > end
-  ) {
-    return { ok: false, reason: "Valid declared coverage dates are required." };
-  }
-
-  const observed = exactRecordBounds(records);
-  if (observed.start && (observed.start < start || observed.end > end)) {
-    return {
-      ok: false,
-      reason: "The selected coverage dates must include every valid case date in the workbook.",
-      validationErrors: [{
-        sheet: null,
-        row: null,
-        field: "coverage",
-        message: `Valid workbook records span ${observed.start.toISOString().slice(0, 10)} through ${observed.end.toISOString().slice(0, 10)}.`,
-      }],
-    };
-  }
-  return { ok: true, coverageStart: start, coverageEnd: end };
 }
 
 export function districtCoverageFromRecords(records, suppliedCoverage = []) {
@@ -252,12 +144,6 @@ export function districtCoverageFromRecords(records, suppliedCoverage = []) {
       verificationSource: "derived_from_records",
     };
   });
-}
-
-function normalizeTemplateRowKeys(row = {}) {
-  return Object.fromEntries(
-    Object.entries(row).map(([key, value]) => [normalizeHeaderKey(key), value]),
-  );
 }
 
 function aggregateRecords(records) {
@@ -354,353 +240,35 @@ export async function importOfficialCasesXlsx({
   districtCoverage = [],
   declaredCoverageStart,
   declaredCoverageEnd,
+  confirmSkipMissing = false,
   beforePersist,
 } = {}) {
-  if (!Buffer.isBuffer(fileBuffer)) throw new Error("fileBuffer is required");
-
-  let wb;
-  try {
-    wb = XLSX.read(fileBuffer, { type: "buffer", cellDates: true });
-  } catch (error) {
-    return {
-      success: false,
-      reason: "The uploaded file could not be read as an Excel workbook.",
-      validationErrors: [
-        {
-          sheet: null,
-          row: null,
-          field: "workbook",
-          message: "Invalid Excel workbook.",
-        },
-      ],
-    };
-  }
-  const detected = detectOfficialCaseXlsxFormat(wb);
-  if (!detected.ok) {
-    return { success: false, reason: detected.reason, validationErrors: [] };
-  }
-
-  const formatType = detected.formatType;
-
-  if (formatType === "raw_health_office") {
-    const v = validateRawWorkbook(wb);
-    if (!v.ok) {
-      return {
-        success: false,
-        formatType,
-        reason: "Validation failed",
-        validationErrors: v.errors,
-      };
-    }
-
-    const normalized = [];
-    const validationErrors = [];
-    let invalidRowCount = 0;
-    const diseases = new Set();
-    const districts = new Set();
-    const seenRows = new Set();
-
-    for (const sn of wb.SheetNames || []) {
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: "" });
-      if (!rows.length) continue;
-      const headers = Object.keys(rows[0] || {});
-      if (!hasAllHeaders(headers, RAW_REQUIRED)) continue;
-
-      for (let i = 0; i < rows.length; i++) {
-        const rowNum = i + 2;
-        const row = rows[i];
-        if (isBlankRow(row)) continue;
-        const n = normalizeRawHealthOfficeRow({ sheetName: sn, row });
-        if (!n.ok) {
-          invalidRowCount += 1;
-          if (validationErrors.length < MAX_STORED_VALIDATION_ERRORS) {
-            validationErrors.push({
-              sheet: sn,
-              row: rowNum,
-              field: n.field,
-              message: n.message,
-            });
-          }
-          continue;
-        }
-        diseases.add(n.value.disease);
-        districts.add(n.value.district);
-        const duplicateKey = [
-          n.value.district,
-          n.value.barangayNo,
-          n.value.disease,
-          n.value.surveillanceDate?.toISOString?.() || "",
-          n.value.caseClassification,
-          n.value.cases,
-        ].join("|");
-        if (seenRows.has(duplicateKey)) {
-          invalidRowCount += 1;
-          if (validationErrors.length < MAX_STORED_VALIDATION_ERRORS) {
-            validationErrors.push({
-              sheet: sn,
-              row: rowNum,
-              field: "row",
-              message: "Duplicate row.",
-            });
-          }
-          continue;
-        }
-        seenRows.add(duplicateKey);
-        normalized.push(n.value);
-      }
-    }
-
-    if (!normalized.length) {
-      return {
-        success: false,
-        formatType,
-        reason: "No valid rows could be normalized.",
-        validationErrors,
-        validationErrorCount: invalidRowCount,
-      };
-    }
-
-    const declaredCoverage = validateDeclaredCoverage(
-      normalized,
-      declaredCoverageStart,
-      declaredCoverageEnd,
-    );
-    if (!declaredCoverage.ok) {
-      return {
-        success: false,
-        formatType,
-        reason: declaredCoverage.reason,
-        validationErrors: declaredCoverage.validationErrors || [],
-        validationErrorCount: invalidRowCount,
-      };
-    }
-    const { coverageStart, coverageEnd } = declaredCoverage;
-    const resolvedDistrictCoverage = districtCoverageFromRecords(
-      normalized,
-      districtCoverage,
-    );
-
-    if (typeof beforePersist === "function") await beforePersist();
-
-    const { dataset, insertedRows } = await persistOfficialCaseImport({
-      datasetPayload: {
-        _id: datasetId,
-        name:
-          name?.trim() ||
-          path.basename(
-            originalFileName || storedFileName || "officialCases.xlsx",
-          ),
-        dataSource: providerName,
-        providerType,
-        providerName,
-        reportingFrequency,
-        ingestionMethod: "excel",
-        coverageStart,
-        coverageEnd,
-        districtCoverage: resolvedDistrictCoverage,
-        originalFileName: originalFileName || "officialCases.xlsx",
-        storedFileName: "",
-        filePath: "",
-        storageProvider,
-        storageKey,
-        fileSize,
-        mimeType:
-          mimeType ||
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        status: "pending",
-        uploadedBy: userId || null,
-        contentHash,
-        formatType,
-        diseases: Array.from(diseases),
-        districts: Array.from(new Set([
-          ...districts,
-          ...resolvedDistrictCoverage.map((entry) => entry.district),
-        ])),
-        totalRows: v.totalRows,
-        insertedRows: 0,
-        skippedRows: invalidRowCount,
-        validationErrorCount: invalidRowCount,
-        validationErrors: validationErrors.length ? validationErrors : null,
-      },
-      normalized,
-      providerType,
-      providerName,
-      reportingFrequency,
-    });
-
-    return {
-      success: true,
-      formatType,
-      datasetId: String(dataset._id),
-      insertedRows,
-      skippedRows: invalidRowCount,
-      validationErrorCount: invalidRowCount,
-      coverageStart: dataset.coverageStart.toISOString(),
-      coverageEnd: dataset.coverageEnd.toISOString(),
-      diseases: dataset.diseases,
-      districts: dataset.districts,
-      validationErrors: dataset.validationErrors,
-    };
-  }
-
-  if (formatType === "processed_template") {
-    const v = validateTemplateWorkbook(wb, "processed data");
-    if (!v.ok) {
-      return {
-        success: false,
-        formatType,
-        reason: "Validation failed",
-        validationErrors: v.errors,
-      };
-    }
-
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[v.sheetName], {
-      defval: "",
-    });
-    const normalized = [];
-    const validationErrors = [];
-    let invalidRowCount = 0;
-    const diseases = new Set();
-    const districts = new Set();
-    const seenRows = new Set();
-
-    for (let i = 0; i < rows.length; i++) {
-      const rowNum = i + 2;
-      const row = normalizeTemplateRowKeys(rows[i]);
-      // Skip "notes" / empty trailing columns rows
-      if (isBlankRow(row)) continue;
-
-      const n = normalizeTemplateRow(row);
-      if (!n.ok) {
-        invalidRowCount += 1;
-        if (validationErrors.length < MAX_STORED_VALIDATION_ERRORS) {
-          validationErrors.push({
-            sheet: v.sheetName,
-            row: rowNum,
-            field: n.field,
-            message: n.message,
-          });
-        }
-        continue;
-      }
-      diseases.add(n.value.disease);
-      districts.add(n.value.district);
-      const duplicateKey = [
-        n.value.district,
-        n.value.barangayNo,
-        n.value.disease,
-        n.value.surveillanceDate?.toISOString?.() || "",
-        n.value.caseClassification,
-        n.value.cases,
-      ].join("|");
-      if (seenRows.has(duplicateKey)) {
-        invalidRowCount += 1;
-        if (validationErrors.length < MAX_STORED_VALIDATION_ERRORS) {
-          validationErrors.push({
-            sheet: v.sheetName,
-            row: rowNum,
-            field: "row",
-            message: "Duplicate row.",
-          });
-        }
-        continue;
-      }
-      seenRows.add(duplicateKey);
-      normalized.push(n.value);
-    }
-
-    if (!normalized.length) {
-      return {
-        success: false,
-        formatType,
-        reason: "No valid rows could be imported.",
-        validationErrors,
-        validationErrorCount: invalidRowCount,
-      };
-    }
-
-    const declaredCoverage = validateDeclaredCoverage(
-      normalized,
-      declaredCoverageStart,
-      declaredCoverageEnd,
-    );
-    if (!declaredCoverage.ok) {
-      return {
-        success: false,
-        formatType,
-        reason: declaredCoverage.reason,
-        validationErrors: declaredCoverage.validationErrors || [],
-        validationErrorCount: invalidRowCount,
-      };
-    }
-    const { coverageStart, coverageEnd } = declaredCoverage;
-    const resolvedDistrictCoverage = districtCoverageFromRecords(
-      normalized,
-      districtCoverage,
-    );
-
-    if (typeof beforePersist === "function") await beforePersist();
-
-    const { dataset, insertedRows } = await persistOfficialCaseImport({
-      datasetPayload: {
-        _id: datasetId,
-        name:
-          name?.trim() ||
-          path.basename(
-            originalFileName || storedFileName || "cleanedOfficialCases.xlsx",
-          ),
-        dataSource: providerName,
-        providerType,
-        providerName,
-        reportingFrequency,
-        ingestionMethod: "excel",
-        coverageStart,
-        coverageEnd,
-        districtCoverage: resolvedDistrictCoverage,
-        originalFileName: originalFileName || "cleanedOfficialCases.xlsx",
-        storedFileName: "",
-        filePath: "",
-        storageProvider,
-        storageKey,
-        fileSize,
-        mimeType:
-          mimeType ||
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        status: "pending",
-        uploadedBy: userId || null,
-        contentHash,
-        formatType,
-        diseases: Array.from(diseases),
-        districts: Array.from(new Set([
-          ...districts,
-          ...resolvedDistrictCoverage.map((entry) => entry.district),
-        ])),
-        totalRows: rows.length,
-        insertedRows: 0,
-        skippedRows: invalidRowCount,
-        validationErrorCount: invalidRowCount,
-        validationErrors: validationErrors.length ? validationErrors : null,
-      },
-      normalized,
-      providerType,
-      providerName,
-      reportingFrequency,
-    });
-
-    return {
-      success: true,
-      formatType,
-      datasetId: String(dataset._id),
-      insertedRows,
-      skippedRows: invalidRowCount,
-      validationErrorCount: invalidRowCount,
-      coverageStart: dataset.coverageStart.toISOString(),
-      coverageEnd: dataset.coverageEnd.toISOString(),
-      diseases: dataset.diseases,
-      districts: dataset.districts,
-      validationErrors: dataset.validationErrors,
-    };
-  }
-
-  return { success: false, reason: "Unsupported format type." };
+  const validation = await validateWorkbookIsolated({ fileBuffer, declaredCoverageStart, declaredCoverageEnd });
+  const { normalized, ...preview } = validation;
+  if (!validation.canUpload) return { ...preview, validationErrors: preview.errors, validationErrorCount: preview.errorCount };
+  if (validation.requiresSkipConfirmation && confirmSkipMissing !== true) return {
+    ...preview, success: false, canUpload: false, reason: "Explicit confirmation is required before skipping incomplete rows.",
+  };
+  const coverageStart = new Date(declaredCoverageStart);
+  const coverageEnd = new Date(declaredCoverageEnd);
+  const resolvedDistrictCoverage = districtCoverageFromRecords(normalized, districtCoverage);
+  if (typeof beforePersist === "function") await beforePersist();
+  const { dataset, insertedRows } = await persistOfficialCaseImport({
+    datasetPayload: {
+      _id: datasetId, name: name?.trim() || path.basename(originalFileName || "officialCases.xlsx"),
+      dataSource: providerName, providerType, providerName, reportingFrequency, ingestionMethod: "excel",
+      coverageStart, coverageEnd, districtCoverage: resolvedDistrictCoverage,
+      originalFileName: originalFileName || "officialCases.xlsx", storedFileName: "", filePath: "",
+      storageProvider, storageKey, fileSize, mimeType, status: "pending", uploadedBy: userId || null,
+      contentHash, formatType: validation.formatType,
+      diseases: [...new Set(normalized.map((r) => r.disease))],
+      districts: [...new Set([...normalized.map((r) => r.district), ...resolvedDistrictCoverage.map((r) => r.district)])],
+      totalRows: validation.totalRows, insertedRows: 0, skippedRows: validation.skippedRows,
+      validationErrorCount: 0, validationErrors: null,
+    }, normalized, providerType, providerName, reportingFrequency,
+  });
+  return { success: true, formatType: dataset.formatType, datasetId: String(dataset._id), insertedRows,
+    skippedRows: validation.skippedRows, validationErrorCount: 0, validationErrors: [],
+    coverageStart: coverageStart.toISOString(), coverageEnd: coverageEnd.toISOString(),
+    diseases: dataset.diseases, districts: dataset.districts };
 }
