@@ -60,7 +60,7 @@ export async function sendMobileOtp({ phone, purpose }) {
   const expiresAt = new Date(now.getTime() + OTP_TTL_MS);
   await sendSemaphoreSms({
     phone,
-    message: `Your FoodSafe verification code is ${otp}. It expires in 5 minutes. Do not share this code.`,
+    message: `Your One Time Password is ${otp}. It expires in 5 minutes. Do not share this code.`,
   });
 
   await MobileOtp.findOneAndUpdate(
