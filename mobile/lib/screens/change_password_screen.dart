@@ -115,33 +115,71 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     });
   }
 
+  Future<bool> _isIdentifierLinkedToAccount() async {
+    if (widget.isForgot) {
+      return _useEmail
+          ? ApiService.checkEmailExists(_emailCtrl.text.trim())
+          : ApiService.checkPhoneExists(
+              toLocalPhilippineMobileNumber(_phoneCtrl.text),
+            );
+    }
+
+    final currentUser = user;
+    if (currentUser == null) return false;
+
+    if (_useEmail) {
+      final enteredEmail = _emailCtrl.text.trim().toLowerCase();
+      final accountEmail = currentUser['email']
+          ?.toString()
+          .trim()
+          .toLowerCase();
+      return accountEmail != null &&
+          accountEmail.isNotEmpty &&
+          enteredEmail == accountEmail;
+    }
+
+    final accountPhone = currentUser['phoneNumber']?.toString();
+    if (accountPhone == null || accountPhone.isEmpty) return false;
+
+    return toLocalPhilippineMobileNumber(_phoneCtrl.text) ==
+        toLocalPhilippineMobileNumber(toPhilippineMobileInput(accountPhone));
+  }
+
+  Future<bool> _guardAccountIdentifier() async {
+    final isLinked = await _isIdentifierLinkedToAccount();
+    if (!isLinked && mounted) {
+      SnackbarWidgets.info(
+        context,
+        "Please check your information and try again.",
+      );
+      return false;
+    }
+    return true;
+  }
+
+  Future<bool> _sendPasswordResetOtp() async {
+    if (!await _guardAccountIdentifier()) return false;
+
+    if (_useEmail) {
+      await ApiService.sendEmailOtp(
+        email: _emailCtrl.text.trim(),
+        purpose: 'password_reset',
+      );
+    } else {
+      await ApiService.sendMobileOtp(
+        phone: toLocalPhilippineMobileNumber(_phoneCtrl.text),
+        purpose: 'password_reset',
+      );
+    }
+    return true;
+  }
+
   Future<bool> _sendOTP({bool forceNew = false}) async {
     setState(() => _loading = true);
 
     try {
-      if (_useEmail) {
-        final email = _emailCtrl.text.trim();
-
-        final exists = await ApiService.checkEmailExists(email);
-
-        if (exists) {
-          await ApiService.sendEmailOtp(
-            email: email,
-            purpose: 'password_reset',
-          );
-        }
-      } else {
-        final phone = toLocalPhilippineMobileNumber(_phoneCtrl.text);
-
-        final exists = await ApiService.checkPhoneExists(phone);
-
-        if (exists) {
-          await ApiService.sendMobileOtp(
-            phone: phone,
-            purpose: 'password_reset',
-          );
-        }
-      }
+      final sent = await _sendPasswordResetOtp();
+      if (!sent) return false;
 
       if (!mounted) return false;
 
@@ -278,12 +316,22 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     if (_currentStep == 0) {
       if (!_formKey.currentState!.validate()) return;
 
-      setState(() => _currentStep = 1);
+      setState(() => _loading = true);
+      try {
+        if (!await _guardAccountIdentifier() || !mounted) return;
 
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        FocusScope.of(context).requestFocus(_passFocus);
-      });
+        setState(() => _currentStep = 1);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          FocusScope.of(context).requestFocus(_passFocus);
+        });
+      } catch (error) {
+        if (mounted) {
+          SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+        }
+      } finally {
+        if (mounted) setState(() => _loading = false);
+      }
 
       return;
     }
@@ -297,29 +345,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       try {
         // Only send the OTP the first time we enter the OTP step.
         if (!_otpSent) {
-          if (_useEmail) {
-            final email = _emailCtrl.text.trim();
-
-            final exists = await ApiService.checkEmailExists(email);
-
-            if (exists) {
-              await ApiService.sendEmailOtp(
-                email: email,
-                purpose: 'password_reset',
-              );
-            }
-          } else {
-            final phone = toLocalPhilippineMobileNumber(_phoneCtrl.text);
-
-            final exists = await ApiService.checkPhoneExists(phone);
-
-            if (exists) {
-              await ApiService.sendMobileOtp(
-                phone: phone,
-                purpose: 'password_reset',
-              );
-            }
-          }
+          final sent = await _sendPasswordResetOtp();
+          if (!sent) return;
 
           if (!mounted) return;
 

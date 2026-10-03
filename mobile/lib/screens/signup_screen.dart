@@ -126,7 +126,7 @@ class _SignupScreenState extends State<SignupScreen> {
       }
 
       _startResendTimer();
-      SnackbarWidgets.success(context, "Verification code sent");
+      SnackbarWidgets.info(context, "We've sent a verification code to your phone number");
       return true;
     } catch (error) {
       if (mounted) {
@@ -264,7 +264,7 @@ class _SignupScreenState extends State<SignupScreen> {
         if (!mounted) return;
 
         if (exists) {
-          SnackbarWidgets.error(context, "Please check your information and try again.");
+          SnackbarWidgets.info(context, "Please check your information and try again.");
           return;
         }
 

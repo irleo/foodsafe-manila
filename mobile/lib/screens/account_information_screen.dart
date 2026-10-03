@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../services/api_client.dart';
 import '../services/api_service.dart';
 import '../services/session.dart';
 import '../utils/philippine_mobile_number.dart';
@@ -38,7 +41,8 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
   final _otpCtrl = TextEditingController();
   late List<TextEditingController> otpControllers;
   late List<FocusNode> otpFocusNodes;
-  final int _resendSeconds = 0;
+  Timer? _resendTimer;
+  int _resendSeconds = 0;
 
   @override
   void initState() {
@@ -61,6 +65,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
 
   @override
   void dispose() {
+    _resendTimer?.cancel();
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _emailCtrl.dispose();
@@ -91,6 +96,142 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
 
   void _updateOtp() {
     _otpCtrl.text = otpControllers.map((c) => c.text).join();
+  }
+
+  void _startResendTimer() {
+    _resendTimer?.cancel();
+    setState(() => _resendSeconds = 60);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_resendSeconds <= 1) {
+        timer.cancel();
+        setState(() => _resendSeconds = 0);
+      } else {
+        setState(() => _resendSeconds--);
+      }
+    });
+  }
+
+  void _clearOtpFields() {
+    for (final controller in otpControllers) {
+      controller.clear();
+    }
+    _otpCtrl.clear();
+  }
+
+  void _cancelPhoneChange() {
+    _resendTimer?.cancel();
+    _clearOtpFields();
+    setState(() {
+      _isOtpVerificationMode = false;
+      _pendingPhoneNumber = null;
+      _resendSeconds = 0;
+    });
+  }
+
+  Future<void> _sendPhoneChangeOtp({
+    bool resend = false,
+    bool beginVerification = false,
+  }) async {
+    final phone = _pendingPhoneNumber;
+    if (phone == null) return;
+
+    setState(() => _loading = true);
+    try {
+      await ApiService.sendPhoneChangeOtp(phone: phone);
+      if (!mounted) return;
+
+      if (beginVerification) {
+        setState(() => _isOtpVerificationMode = true);
+      }
+      if (resend) _clearOtpFields();
+      _startResendTimer();
+      SnackbarWidgets.info(
+        context,
+        "We've sent a verification code to your phone number",
+      );
+      FocusScope.of(context).requestFocus(otpFocusNodes[0]);
+    } catch (error) {
+      if (mounted) {
+        if (beginVerification) {
+          setState(() => _pendingPhoneNumber = null);
+        }
+        if (error is ApiException && error.statusCode == 409) {
+          SnackbarWidgets.info(
+            context,
+            "Please check your information and try again.",
+          );
+        } else {
+          SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _verifyPhoneChangeOtp() async {
+    final phone = _pendingPhoneNumber;
+    if (phone == null) return;
+    if (_otpCtrl.text.length != 6) {
+      SnackbarWidgets.error(context, "Enter the 6-digit verification code");
+      return;
+    }
+
+    final userId = (user?['_id'] ?? user?['id'])?.toString();
+    if (userId == null || userId.isEmpty) {
+      SnackbarWidgets.error(context, "Unable to identify your account");
+      return;
+    }
+
+    setState(() => _loading = true);
+    try {
+      final verificationToken = await ApiService.verifyPhoneChangeOtp(
+        phone: phone,
+        otp: _otpCtrl.text,
+      );
+      final updatedUser = await ApiService.updateUser(
+        id: userId,
+        username: _nameCtrl.text.trim(),
+        phone: phone,
+        email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+        verificationToken: verificationToken,
+      );
+
+      if (!mounted) return;
+      if (updatedUser == null) {
+        SnackbarWidgets.error(context, "Update failed");
+        return;
+      }
+
+      await Session.saveCurrentUser(updatedUser);
+      if (!mounted) return;
+
+      _resendTimer?.cancel();
+      _clearOtpFields();
+      final updatedPhone = updatedUser['phoneNumber']?.toString() ?? '';
+      setState(() {
+        _originalPhoneNumber = toPhilippineMobileInput(updatedPhone);
+        _phoneCtrl.text = _originalPhoneNumber!;
+        _nameCtrl.text = updatedUser['username'] ?? '';
+        _emailCtrl.text = updatedUser['email'] ?? '';
+        _isOtpVerificationMode = false;
+        _pendingPhoneNumber = null;
+        _resendSeconds = 0;
+        _isEditing = false;
+        _updated = true;
+      });
+      SnackbarWidgets.success(context, "Profile updated successfully");
+    } catch (error) {
+      if (mounted) {
+        SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   // Build OTP verification UI
@@ -178,9 +319,9 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
           children: [
             Text('Did not receive code?', style: GoogleFonts.inter()),
             TextButton(
-              onPressed: _resendSeconds > 0
+              onPressed: _loading || _resendSeconds > 0
                   ? null
-                  : () {}, // Implement resend OTP logic here
+                  : () => _sendPhoneChangeOtp(resend: true),
               style: ButtonStyle(
                 visualDensity: VisualDensity(horizontal: -4, vertical: -4),
               ),
@@ -203,9 +344,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
           children: [
             Expanded(
               child: ElevatedButton(
-                onPressed: _loading
-                    ? null
-                    : () {}, // Implement verify OTP logic here
+                onPressed: _loading ? null : _verifyPhoneChangeOtp,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF134c8c),
                   foregroundColor: Colors.white,
@@ -250,20 +389,8 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
     final phoneChanged = currentPhone != originalPhone;
 
     if (phoneChanged) {
-      // Enter OTP verification mode
-      setState(() {
-        _isOtpVerificationMode = true;
-        _pendingPhoneNumber = _phoneCtrl.text.trim();
-      });
-
-      // Request focus on first OTP field after frame is built
-      if (mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            FocusScope.of(context).requestFocus(otpFocusNodes[0]);
-          }
-        });
-      }
+      setState(() => _pendingPhoneNumber = currentPhone);
+      await _sendPhoneChangeOtp(beginVerification: true);
 
       return;
     }
@@ -398,10 +525,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
               if (!context.mounted) return;
 
               if (confirm == true) {
-                setState(() {
-                  _isOtpVerificationMode = false;
-                  _pendingPhoneNumber = null;
-                });
+                _cancelPhoneChange();
               }
               return;
             }
@@ -489,9 +613,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
               // Header with gradient
               Container(
                 padding: const EdgeInsets.fromLTRB(16, 36, 16, 36),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF134c8c)
-                ),
+                decoration: const BoxDecoration(color: Color(0xFF134c8c)),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -553,7 +675,9 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                               Navigator.pop(context, false);
                                             },
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor: Color(0xFF134c8c),
+                                              backgroundColor: Color(
+                                                0xFF134c8c,
+                                              ),
                                               shape: RoundedRectangleBorder(
                                                 borderRadius:
                                                     BorderRadius.circular(10),
@@ -581,10 +705,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                               if (!context.mounted) return;
 
                               if (confirm == true) {
-                                setState(() {
-                                  _isOtpVerificationMode = false;
-                                  _pendingPhoneNumber = null;
-                                });
+                                _cancelPhoneChange();
                               }
                             }
                           : _isEditing
@@ -643,7 +764,9 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                               Navigator.pop(context, false);
                                             },
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(0xFF134c8c),
+                                              backgroundColor: const Color(
+                                                0xFF134c8c,
+                                              ),
                                               shape: RoundedRectangleBorder(
                                                 borderRadius:
                                                     BorderRadius.circular(10),
@@ -871,7 +994,9 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                                 });
                                               },
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF134c8c),
+                                          backgroundColor: const Color(
+                                            0xFF134c8c,
+                                          ),
                                           foregroundColor: Colors.white,
                                           shape: RoundedRectangleBorder(
                                             borderRadius: BorderRadius.circular(

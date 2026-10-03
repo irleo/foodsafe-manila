@@ -109,6 +109,21 @@ class ApiService {
     return token;
   }
 
+  static Future<int> sendPhoneChangeOtp({required String phone}) {
+    return sendMobileOtp(phone: phone, purpose: 'registration');
+  }
+
+  static Future<String> verifyPhoneChangeOtp({
+    required String phone,
+    required String otp,
+  }) {
+    return verifyMobileOtp(
+      phone: phone,
+      purpose: 'registration',
+      otp: otp,
+    );
+  }
+
   static Future<bool> checkPhoneExists(String phone) async {
     final response = await ApiClient.get(
       '/auth/user/exists',
@@ -201,10 +216,16 @@ class ApiService {
     required String username,
     required String phone,
     String? email,
+    String? verificationToken,
   }) async {
     final response = await ApiClient.put(
       '/users/$id',
-      body: {'username': username, 'phone': phone, 'email': email ?? ''},
+      body: {
+        'username': username,
+        'phone': phone,
+        'email': email ?? '',
+        if (verificationToken != null) 'verificationToken': verificationToken,
+      },
     );
 
     if (response.statusCode != 200) return null;

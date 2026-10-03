@@ -466,15 +466,8 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                                       )
                                     : <String, dynamic>{};
 
-                                final investigationFindings =
-                                    investigation['findings'] as String?;
 
-                                final suspectedFindings =
-                                    suspectedDecision['investigationFindings']
-                                        as String?;
 
-                                final validationFindings =
-                                    validation['supportingFindings'] as String?;
 
                                 final findings = <Map<String, String>>[];
 
