@@ -101,9 +101,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                decoration: BoxDecoration(
-                  color: Color(0xFF134c8c),
-                ),
+                decoration: BoxDecoration(color: Color(0xFF134c8c)),
                 child: Container(
                   padding: EdgeInsets.all(20),
                   child: Row(
@@ -168,6 +166,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
                 title: "Change Password",
                 subtitle: "Update your account password",
                 page: const ChangePasswordScreen(),
+                closeDrawerOnSuccess: true,
               ),
               _buildMenuTile(
                 icon: LucideIcons.clipboardList,
@@ -501,6 +500,7 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
     required String title,
     required String subtitle,
     required Widget page,
+    closeDrawerOnSuccess = false,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -526,6 +526,9 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
             );
 
             if (updated == true && mounted) {
+              if (closeDrawerOnSuccess) {
+                _scaffoldKey.currentState?.closeEndDrawer();
+              }
               setState(() {});
             }
           },

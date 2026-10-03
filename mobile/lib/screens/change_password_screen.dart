@@ -398,9 +398,14 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         if (!mounted) return;
 
         if (success) {
-          SnackbarWidgets.success(context, "Password updated successfully");
+          await Session.clear();
+          if (!mounted) return;
 
-          Navigator.pop(context);
+          SnackbarWidgets.success(
+            context,
+            "Password updated successfully! Please sign in again",
+          );
+          Navigator.pop(context, true);
         }
       } catch (error) {
         if (mounted) {
@@ -432,9 +437,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         child: SafeArea(
           top: true,
           child: Container(
-            decoration: const BoxDecoration(
-              color: Color(0xFF134c8c),
-            ),
+            decoration: const BoxDecoration(color: Color(0xFF134c8c)),
             child: SingleChildScrollView(
               child: Column(
                 children: [

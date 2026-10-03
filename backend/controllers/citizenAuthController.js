@@ -173,6 +173,7 @@ export const resetCitizenPassword = async (req, res) => {
       }
 
       mobileUser.password = await bcrypt.hash(newPassword, 10);
+      mobileUser.tokenVersion = (mobileUser.tokenVersion || 0) + 1;
       await mobileUser.save();
 
       return res.json({ success: true });
