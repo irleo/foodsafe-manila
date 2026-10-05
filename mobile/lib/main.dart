@@ -11,16 +11,99 @@ import 'screens/policy_screen.dart';
 
 final appNavigatorKey = GlobalKey<NavigatorState>();
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await Session.initialize();
-  await ApiClient.warmSession();
-  await PolicyService.initialize();
-  PolicyService.requestLocationDisclosure = () async {
-    final context = appNavigatorKey.currentContext;
-    return context == null ? false : showLocationDisclosure(context);
-  };
-  runApp(MainApp());
+  runApp(const _StartupApp());
+}
+
+/// Show progress while restoring credentials before protected screens can load.
+class _StartupApp extends StatefulWidget {
+  const _StartupApp();
+
+  @override
+  State<_StartupApp> createState() => _StartupAppState();
+}
+
+class _StartupAppState extends State<_StartupApp> {
+  late Future<void> _initialization;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialization = _initialize();
+  }
+
+  Future<void> _initialize() async {
+    try {
+      await Session.initialize();
+      await ApiClient.warmSession();
+      await PolicyService.initialize();
+      PolicyService.requestLocationDisclosure = () async {
+        final context = appNavigatorKey.currentContext;
+        return context == null ? false : showLocationDisclosure(context);
+      };
+    } catch (error, stack) {
+      Error.throwWithStackTrace(error, stack);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<void>(
+    future: _initialization,
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.done &&
+          !snapshot.hasError) {
+        return const MainApp();
+      }
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          backgroundColor: const Color(0xFF134C8C),
+          body: SafeArea(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'FoodSafe Manila',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    if (snapshot.hasError) ...[
+                      const Text(
+                        'Could not restore your session. Please try again.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: () =>
+                            setState(() => _initialization = _initialize()),
+                        child: const Text('Retry'),
+                      ),
+                    ] else ...[
+                      const CircularProgressIndicator(color: Colors.white),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Restoring your session…',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class MainApp extends StatelessWidget {

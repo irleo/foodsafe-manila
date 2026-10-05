@@ -1,5 +1,6 @@
 import 'api_client.dart';
 import 'session.dart';
+import 'credential_store.dart';
 import 'phone_change_flow.dart';
 import '../utils/recovery_email.dart';
 
@@ -12,9 +13,16 @@ class ApiService {
       '/auth/login',
       body: {'phone': phone, 'password': password},
       auth: false,
+      timeout: const Duration(seconds: 30),
     );
 
-    if (response.statusCode != 200) return null;
+    if (response.statusCode == 401) return null;
+    ApiClient.throwIfError(
+      response,
+      fallback: response.statusCode == 429
+          ? 'Too many sign-in attempts. Please wait before trying again.'
+          : 'Sign-in is currently unavailable. Please try again later.',
+    );
 
     final data = ApiClient.decodeMap(response);
     final accessToken = data['accessToken'] as String?;
@@ -24,14 +32,20 @@ class ApiService {
         accessToken.isEmpty ||
         refreshToken == null ||
         refreshToken.isEmpty) {
-      return null;
+      throw ApiException(
+        502,
+        'The server returned an invalid sign-in response. Please try again.',
+      );
     }
 
-    await Session.saveTokens(
+    final saved = await Session.saveTokens(
       accessToken: accessToken,
       refreshToken: refreshToken,
       user: data,
     );
+    if (!saved || Session.currentUser == null) {
+      throw const SessionStorageException();
+    }
 
     return Session.currentUser;
   }

@@ -5,7 +5,6 @@ import '../widgets/snackbar_widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_service.dart';
 import '../services/api_client.dart';
-import '../services/session.dart';
 import '../utils/philippine_mobile_number.dart';
 import '../widgets/app_loading.dart';
 import '../widgets/philippine_mobile_prefix.dart';
@@ -38,6 +37,7 @@ class _LogInScreenState extends State<LoginScreen> {
   }
 
   Future<void> _signIn() async {
+    if (_loading) return;
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
 
@@ -45,16 +45,13 @@ class _LogInScreenState extends State<LoginScreen> {
 
     try {
       final phone = toLocalPhilippineMobileNumber(_phoneCtrl.text);
-      String password = _passCtrl.text;
+      final password = _passCtrl.text;
 
-      var user = await ApiService.login(phone, password);
+      final user = await ApiService.login(phone, password);
 
       if (!mounted) return;
 
       if (user != null) {
-        await Session.saveCurrentUser(user);
-        if (!mounted) return;
-
         SnackbarWidgets.success(context, "Sign in successful");
 
         final args =

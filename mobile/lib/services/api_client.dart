@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -77,16 +78,23 @@ class ApiClient {
     String path, {
     Object? body,
     bool auth = true,
+    Duration? timeout,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}$path');
-    return _send(
-      () => http.post(
-        uri,
-        headers: auth ? _authHeaders() : jsonHeaders,
-        body: body == null ? null : jsonEncode(body),
-      ),
-      auth: auth,
-    );
+    return _send(() async {
+      final client = http.Client();
+      try {
+        final response = client.post(
+          uri,
+          headers: auth ? _authHeaders() : jsonHeaders,
+          body: body == null ? null : jsonEncode(body),
+        );
+        return await (timeout == null ? response : response.timeout(timeout));
+      } finally {
+        // Release the connection even when a timed request fails.
+        client.close();
+      }
+    }, auth: auth);
   }
 
   static Future<http.Response> put(
@@ -279,6 +287,12 @@ class ApiClient {
     String fallback = 'The request could not be completed.',
   }) {
     if (error is SessionStorageException) return error.message;
+    if (error is TimeoutException) {
+      return 'The server took too long to respond. Please try again.';
+    }
+    if (error is http.ClientException) {
+      return 'Could not connect to the server. Check your connection and try again.';
+    }
     if (error is! ApiException) return fallback;
     final message =
         error.message.isNotEmpty &&
