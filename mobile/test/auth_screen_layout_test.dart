@@ -63,6 +63,13 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMessageHandler('flutter/assets', (message) async {
           final path = utf8.decode(message!.buffer.asUint8List());
+          if (path == 'AssetManifest.bin') {
+            return const StandardMessageCodec().encodeMessage({
+              'assets/foodsafe_logo.png': [
+                {'asset': 'assets/foodsafe_logo.png'},
+              ],
+            });
+          }
           if (path == 'assets/foodsafe_logo.png') return logo;
           return path.startsWith('test-fonts/') ? bytes : null;
         });
@@ -137,10 +144,12 @@ void main() {
           await tester.pumpWidget(const SizedBox.shrink());
         },
         () => MockClient((request) async {
-          if (request.url.path.endsWith('/policies'))
+          if (request.url.path.endsWith('/policies')) {
             return http.Response(policyJson, 200);
-          if (request.url.path.endsWith('/exists'))
+          }
+          if (request.url.path.endsWith('/exists')) {
             return http.Response('{"exists":false}', 200);
+          }
           expect(request.url.path, endsWith('/otp/send'));
           return http.Response('{"expiresInSeconds":300}', 200);
         }),
