@@ -231,6 +231,7 @@ class ApiService {
     String? verificationToken,
     String? flowId,
     String? otp,
+    String? currentPassword,
   }) async {
     final response = await ApiClient.put(
       '/users/$id',
@@ -241,6 +242,8 @@ class ApiService {
         if (verificationToken != null) 'verificationToken': verificationToken,
         if (flowId != null) 'flowId': flowId,
         if (otp != null) 'otp': otp,
+        if (currentPassword != null && currentPassword.isNotEmpty)
+          'currentPassword': currentPassword,
       },
     );
 
@@ -248,34 +251,6 @@ class ApiService {
     final data = ApiClient.decodeMap(response);
     await Session.saveCurrentUser(data);
     return data;
-  }
-
-  static Future<void> sendRecoveryEmailVerification(String email) async {
-    final response = await ApiClient.post(
-      '/auth/mobile/recovery-email/otp/send',
-      body: {'email': normalizeRecoveryEmail(email)},
-    );
-    ApiClient.throwIfError(
-      response,
-      fallback: 'Could not send email verification',
-    );
-  }
-
-  static Future<Map<String, dynamic>> verifyRecoveryEmail({
-    required String email,
-    required String otp,
-  }) async {
-    final response = await ApiClient.post(
-      '/auth/mobile/recovery-email/otp/verify',
-      body: {'email': normalizeRecoveryEmail(email), 'otp': otp.trim()},
-    );
-    ApiClient.throwIfError(
-      response,
-      fallback: 'Could not verify recovery email',
-    );
-    final user = ApiClient.decodeMap(response);
-    await Session.saveCurrentUser(user);
-    return user;
   }
 
   static Future<bool> submitReport({

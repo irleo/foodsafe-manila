@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 import MobileUser from "../models/MobileUser.js";
 import MobileOtp from "../models/MobileOtp.js";
 import { sendPhoneChangeOtp, commitPhoneChange, phoneChangeDelivery } from "../services/phoneChangeOtpService.js";
@@ -150,12 +151,13 @@ test("attempt ceiling prevents transaction and commit", async (t) => {
   assert.equal(tx.mock.callCount(), 0);
 });
 test("legacy profile update cannot change phone with registration verification token", async (t) => {
+  t.mock.method(bcrypt, "compare", async () => true);
   const save = t.mock.fn(async () => {});
   t.mock.method(MobileUser, "findById", async () => ({ _id: userId, phoneNumber: originalPhone, email: "", save }));
   t.mock.method(MobileUser, "exists", async () => null);
   const res = response();
   await updateMobileProfile({ user: { id: userId, accountType: "citizen" }, params: { id: userId },
-    body: { phone, verificationToken: "old-registration-proof" } }, res);
+    body: { phone, currentPassword: "CurrentPass1!", verificationToken: "old-registration-proof" } }, res);
   assert.equal(res.statusCode, 403);
   assert.equal(res.body.code, "PHONE_VERIFICATION_REQUIRED");
   assert.equal(save.mock.callCount(), 0);

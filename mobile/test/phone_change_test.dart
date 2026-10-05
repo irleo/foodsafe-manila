@@ -38,6 +38,11 @@ Future<void> begin(WidgetTester tester, {bool waitForSend = true}) async {
   await tester.tap(find.text('Edit profile'));
   await tester.pumpAndSettle();
   await tester.enterText(find.byType(TextFormField).at(1), '9171234567');
+  await tester.pumpAndSettle();
+  await tester.enterText(
+    find.byKey(const ValueKey('contact-current-password')),
+    'CurrentPass1!',
+  );
   await tester.ensureVisible(find.text('Save changes'));
   await tester.tap(find.text('Save changes'));
   if (waitForSend) {
@@ -115,6 +120,71 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
   }
 
+  testWidgets('email save requires a password and never sends an OTP', (
+    tester,
+  ) async {
+    viewport(tester);
+    final requests = <String>[];
+    await http.runWithClient(
+      () async {
+        await tester.pumpWidget(
+          const MaterialApp(home: AccountInformationScreen()),
+        );
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('Edit profile'));
+        await tester.tap(find.text('Edit profile'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byType(TextFormField).at(2),
+          ' Alice@Example.COM ',
+        );
+        await tester.pumpAndSettle();
+        final password = find.byKey(const ValueKey('contact-current-password'));
+        expect(password, findsOneWidget);
+        await tester.ensureVisible(find.text('Save changes'));
+        await tester.tap(find.text('Save changes'));
+        await tester.pumpAndSettle();
+        expect(requests, isEmpty);
+        await tester.enterText(password, 'CurrentPass1!');
+        await tester.ensureVisible(find.text('Save changes'));
+        await tester.runAsync(() async {
+          await tester.tap(find.text('Save changes'));
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        });
+        await tester.pumpAndSettle();
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pumpAndSettle();
+        expect(requests, ['/api/users/citizen-1']);
+        expect(Session.currentUser!['email'], 'alice@example.com');
+        expect(Session.currentUser!['emailVerified'], false);
+        expect(find.text('Verification code'), findsNothing);
+        expect(find.text('Edit profile'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        tester
+            .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
+            .removeCurrentSnackBar();
+        await tester.pumpWidget(const SizedBox());
+      },
+      () => MockClient((request) async {
+          if (request.url.path.endsWith('/policies/status')) {
+          return json({'requiresAcknowledgement': false});
+          }
+        requests.add(request.url.path);
+        expect(request.method, 'PUT');
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['email'], 'alice@example.com');
+        expect(body['currentPassword'], 'CurrentPass1!');
+        return json({
+          ...profile,
+          'email': 'alice@example.com',
+          'emailVerified': false,
+        });
+      }),
+    );
+  });
+
   testWidgets(
     'success commits OTP flow then updates saved phone, never before',
     (tester) async {
@@ -168,6 +238,7 @@ void main() {
           expect(body['flowId'], flow['flowId']);
           expect(body['otp'], '123456');
           expect(body['phone'], newPhone);
+          expect(body['currentPassword'], 'CurrentPass1!');
           return completion.future;
         }),
       );

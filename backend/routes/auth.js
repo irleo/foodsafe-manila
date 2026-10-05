@@ -28,8 +28,6 @@ import {
 import {
   requestEmailOtp,
   confirmEmailOtp,
-  requestRecoveryEmailOtp,
-  confirmRecoveryEmailOtp,
 } from "../controllers/mobileEmailOtpController.js";
 
 const requestAccessLimiter = rateLimit({
@@ -98,8 +96,6 @@ router.post('/mobile/otp/verify', mobileOtpVerifyLimiter, confirmMobileOtp);
 router.post('/mobile/phone-change/otp/send', verifyToken, requireCitizenAccount, requireCurrentMobilePolicies, mobileOtpSendLimiter, requestPhoneChangeOtp);
 router.post('/email/otp/send', emailOtpSendLimiter, requestEmailOtp);
 router.post('/email/otp/verify', emailOtpVerifyLimiter, confirmEmailOtp);
-router.post('/mobile/recovery-email/otp/send', verifyToken, requireCitizenAccount, emailOtpSendLimiter, requestRecoveryEmailOtp);
-router.post('/mobile/recovery-email/otp/verify', verifyToken, requireCitizenAccount, emailOtpVerifyLimiter, confirmRecoveryEmailOtp);
 router.post('/register', registerCitizen);
 router.get('/user/exists', checkPhoneExists);
 router.get('/user/email-exists', checkEmailExists);

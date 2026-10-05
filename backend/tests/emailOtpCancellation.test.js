@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import authRouter from "../routes/auth.js";
 import MobileEmailOtp from "../models/MobileEmailOtp.js";
 import MobileUser from "../models/MobileUser.js";
-import { emailOtpDelivery, requestRecoveryEmailOtp } from "../controllers/mobileEmailOtpController.js";
+import { emailOtpDelivery, requestEmailOtp } from "../controllers/mobileEmailOtpController.js";
 import { RECOVERY_EMAIL_INDEX } from "../utils/recoveryEmail.js";
 
 /** @param {Record<string, unknown>} body */
@@ -65,6 +65,8 @@ test("repeated cancellation requests remain unhandled and cannot mutate a challe
 
 test("closing recovery cannot reset lastSentAt or bypass resend cooldown", async (t) => {
   process.env.OTP_HASH_SECRET = "mock-otp-cancellation-test-only";
+  let time = 0;
+  t.mock.method(Date, "now", () => time += 10_000);
   const sentAt = new Date();
   let lastSentAt = sentAt;
   t.mock.method(MobileUser.collection, "indexes", async () => [{
@@ -76,7 +78,7 @@ test("closing recovery cannot reset lastSentAt or bypass resend cooldown", async
   }));
   const reserve = t.mock.method(MobileEmailOtp, "findOneAndUpdate", async (filter, update, options) => {
     assert.equal(filter.email, "victim@example.com");
-    assert.equal(filter.purpose, "recovery_email");
+    assert.equal(filter.purpose, "password_reset");
     assert.equal(options.upsert, true);
     const cutoff = filter.$or[0].lastSentAt.$lte;
     assert.ok(cutoff instanceof Date);
@@ -91,20 +93,20 @@ test("closing recovery cannot reset lastSentAt or bypass resend cooldown", async
     assert.equal(reserve.mock.callCount(), attempt);
     assert.equal(lastSentAt, sentAt);
     const res = response();
-    await requestRecoveryEmailOtp(/** @type {import('express').Request} */ (/** @type {unknown} */ ({
-      user: { id: "citizen-owner", accountType: "citizen" }, body: { email: "victim@example.com" },
+    await requestEmailOtp(/** @type {import('express').Request} */ (/** @type {unknown} */ ({
+      body: { email: "victim@example.com" },
     })), /** @type {import('express').Response} */ (/** @type {unknown} */ (res)));
-    assert.equal(res.statusCode, 429);
-    assert.equal(res.body?.retryAfterSeconds, 60);
+    assert.equal(res.statusCode, 202);
+    assert.equal(res.body?.retryAfterSeconds, undefined);
   }
   assert.equal(delivery.mock.callCount(), 0);
   assert.equal(lastSentAt, sentAt);
   lastSentAt = new Date(sentAt.getTime() - 61_000);
   const res = response();
-  await requestRecoveryEmailOtp(/** @type {import('express').Request} */ (/** @type {unknown} */ ({
-    user: { id: "citizen-owner", accountType: "citizen" }, body: { email: "victim@example.com" },
+  await requestEmailOtp(/** @type {import('express').Request} */ (/** @type {unknown} */ ({
+    body: { email: "victim@example.com" },
   })), /** @type {import('express').Response} */ (/** @type {unknown} */ (res)));
-  assert.equal(res.statusCode, 200);
+  assert.equal(res.statusCode, 202);
   assert.equal(delivery.mock.callCount(), 1);
   assert.ok(lastSentAt >= sentAt);
 });

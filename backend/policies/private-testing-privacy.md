@@ -32,7 +32,7 @@ review, investigation workflows, and aggregated analytics. Even a fictional repo
 can identify a tester when linked to an account or precise coordinates.
 
 Do not include information about other people. Collection of genuine health data
-is outside this draft trial notice and requires a reviewed lawful basis and revised
+is outside this private trial notice and requires a reviewed lawful basis and revised
 disclosure before it starts.
 
 4. Precise and Geographic Location
@@ -81,8 +81,8 @@ or stopping testing does not itself erase stored records.
 
 The app displays this notice's version. The organizer must explain significant
 changes before new processing, and obtain fresh acknowledgement or consent when
-required. Existing acceptance evidence is retained according to the completed
-retention arrangements. An updated notice does not retroactively authorize a new
+required. Existing acceptance evidence remains stored until the organizer deletes
+it. An updated notice does not retroactively authorize a new
 purpose for previously collected data.
 
 8. Private Testing Scope

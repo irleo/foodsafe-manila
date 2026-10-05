@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import MobileUser from "../models/MobileUser.js";
 import {
@@ -14,7 +15,7 @@ import { isTokenVersionCurrent } from "../utils/tokenVersion.js";
 import { validatePolicyChoices } from "../policies/mobilePolicies.js";
 import { createMobileUserWithPolicies } from "../services/mobilePolicyService.js";
 import { EMAIL_UNAVAILABLE, isDuplicateRecoveryEmail, isValidRecoveryEmail, normalizeRecoveryEmail } from "../utils/recoveryEmail.js";
-import { findVerifiedRecoveryAccount, recoveryEmailIndexReady, recoveryEmailTaken, requireRecoveryEmailIndex } from "../services/recoveryEmailService.js";
+import { findRecoveryAccount, recoveryEmailIndexReady, recoveryEmailTaken, requireRecoveryEmailIndex } from "../services/recoveryEmailService.js";
 
 // POST /api/auth/register
 export const registerCitizen = async (req, res) => {
@@ -160,26 +161,27 @@ export const resetCitizenPassword = async (req, res) => {
       const failure = { message: "Email verification is invalid or expired" };
       if (!isValidRecoveryEmail(email, true)) return res.status(403).json(failure);
       const normalizedEmail = normalizeRecoveryEmail(email);
-      const mobileUser = await findVerifiedRecoveryAccount(normalizedEmail);
+      const mobileUser = await findRecoveryAccount(normalizedEmail);
       if (!mobileUser) return res.status(403).json(failure);
       if (!await recoveryEmailIndexReady()) return res.status(403).json(failure);
-      const verified = await consumeEmailOtpVerification({
-        email: normalizedEmail,
-        purpose: "password_reset",
-        verificationToken,
-        userId: mobileUser._id,
-        emailVersion: mobileUser.emailVersion || 0,
-      });
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await mongoose.connection.transaction(async (session) => {
+        const verified = await consumeEmailOtpVerification({
+          email: normalizedEmail,
+          purpose: "password_reset",
+          verificationToken,
+          userId: mobileUser._id,
+          emailVersion: mobileUser.emailVersion || 0,
+        }, session);
 
-      if (!verified) {
-        return res.status(403).json(failure);
-      }
-      const changed = await MobileUser.findOneAndUpdate(
-        { _id: mobileUser._id, email: normalizedEmail, emailVerified: true, emailVersion: mobileUser.emailVersion || 0 },
-        { $set: { password: await bcrypt.hash(newPassword, 10) }, $inc: { tokenVersion: 1 } },
-        { new: true, runValidators: true },
-      );
-      if (!changed) return res.status(403).json(failure);
+        if (!verified) throw Object.assign(new Error(failure.message), { code: "EMAIL_PROOF_INVALID" });
+        const changed = await MobileUser.findOneAndUpdate(
+          { _id: mobileUser._id, email: normalizedEmail, emailVersion: mobileUser.emailVersion || 0 },
+          { $set: { password: hashedPassword, emailVerified: true, emailVerifiedAt: new Date() }, $inc: { tokenVersion: 1 } },
+          { new: true, runValidators: true, session },
+        );
+        if (!changed) throw Object.assign(new Error(failure.message), { code: "EMAIL_PROOF_INVALID" });
+      });
 
       return res.json({ success: true });
     }
@@ -191,24 +193,26 @@ export const resetCitizenPassword = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const verified = await consumeMobileOtpVerification({
-      phone: normalizedPhone,
-      purpose: "password_reset",
-      verificationToken,
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await mongoose.connection.transaction(async (session) => {
+      const verified = await consumeMobileOtpVerification({
+        phone: normalizedPhone,
+        purpose: "password_reset",
+        verificationToken,
+      }, session);
+      if (!verified) throw Object.assign(new Error("Phone verification is invalid or expired"), { code: "PHONE_PROOF_INVALID" });
+      const changed = await MobileUser.findOneAndUpdate(
+        { _id: mobileUser._id, phoneNumber: normalizedPhone },
+        { $set: { password: hashedPassword }, $inc: { tokenVersion: 1 } },
+        { new: true, runValidators: true, session },
+      );
+      if (!changed) throw Object.assign(new Error("Phone verification is invalid or expired"), { code: "PHONE_PROOF_INVALID" });
     });
-
-    if (!verified) {
-      return res.status(403).json({
-        message: "Phone verification is invalid or expired",
-      });
-    }
-
-    mobileUser.password = await bcrypt.hash(newPassword, 10);
-    mobileUser.tokenVersion = (mobileUser.tokenVersion || 0) + 1;
-    await mobileUser.save();
 
     return res.json({ success: true });
   } catch (error) {
+    if (error?.code === "EMAIL_PROOF_INVALID") return res.status(403).json({ message: "Email verification is invalid or expired" });
+    if (error?.code === "PHONE_PROOF_INVALID") return res.status(403).json({ message: "Phone verification is invalid or expired" });
     logRequestError(error, req, "CITIZEN_PASSWORD_RESET_ERROR");
     return res.status(500).json({ message: "Failed to reset password" });
   }

@@ -33,8 +33,15 @@ export async function recoveryEmailTaken(email, excludeUserId) {
 }
 
 /** @param {string} email */
-export async function findVerifiedRecoveryAccount(email) {
-  // Only verified addresses are eligible. Legacy records missing the flag are not.
-  return MobileUser.findOne({ email: normalizeRecoveryEmail(email), emailVerified: true })
+export async function findRecoveryAccount(email) {
+  // Lookup alone never authorizes a reset; the recovery OTP proves ownership.
+  return MobileUser.findOne({ email: normalizeRecoveryEmail(email) })
     .select("_id email tokenVersion emailVersion").lean();
+}
+
+/** @param {{userId: string, originalEmail: string, emailVersion: number, passwordHash: string, username: string, email: string}} input */
+export async function updateRecoveryEmail({ userId, originalEmail, emailVersion, passwordHash, username, email }) {
+  return MobileUser.findOneAndUpdate({ _id: userId, email: originalEmail, emailVersion, password: passwordHash },
+    { $set: { username, email, emailVerified: false }, $inc: { emailVersion: 1 }, $unset: { emailVerifiedAt: "" } },
+    { new: true, runValidators: true });
 }

@@ -20,8 +20,8 @@ export function hashEmailVerificationToken(token) {
   return hashValue("email-verification:" + token);
 }
 
-/** @param {{email: string, purpose: string, verificationToken: string, userId: import('mongoose').Types.ObjectId, emailVersion: number}} input */
-export async function consumeEmailOtpVerification({ email, purpose, verificationToken, userId, emailVersion }) {
+/** @param {{email: string, purpose: string, verificationToken: string, userId: import('mongoose').Types.ObjectId, emailVersion: number}} input @param {import('mongoose').ClientSession=} session */
+export async function consumeEmailOtpVerification({ email, purpose, verificationToken, userId, emailVersion }, session) {
   if (!userId || !Number.isSafeInteger(emailVersion) || emailVersion < 0
       || typeof verificationToken !== "string" || !/^[a-f0-9]{64}$/.test(verificationToken)) return false;
   const now = new Date();
@@ -30,6 +30,6 @@ export async function consumeEmailOtpVerification({ email, purpose, verification
     email: normalizeRecoveryEmail(email), purpose, userId, emailVersion,
     verificationTokenHash: hashEmailVerificationToken(verificationToken),
     verifiedAt: { $ne: null }, consumedAt: null, expiresAt: { $gt: now },
-  }, { $set: { consumedAt: now }, $unset: { verificationTokenHash: "" } }, { new: true });
+  }, { $set: { consumedAt: now }, $unset: { verificationTokenHash: "" } }, { new: true, ...(session ? { session } : {}) });
   return Boolean(consumed);
 }

@@ -84,8 +84,8 @@ export async function sendPhoneChangeOtp({ userId, phone, flowId }) {
   return { flowId: challenge, maskedPhone: `+63 *** *** ${phone.slice(-4)}`, expiresInSeconds: TTL_MS / 1000, retryAfterSeconds: COOLDOWN_MS / 1000 };
 }
 
-/** @param {{userId: string, phone: string, originalPhone: string, flowId: string, otp: string, profile: Record<string, unknown>}} input */
-export async function commitPhoneChange({ userId, phone, originalPhone, flowId, otp, profile }) {
+/** @param {{userId: string, phone: string, originalPhone: string, flowId: string, otp: string, profile: Record<string, unknown>, expectedPasswordHash?: string, expectedEmail?: string, expectedEmailVersion?: number}} input */
+export async function commitPhoneChange({ userId, phone, originalPhone, flowId, otp, profile, expectedPasswordHash, expectedEmail, expectedEmailVersion }) {
   if (!validPhoneChangeFlow(flowId)) throw new PhoneChangeError("PHONE_VERIFICATION_REQUIRED", "Verify your new phone number before saving it.", 403);
   if (typeof otp !== "string" || !/^\d{6}$/.test(otp)) throw new PhoneChangeError("OTP_INVALID", "Enter the 6-digit verification code.", 400);
   const now = new Date();
@@ -103,7 +103,8 @@ export async function commitPhoneChange({ userId, phone, originalPhone, flowId, 
         { $inc: { attempts: 1 } }, { session });
       return new PhoneChangeError("OTP_INVALID", "The code is incorrect or no longer valid.", 400);
     }
-    const updated = await MobileUser.findOneAndUpdate({ _id: userId, phoneNumber: originalPhone },
+    const updated = await MobileUser.findOneAndUpdate({ _id: userId, phoneNumber: originalPhone,
+      ...(expectedPasswordHash ? { password: expectedPasswordHash, email: expectedEmail, emailVersion: expectedEmailVersion } : {}) },
       { $set: { ...profile, phoneNumber: phone }, ...(!profile.emailVerifiedAt ? { $unset: { emailVerifiedAt: 1 } } : {}) }, { new: true, runValidators: true, session });
     if (!updated) throw expired();
     return updated;

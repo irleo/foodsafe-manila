@@ -14,7 +14,6 @@ import 'package:foodsafe_manila/widgets/app_loading.dart';
 import 'package:foodsafe_manila/widgets/philippine_mobile_prefix.dart';
 import 'package:foodsafe_manila/widgets/snackbar_widgets.dart';
 import 'package:foodsafe_manila/screens/legal/policy_screen.dart';
-import 'package:foodsafe_manila/screens/account/recovery_email_verification_screen.dart';
 import 'package:foodsafe_manila/utils/recovery_email.dart';
 
 class AccountInformationScreen extends StatefulWidget {
@@ -33,36 +32,18 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
+  final _currentPasswordCtrl = TextEditingController();
+  bool _showCurrentPassword = false;
 
   bool _loading = false;
   bool _updated = false;
   bool _isEditing = false;
 
-  Future<void> _verifyRecoveryEmail() async {
-    final email = normalizeRecoveryEmail(
-      Session.currentUser?['email'] as String?,
-    );
-    if (email.isEmpty) return;
-    try {
-      final verified = await Navigator.push<bool>(
-        context,
-        MaterialPageRoute(
-          builder: (_) => RecoveryEmailVerificationScreen(email: email),
-        ),
-      );
-      if (mounted && verified == true) {
-        setState(
-          () =>
-              _emailCtrl.text = Session.currentUser?['email'] as String? ?? '',
-        );
-        SnackbarWidgets.success(context, 'Recovery email verified');
-      }
-    } catch (error) {
-      if (mounted) {
-        SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
-      }
-    }
-  }
+  bool get _contactChanged =>
+      _phoneCtrl.text.replaceAll(RegExp(r'\D'), '') !=
+          (_originalPhoneNumber ?? '').replaceAll(RegExp(r'\D'), '') ||
+      normalizeRecoveryEmail(_emailCtrl.text) !=
+          normalizeRecoveryEmail(Session.currentUser?['email'] as String?);
 
   // OTP verification related
   bool _isOtpVerificationMode = false;
@@ -105,6 +86,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _emailCtrl.dispose();
+    _currentPasswordCtrl.dispose();
     _otpCtrl.dispose();
     for (var c in otpControllers) {
       c.dispose();
@@ -171,6 +153,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
     _flowGeneration++;
     _resendTimer?.cancel();
     _clearOtpFields();
+    _currentPasswordCtrl.clear();
     setState(() {
       _isOtpVerificationMode = false;
       _pendingPhoneNumber = null;
@@ -264,6 +247,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
         email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
         flowId: _phoneFlow!.id,
         otp: _otpCtrl.text,
+        currentPassword: _currentPasswordCtrl.text,
       );
 
       if (!mounted) return;
@@ -274,6 +258,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
 
       _resendTimer?.cancel();
       _clearOtpFields();
+      _currentPasswordCtrl.clear();
       final updatedPhone = updatedUser['phoneNumber']?.toString() ?? '';
       setState(() {
         _originalPhoneNumber = toPhilippineMobileInput(updatedPhone);
@@ -503,15 +488,12 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
         username: _nameCtrl.text.trim(),
         phone: toLocalPhilippineMobileNumber(_phoneCtrl.text),
         email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+        currentPassword: _currentPasswordCtrl.text,
       );
 
       if (!mounted) return;
 
       if (updatedUser != null) {
-        await Session.saveCurrentUser(updatedUser);
-
-        if (!mounted) return;
-
         _nameCtrl.text = updatedUser['username'] ?? '';
 
         final updatedPhone = updatedUser['phoneNumber']?.toString() ?? '';
@@ -520,6 +502,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
         _phoneCtrl.text = _originalPhoneNumber!;
 
         _emailCtrl.text = updatedUser['email'] ?? '';
+        _currentPasswordCtrl.clear();
 
         _updated = true;
         _isEditing = false;
@@ -998,6 +981,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                       label: "Phone Number",
                                       child: TextFormField(
                                         controller: _phoneCtrl,
+                                        onChanged: (_) => setState(() {}),
                                         enabled: _isEditing,
                                         validator:
                                             validatePhilippineMobileInput,
@@ -1039,6 +1023,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                       label: "Recovery Email",
                                       child: TextFormField(
                                         controller: _emailCtrl,
+                                        onChanged: (_) => setState(() {}),
                                         enabled: _isEditing,
                                         validator: (value) =>
                                             validateRecoveryEmail(value),
@@ -1069,28 +1054,49 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                       ),
                                     ),
 
-                                    if (!_isEditing &&
-                                        normalizeRecoveryEmail(
-                                          Session.currentUser?['email']
-                                              as String?,
-                                        ).isNotEmpty) ...[
-                                      Text(
-                                        Session.currentUser?['emailVerified'] ==
-                                                true
-                                            ? 'Verified recovery email'
-                                            : 'Unverified: email recovery is unavailable',
-                                      ),
-                                      if (Session
-                                              .currentUser?['emailVerified'] !=
-                                          true)
-                                        TextButton(
-                                          onPressed: _loading
-                                              ? null
-                                              : _verifyRecoveryEmail,
-                                          child: const Text(
-                                            'Verify recovery email',
+                                    if (_isEditing && _contactChanged) ...[
+                                      const SizedBox(height: 16),
+                                      _InputField(
+                                        label: 'Current Password',
+                                        child: TextFormField(
+                                          key: const ValueKey(
+                                            'contact-current-password',
+                                          ),
+                                          controller: _currentPasswordCtrl,
+                                          enabled: !_loading,
+                                          obscureText: !_showCurrentPassword,
+                                          autofillHints: const [
+                                            AutofillHints.password,
+                                          ],
+                                          inputFormatters: [
+                                            LengthLimitingTextInputFormatter(
+                                              256,
+                                            ),
+                                          ],
+                                          validator: (value) =>
+                                              _contactChanged &&
+                                                  (value == null ||
+                                                      value.isEmpty)
+                                              ? 'Enter your current password to change recovery details.'
+                                              : null,
+                                          decoration: InputDecoration(
+                                            suffixIcon: IconButton(
+                                              tooltip: _showCurrentPassword
+                                                  ? 'Hide password'
+                                                  : 'Show password',
+                                              onPressed: () => setState(
+                                                () => _showCurrentPassword =
+                                                    !_showCurrentPassword,
+                                              ),
+                                              icon: Icon(
+                                                _showCurrentPassword
+                                                    ? LucideIcons.eye
+                                                    : LucideIcons.eyeOff,
+                                              ),
+                                            ),
                                           ),
                                         ),
+                                      ),
                                     ],
                                     const SizedBox(height: 24),
 

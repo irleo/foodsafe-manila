@@ -9,7 +9,7 @@ import MobileEmailOtp from "../models/MobileEmailOtp.js";
 import PolicyAcceptance from "../models/PolicyAcceptance.js";
 import { registerCitizen, resetCitizenPassword, checkEmailExists } from "../controllers/citizenAuthController.js";
 import { updateMobileProfile } from "../controllers/mobileUserController.js";
-import { requestEmailOtp, requestRecoveryEmailOtp, confirmRecoveryEmailOtp, emailOtpDelivery } from "../controllers/mobileEmailOtpController.js";
+import { requestEmailOtp, confirmEmailOtp, emailOtpDelivery } from "../controllers/mobileEmailOtpController.js";
 import { normalizeRecoveryEmail, isValidRecoveryEmail, RECOVERY_EMAIL_INDEX } from "../utils/recoveryEmail.js";
 import { consumeEmailOtpVerification } from "../services/mobileEmailOtpService.js";
 import { migrateRecoveryEmails, normalizedAccountUpdate } from "../maintenance/recoveryEmailMigration.js";
@@ -22,7 +22,7 @@ const readyIndex = { name: RECOVERY_EMAIL_INDEX, key: { email: 1 }, unique: true
 const choices = { terms: { accepted: true, version: mobilePolicies.terms.version },
   privacy: { accepted: true, version: mobilePolicies.privacy.version } };
 const accountRequest = (email) => ({ user: { id: String(userId), accountType: "citizen" },
-  params: { id: String(userId) }, body: { email } });
+  params: { id: String(userId) }, body: { email, currentPassword: "CurrentPass1!" } });
 const registration = (email) => ({ body: { username: "Tester", phone: "09171234567",
   password: "ValidPass1!", verificationToken: "proof", email, policyAcceptance: choices } });
 const response = () => ({ statusCode: 200, body: null,
@@ -30,6 +30,13 @@ const response = () => ({ statusCode: 200, body: null,
   json(body) { this.body = body; return this; } });
 const queryResult = (result) => ({ select: () => ({ lean: async () => result }) });
 function ready(t) { t.mock.method(MobileUser.collection, "indexes", async () => [readyIndex]); }
+function authorizeProfile(t) {
+  t.mock.method(bcrypt, "compare", async (password) => {
+    assert.equal(password, "CurrentPass1!");
+    return true;
+  });
+  t.mock.method(MobileUser, "findOneAndUpdate", async (filter, update) => ({ _id: userId, ...update.$set, emailVersion: (filter.emailVersion || 0) + 1 }));
+}
 
 test("mixed case and whitespace normalize before email validation", () => {
   assert.equal(normalizeRecoveryEmail("  Alice+Test@Example.COM \n"), "alice+test@example.com");
@@ -60,7 +67,7 @@ test("duplicate registration rejects normalized email before consuming OTP", asy
     assert.deepEqual(filter, { email: "alice@example.com" });
     return { _id: userId };
   });
-  t.mock.method(MobileOtp, "findOne", () => { throw new Error("Must not consume OTP"); });
+  t.mock.method(MobileOtp, "findOneAndUpdate", () => { throw new Error("Must not consume OTP"); });
   const res = response();
   await registerCitizen(registration(" Alice@Example.COM "), res);
   assert.equal(res.statusCode, 409);
@@ -114,6 +121,7 @@ test("email assignment fails safely until the explicitly migrated unique index e
 });
 
 test("duplicate profile update excludes current user and preserves saved identity", async (t) => {
+  authorizeProfile(t);
   const account = { _id: userId, email: "old@example.com", emailVerified: true };
   t.mock.method(MobileUser, "findById", async () => account);
   t.mock.method(MobileUser, "exists", async (filter) => {
@@ -129,6 +137,7 @@ test("duplicate profile update excludes current user and preserves saved identit
 });
 
 test("changed recovery email clears verification and invalidates earlier challenge version", async (t) => {
+  authorizeProfile(t);
   ready(t);
   const account = { _id: userId, email: "old@example.com", emailVerified: true,
     emailVerifiedAt: new Date(), emailVersion: 2, save: async () => {} };
@@ -155,10 +164,12 @@ test("case-only same-email updates preserve existing verification", async (t) =>
 });
 
 test("concurrent duplicate profile writes return a safe conflict", async (t) => {
+  authorizeProfile(t);
   ready(t);
   t.mock.method(MobileUser, "findById", async () => ({ _id: userId, email: "old@example.com",
     save: async () => { throw Object.assign(new Error("duplicate"), { code: 11000, keyValue: { email: "alice@example.com" } }); } }));
   t.mock.method(MobileUser, "exists", async () => null);
+  t.mock.method(MobileUser, "findOneAndUpdate", async () => { throw Object.assign(new Error("duplicate"), { code: 11000, keyValue: { email: "alice@example.com" } }); });
   const res = response();
   await updateMobileProfile(accountRequest("alice@example.com"), res);
   assert.equal(res.statusCode, 409);
@@ -172,7 +183,7 @@ test("anonymous OTP responses do not distinguish eligible, absent, or unverified
   let eligible = false;
   let delivered = 0;
   t.mock.method(MobileUser, "findOne", (filter) => {
-    assert.deepEqual(filter, { email: "alice@example.com", emailVerified: true });
+    assert.deepEqual(filter, { email: "alice@example.com" });
     return queryResult(eligible ? { _id: userId, emailVersion: 1 } : null);
   });
   t.mock.method(MobileEmailOtp, "findOneAndUpdate", async () => ({}));
@@ -192,13 +203,17 @@ test("anonymous OTP responses do not distinguish eligible, absent, or unverified
   assert.equal(present.body.debugOtp, undefined);
 });
 
-test("unverified email recovery never consumes proof or changes password", async (t) => {
+test("saved unverified email cannot reset a password without a valid OTP proof", async (t) => {
+  ready(t);
+  t.mock.method(bcrypt, "hash", async () => "hash");
+  t.mock.method(mongoose.connection, "transaction", async (callback) => callback({}));
   t.mock.method(MobileUser, "findOne", (filter) => {
     assert.equal(filter.email, "alice@example.com");
-    assert.equal(filter.emailVerified, true);
-    return queryResult(null);
+    assert.equal(filter.emailVerified, undefined);
+    return queryResult({ _id: userId, emailVersion: 1, emailVerified: false });
   });
-  t.mock.method(MobileEmailOtp, "findOneAndUpdate", () => { throw new Error("No OTP consumption allowed"); });
+  t.mock.method(MobileEmailOtp, "findOneAndUpdate", async () => null);
+  t.mock.method(MobileUser, "findOneAndUpdate", () => { throw new Error("No password change allowed"); });
   const res = response();
   await resetCitizenPassword({ body: { email: " Alice@Example.COM ", newPassword: "ValidPass1!", verificationToken: "a".repeat(64) } }, res);
   assert.equal(res.statusCode, 403);
@@ -229,10 +244,11 @@ test("anonymous recovery hides cooldown and delivery failures behind the same re
 
 test("incorrect or expired ownership codes cannot enable recovery", async (t) => {
   ready(t);
+  t.mock.method(MobileUser, "findOne", () => queryResult({ _id: userId, emailVersion: 1 }));
   t.mock.method(MobileEmailOtp, "findOneAndUpdate", async (filter, update) => {
     assert.equal(filter.attempts.$lt, 5);
     assert.ok(filter.expiresAt.$gt instanceof Date);
-    assert.equal(filter.userId, String(userId));
+    assert.equal(filter.userId, userId);
     if (update.$inc) assert.equal(update.$inc.attempts, 1);
     return null;
   });
@@ -240,18 +256,20 @@ test("incorrect or expired ownership codes cannot enable recovery", async (t) =>
   const req = accountRequest("alice@example.com");
   req.body.otp = "123456";
   const res = response();
-  await confirmRecoveryEmailOtp(req, res);
+  await confirmEmailOtp(req, res);
   assert.equal(res.statusCode, 400);
   assert.equal(res.body.message, "Verification code is invalid or expired");
 });
 
-test("verified mixed-case email recovery binds its atomic update to account and email version", async (t) => {
+test("first recovery verifies saved email and revokes sessions in the proof-consumption transaction", async (t) => {
   ready(t);
+  t.mock.method(mongoose.connection, "transaction", async (callback) => callback("mock-session"));
   t.mock.method(MobileUser, "findOne", (filter) => {
     assert.equal(filter.email, "alice@example.com");
-    return queryResult({ _id: userId, emailVersion: 3 });
+    return queryResult({ _id: userId, emailVersion: 3, emailVerified: false });
   });
-  t.mock.method(MobileEmailOtp, "findOneAndUpdate", async (filter) => {
+  t.mock.method(MobileEmailOtp, "findOneAndUpdate", async (filter, _update, options) => {
+    assert.equal(options.session, "mock-session");
     assert.equal(filter.email, "alice@example.com");
     assert.equal(filter.userId, userId);
     assert.equal(filter.emailVersion, 3);
@@ -259,8 +277,11 @@ test("verified mixed-case email recovery binds its atomic update to account and 
     return {};
   });
   t.mock.method(bcrypt, "hash", async () => "hash");
-  t.mock.method(MobileUser, "findOneAndUpdate", async (filter, update) => {
-    assert.deepEqual(filter, { _id: userId, email: "alice@example.com", emailVerified: true, emailVersion: 3 });
+  t.mock.method(MobileUser, "findOneAndUpdate", async (filter, update, options) => {
+    assert.deepEqual(filter, { _id: userId, email: "alice@example.com", emailVersion: 3 });
+    assert.equal(options.session, "mock-session");
+    assert.equal(update.$set.emailVerified, true);
+    assert.ok(update.$set.emailVerifiedAt instanceof Date);
     assert.equal(update.$inc.tokenVersion, 1);
     return {};
   });
@@ -269,27 +290,21 @@ test("verified mixed-case email recovery binds its atomic update to account and 
   assert.deepEqual(res.body, { success: true });
 });
 
-test("email ownership verification is authenticated and applies only to current saved email version", async (t) => {
-  const denied = response();
-  await requestRecoveryEmailOtp({ body: { email: "alice@example.com" } }, denied);
-  assert.equal(denied.statusCode, 403);
+test("recovery verification issues only an account/version-bound reset proof", async (t) => {
   ready(t);
+  t.mock.method(MobileUser, "findOne", () => queryResult({ _id: userId, emailVersion: 4 }));
   t.mock.method(MobileEmailOtp, "findOneAndUpdate", async (filter) => {
-    assert.equal(filter.userId, String(userId));
-    assert.equal(filter.purpose, "recovery_email");
+    assert.equal(filter.userId, userId);
+    assert.equal(filter.purpose, "password_reset");
+    assert.equal(filter.emailVersion, 4);
     return { emailVersion: 4 };
   });
-  t.mock.method(MobileUser, "findOneAndUpdate", async (filter, update) => {
-    assert.deepEqual(filter, { _id: String(userId), email: "alice@example.com", emailVersion: 4 });
-    assert.equal(update.$set.emailVerified, true);
-    assert.ok(update.$set.emailVerifiedAt instanceof Date);
-    return { _id: userId, email: "alice@example.com", ...update.$set };
-  });
+  t.mock.method(MobileUser, "findOneAndUpdate", () => { throw new Error("Only reset completion records email verification"); });
   const req = accountRequest(" Alice@Example.COM ");
   req.body.otp = "123456";
   const res = response();
-  await confirmRecoveryEmailOtp(req, res);
-  assert.equal(res.body.emailVerified, true);
+  await confirmEmailOtp(req, res);
+  assert.match(res.body.verificationToken, /^[a-f0-9]{64}$/);
 });
 
 test("verification proof is single-use and rejects old unbound tokens", async (t) => {
@@ -315,6 +330,45 @@ test("legacy anonymous email existence endpoint has a constant response", async 
   await checkEmailExists({ query: { email: "alice@example.com" } }, first);
   await checkEmailExists({ query: { email: "missing@example.com" } }, second);
   assert.deepEqual(first.body, second.body);
+});
+
+test("phone reset consumes proof and atomically revokes sessions in the same transaction", async (t) => {
+  t.mock.method(mongoose.connection, "transaction", async (callback) => callback("mock-session"));
+  t.mock.method(MobileUser, "findOne", async () => ({ _id: userId }));
+  t.mock.method(bcrypt, "hash", async () => "new-password-hash");
+  t.mock.method(MobileOtp, "findOneAndUpdate", async (filter, update, options) => {
+    assert.equal(filter.phone, "09171234567");
+    assert.equal(filter.purpose, "password_reset");
+    assert.equal(options.session, "mock-session");
+    assert.ok(update.$set.consumedAt instanceof Date);
+    return {};
+  });
+  t.mock.method(MobileUser, "findOneAndUpdate", async (filter, update, options) => {
+    assert.deepEqual(filter, { _id: userId, phoneNumber: "09171234567" });
+    assert.equal(options.session, "mock-session");
+    assert.equal(update.$set.password, "new-password-hash");
+    assert.equal(update.$inc.tokenVersion, 1);
+    return {};
+  });
+  const res = response();
+  await resetCitizenPassword({ body: { phone: "09171234567", newPassword: "ValidPass1!", verificationToken: "proof" } }, res);
+  assert.deepEqual(res.body, { success: true });
+});
+
+test("failed reset commit throws inside the transaction rather than burning the proof", async (t) => {
+  let transactionFailure;
+  t.mock.method(mongoose.connection, "transaction", async (callback) => {
+    try { return await callback("mock-session"); }
+    catch (error) { transactionFailure = error; throw error; }
+  });
+  t.mock.method(MobileUser, "findOne", async () => ({ _id: userId }));
+  t.mock.method(bcrypt, "hash", async () => "hash");
+  t.mock.method(MobileOtp, "findOneAndUpdate", async () => ({}));
+  t.mock.method(MobileUser, "findOneAndUpdate", async () => null);
+  const res = response();
+  await resetCitizenPassword({ body: { phone: "09171234567", newPassword: "ValidPass1!", verificationToken: "proof" } }, res);
+  assert.equal(transactionFailure.code, "PHONE_PROOF_INVALID");
+  assert.equal(res.statusCode, 403);
 });
 
 test("legacy normalization does not invent verification evidence", () => {

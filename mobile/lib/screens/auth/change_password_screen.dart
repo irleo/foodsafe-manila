@@ -136,7 +136,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           .trim()
           .toLowerCase();
       return accountEmail != null &&
-          currentUser['emailVerified'] == true &&
           accountEmail.isNotEmpty &&
           enteredEmail == accountEmail;
     }
