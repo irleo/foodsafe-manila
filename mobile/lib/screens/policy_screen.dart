@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../services/api_client.dart';
 import '../services/policy_service.dart';
@@ -20,8 +21,9 @@ class PolicyLinks extends StatelessWidget {
       }.entries)
         TextButton(
           style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF134C8C),
             minimumSize: const Size(48, 48),
-            textStyle: TextStyle(
+            textStyle: GoogleFonts.inter(
               fontSize: compact ? 12 : 14,
               decoration: TextDecoration.underline,
             ),
@@ -128,119 +130,329 @@ class _PolicyScreenState extends State<PolicyScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: Text(
-        widget.type == null
-            ? 'Privacy and Terms'
-            : widget.type == 'terms'
-            ? 'Terms of Use'
-            : widget.type == 'privacy'
-            ? 'Privacy Policy'
-            : 'Disclosure',
+  Widget build(BuildContext context) => Theme(
+    data: Theme.of(context).copyWith(
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF134C8C)),
+      textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFF134C8C),
+          foregroundColor: Colors.white,
+          minimumSize: const Size(48, 52),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
       ),
     ),
-    body: FutureBuilder<PolicyBundle>(
-      future: _future,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Policies could not be loaded.'),
-                TextButton(
-                  onPressed: () =>
-                      setState(() => _future = PolicyService.load()),
-                  child: const Text('Retry'),
+    child: Scaffold(
+      backgroundColor: const Color(0xFFF9FAFB),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF134C8C),
+        foregroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        titleTextStyle: GoogleFonts.inter(
+          fontSize: 17,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+        title: Text(
+          widget.type == null
+              ? 'Privacy and Terms'
+              : widget.type == 'terms'
+              ? 'Terms of Use'
+              : widget.type == 'privacy'
+              ? 'Privacy Policy'
+              : 'Disclosure',
+        ),
+      ),
+      body: FutureBuilder<PolicyBundle>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.description_outlined,
+                      size: 40,
+                      color: Color(0xFF134C8C),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Policies could not be loaded.'),
+                    TextButton(
+                      onPressed: () =>
+                          setState(() => _future = PolicyService.load()),
+                      child: const Text('Retry'),
+                    ),
+                  ],
                 ),
-              ],
+              ),
+            );
+          }
+          if (!snapshot.hasData) {
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF134C8C)),
+            );
+          }
+          final bundle = snapshot.data!;
+          final documents = widget.type == null
+              ? bundle.documents
+              : [bundle.policy(widget.type!)];
+          return SafeArea(
+            top: false,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 760),
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                  children: [
+                    for (final document in documents)
+                      _PolicyDocumentView(document: document),
+                    if (widget.type == null) ...[
+                      SwitchListTile(
+                        title: const Text('Use device location (optional)'),
+                        subtitle: const Text(
+                          'OS permission is separate from Privacy Policy acknowledgement.',
+                        ),
+                        value: PolicyService.locationEnabled,
+                        onChanged: _saving
+                            ? null
+                            : (enabled) async {
+                                try {
+                                  if (enabled) {
+                                    if (!await showLocationDisclosure(
+                                      context,
+                                    )) {
+                                      return;
+                                    }
+                                    await LocationService.initializePermission();
+                                  } else {
+                                    await PolicyService.setLocationEnabled(
+                                      false,
+                                    );
+                                    LocationService.clearCachedLocation();
+                                  }
+                                  if (mounted) setState(() {});
+                                } catch (error) {
+                                  if (mounted) {
+                                    setState(
+                                      () => _error = ApiClient.safeErrorMessage(
+                                        error,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                      ),
+                      if (Session.currentUser != null) ...[
+                        const Text(
+                          'When required policies change, review them before account updates or reporting. Declining keeps public information available.',
+                        ),
+                        PolicyChoices(
+                          termsAccepted: _terms,
+                          privacyAcknowledged: _privacy,
+                          enabled: bundle.accountPublished && !_saving,
+                          onTermsChanged: (value) =>
+                              setState(() => _terms = value),
+                          onPrivacyChanged: (value) =>
+                              setState(() => _privacy = value),
+                        ),
+                        FilledButton(
+                          onPressed:
+                              bundle.accountPublished &&
+                                  _terms &&
+                                  _privacy &&
+                                  !_saving
+                              ? () => _save(bundle)
+                              : null,
+                          child: Text(
+                            _saving ? 'Saving...' : 'Save acknowledgement',
+                          ),
+                        ),
+                      ],
+                    ],
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Text(
+                          _error!,
+                          semanticsLabel: 'Error: $_error',
+                          style: const TextStyle(color: Color(0xFFB91C1C)),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
           );
-        }
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final bundle = snapshot.data!;
-        final documents = widget.type == null
-            ? bundle.documents
-            : [bundle.policy(widget.type!)];
-        return ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            for (final document in documents) ...[
+        },
+      ),
+    ),
+  );
+}
+
+/// Presents policy text without changing its wording or paragraph order.
+class _PolicyDocumentView extends StatelessWidget {
+  final PolicyDocument document;
+
+  const _PolicyDocumentView({required this.document});
+
+  @override
+  Widget build(BuildContext context) {
+    final paragraphs = document.text.trim().split(RegExp(r'\n\s*\n'));
+    final status = document.status == 'testing'
+        ? 'Private testing'
+        : document.published
+        ? 'Published'
+        : 'Unavailable';
+    final headingPattern = RegExp(r'^\d+\.\s+[^\n]+$');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF134C8C), Color(0xFF1767AB)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  document.type == 'privacy'
+                      ? Icons.shield_outlined
+                      : Icons.description_outlined,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'FOODSAFE MANILA',
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.6,
+                  color: Colors.white70,
+                ),
+              ),
+              const SizedBox(height: 8),
               Semantics(
                 header: true,
                 child: Text(
                   document.title,
-                  style: Theme.of(context).textTheme.titleLarge,
+                  style: GoogleFonts.inter(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    height: 1.2,
+                    color: Colors.white,
+                  ),
                 ),
               ),
-              SelectableText(
-                'Version ${document.version} | ${document.status == 'testing'
-                    ? 'Private testing'
-                    : document.published
-                    ? 'Published'
-                    : 'Unavailable'}',
+              const SizedBox(height: 20),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final label in [status, 'Version ${document.version}'])
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.2),
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: SelectableText(
+                        label,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: Colors.white,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              const SizedBox(height: 12),
-              SelectableText(document.text),
-              const SizedBox(height: 24),
             ],
-            if (widget.type == null) ...[
-              SwitchListTile(
-                title: const Text('Use device location (optional)'),
-                subtitle: const Text(
-                  'OS permission is separate from Privacy Policy acknowledgement.',
-                ),
-                value: PolicyService.locationEnabled,
-                onChanged: _saving
-                    ? null
-                    : (enabled) async {
-                        try {
-                          if (enabled) {
-                            if (!await showLocationDisclosure(context)) return;
-                            await LocationService.initializePermission();
-                          } else {
-                            await PolicyService.setLocationEnabled(false);
-                            LocationService.clearCachedLocation();
-                          }
-                          if (mounted) setState(() {});
-                        } catch (error) {
-                          if (mounted) {
-                            setState(
-                              () => _error = ApiClient.safeErrorMessage(error),
-                            );
-                          }
-                        }
-                      },
-              ),
-              if (Session.currentUser != null) ...[
-                const Text(
-                  'When required policies change, review them before account updates or reporting. Declining keeps public information available.',
-                ),
-                PolicyChoices(
-                  termsAccepted: _terms,
-                  privacyAcknowledged: _privacy,
-                  enabled: bundle.accountPublished && !_saving,
-                  onTermsChanged: (value) => setState(() => _terms = value),
-                  onPrivacyChanged: (value) => setState(() => _privacy = value),
-                ),
-                FilledButton(
-                  onPressed:
-                      bundle.accountPublished && _terms && _privacy && !_saving
-                      ? () => _save(bundle)
-                      : null,
-                  child: Text(_saving ? 'Saving...' : 'Save acknowledgement'),
-                ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: SelectionArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (int index = 0; index < paragraphs.length; index++) ...[
+                  if (headingPattern.hasMatch(paragraphs[index])) ...[
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8, bottom: 20),
+                      child: Divider(height: 1, color: Color(0xFFF0F2F5)),
+                    ),
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        paragraphs[index],
+                        style: GoogleFonts.inter(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          height: 1.5,
+                          color: const Color(0xFF134C8C),
+                        ),
+                      ),
+                    ),
+                  ] else
+                    Text(
+                      paragraphs[index].replaceAll(
+                        RegExp(r'(?<!\n)\n(?!\n)'),
+                        ' ',
+                      ),
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        height: 1.8,
+                        color: const Color(0xFF4B5563),
+                        fontWeight: index == 0
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                      ),
+                    ),
+                  if (index < paragraphs.length - 1) const SizedBox(height: 16),
+                ],
               ],
-            ],
-            if (_error != null) Text(_error!, semanticsLabel: 'Error: $_error'),
-          ],
-        );
-      },
-    ),
-  );
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
 }
 
 Future<bool> showLocationDisclosure(BuildContext context) async {
