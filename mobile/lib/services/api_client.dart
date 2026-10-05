@@ -64,12 +64,13 @@ class ApiClient {
     String path, {
     Map<String, String>? query,
     bool auth = true,
+    Duration? timeout,
   }) async {
     final uri = Uri.parse(
       '${ApiConfig.baseUrl}$path',
     ).replace(queryParameters: query?.isNotEmpty == true ? query : null);
     return _send(
-      () => http.get(uri, headers: auth ? _authHeaders() : jsonHeaders),
+      () => _request('GET', uri, auth: auth, timeout: timeout),
       auth: auth,
     );
   }
@@ -81,36 +82,44 @@ class ApiClient {
     Duration? timeout,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}$path');
-    return _send(() async {
-      final client = http.Client();
-      try {
-        final response = client.post(
-          uri,
-          headers: auth ? _authHeaders() : jsonHeaders,
-          body: body == null ? null : jsonEncode(body),
-        );
-        return await (timeout == null ? response : response.timeout(timeout));
-      } finally {
-        // Release the connection even when a timed request fails.
-        client.close();
-      }
-    }, auth: auth);
+    return _send(
+      () => _request('POST', uri, body: body, auth: auth, timeout: timeout),
+      auth: auth,
+    );
   }
 
   static Future<http.Response> put(
     String path, {
     Object? body,
     bool auth = true,
+    Duration? timeout,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}$path');
     return _send(
-      () => http.put(
-        uri,
-        headers: auth ? _authHeaders() : jsonHeaders,
-        body: body == null ? null : jsonEncode(body),
-      ),
+      () => _request('PUT', uri, body: body, auth: auth, timeout: timeout),
       auth: auth,
     );
+  }
+
+  static Future<http.Response> _request(
+    String method,
+    Uri uri, {
+    Object? body,
+    bool auth = true,
+    Duration? timeout,
+  }) async {
+    final client = http.Client();
+    try {
+      final request = http.Request(method, uri);
+      request.headers.addAll(auth ? _authHeaders() : jsonHeaders);
+      if (body != null) request.body = jsonEncode(body);
+      return await client
+          .send(request)
+          .then(http.Response.fromStream)
+          .timeout(timeout ?? const Duration(seconds: 30));
+    } finally {
+      client.close();
+    }
   }
 
   static Future<http.Response> _send(
@@ -148,8 +157,17 @@ class ApiClient {
     }
 
     final version = Session.generation;
-    final ok = await _refreshAccessToken();
-    if (!ok && version == Session.generation) await Session.clear();
+    try {
+      final ok = await _refreshAccessToken();
+      if (!ok && version == Session.generation) await Session.clear();
+    } on http.ClientException {
+      // Cached identity is available offline; protected requests still need authorization.
+      return;
+    } on TimeoutException {
+      return;
+    } on ApiException {
+      return;
+    }
   }
 
   /// Refreshes tokens when the app returns to the foreground.
@@ -193,56 +211,86 @@ class ApiClient {
     final refreshToken = Session.refreshToken;
     if (refreshToken == null || refreshToken.isEmpty) return false;
 
-    try {
-      final uri = Uri.parse('${ApiConfig.baseUrl}/auth/mobile/refresh');
-      final response = await http
-          .post(
-            uri,
-            headers: jsonHeaders,
-            body: jsonEncode({'refreshToken': refreshToken}),
-          )
-          .timeout(const Duration(seconds: 15));
-
-      if (response.statusCode != 200) return false;
-
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final accessToken = data['accessToken'] as String?;
-      final newRefresh = data['refreshToken'] as String?;
-      final user = data['user'] as Map<String, dynamic>?;
-
-      if (accessToken == null ||
-          accessToken.isEmpty ||
-          version != Session.generation ||
-          refreshToken != Session.refreshToken) {
-        return false;
-      }
-      if (user != null &&
-          (user['_id'] ?? user['id']) != Session.currentUser?['_id']) {
-        return false;
-      }
-      return await Session.saveTokens(
-        accessToken: accessToken,
-        refreshToken: newRefresh ?? refreshToken,
-        user: user,
-        expectedGeneration: version,
-      );
-    } catch (_) {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/auth/mobile/refresh');
+    final response = await _request(
+      'POST',
+      uri,
+      auth: false,
+      body: {'refreshToken': refreshToken},
+      timeout: const Duration(seconds: 15),
+    );
+    if (version != Session.generation || refreshToken != Session.refreshToken) {
       return false;
     }
+    // Only the refresh endpoint's credential rejection invalidates the session.
+    if (response.statusCode == 401 || response.statusCode == 403) return false;
+    throwIfError(
+      response,
+      fallback: 'Session refresh is temporarily unavailable. Please retry.',
+    );
+    final data = decodeMap(response);
+    final accessToken = data['accessToken'];
+    final newRefresh = data['refreshToken'];
+    final user = data['user'];
+    if (accessToken is! String ||
+        accessToken.isEmpty ||
+        (newRefresh != null && (newRefresh is! String || newRefresh.isEmpty)) ||
+        (user != null && user is! Map<String, dynamic>)) {
+      throw ApiException(
+        502,
+        'Invalid session response. Please retry.',
+        code: 'INVALID_RESPONSE',
+      );
+    }
+    if (user is Map<String, dynamic> &&
+        (user['_id'] ?? user['id']) !=
+            (Session.currentUser?['_id'] ?? Session.currentUser?['id'])) {
+      return false;
+    }
+    return Session.saveTokens(
+      accessToken: accessToken,
+      refreshToken: newRefresh is String ? newRefresh : refreshToken,
+      user: user is Map<String, dynamic> ? user : null,
+      expectedGeneration: version,
+    );
   }
 
   static Map<String, dynamic> decodeMap(http.Response response) {
-    final body = jsonDecode(response.body);
-    if (body is Map<String, dynamic>) return body;
-    throw ApiException(response.statusCode, 'Invalid response format');
+    try {
+      final body = jsonDecode(response.body);
+      if (body is Map<String, dynamic>) return body;
+    } on FormatException {
+      throw ApiException(
+        502,
+        'Invalid server response. Please retry.',
+        code: 'INVALID_RESPONSE',
+      );
+    }
+    throw ApiException(
+      502,
+      'Invalid server response. Please retry.',
+      code: 'INVALID_RESPONSE',
+    );
   }
 
   static List<Map<String, dynamic>> decodeList(http.Response response) {
-    final body = jsonDecode(response.body);
-    if (body is List) {
-      return body.cast<Map<String, dynamic>>();
+    try {
+      final body = jsonDecode(response.body);
+      if (body is List && body.every((item) => item is Map<String, dynamic>)) {
+        return body.cast<Map<String, dynamic>>();
+      }
+    } on FormatException {
+      throw ApiException(
+        502,
+        'Invalid server response. Please retry.',
+        code: 'INVALID_RESPONSE',
+      );
     }
-    throw ApiException(response.statusCode, 'Invalid response format');
+    throw ApiException(
+      502,
+      'Invalid server response. Please retry.',
+      code: 'INVALID_RESPONSE',
+    );
   }
 
   static void throwIfError(http.Response response, {String? fallback}) {
@@ -251,14 +299,21 @@ class ApiClient {
     String message = fallback ?? 'Request failed';
     String? code;
     String? errorId;
-    int? retryAfterSeconds;
+    int? retryAfterSeconds = int.tryParse(
+      response.headers['retry-after'] ?? '',
+    );
+    if (retryAfterSeconds != null && retryAfterSeconds < 1) {
+      retryAfterSeconds = null;
+    }
     try {
       final data = jsonDecode(response.body);
       if (data is Map) {
         code = data['code']?.toString();
         errorId = data['errorId']?.toString();
         final retry = data['retryAfterSeconds'];
-        if (retry is num && retry > 0) retryAfterSeconds = retry.ceil();
+        if (retry is num && retry.isFinite && retry > 0) {
+          retryAfterSeconds = retry.ceil();
+        }
         final codedMessage = _safeCodeMessages[code];
         final candidate = data['message']?.toString() ?? '';
         if (codedMessage != null) {

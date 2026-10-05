@@ -50,6 +50,7 @@ export const requestMobileOtp = async (req, res) => {
     if (error?.code === "OTP_COOLDOWN") {
       res.set("Retry-After", String(error.retryAfterSeconds));
       return res.status(429).json({
+        code: error.code,
         message: error.message,
         retryAfterSeconds: error.retryAfterSeconds,
       });
@@ -89,10 +90,10 @@ export const confirmMobileOtp = async (req, res) => {
     return res.status(200).json(result);
   } catch (error) {
     if (error?.code === "OTP_ATTEMPTS_EXCEEDED") {
-      return res.status(429).json({ message: error.message });
+      return res.status(429).json({ code: error.code, message: error.message });
     }
     if (error?.code === "OTP_INVALID") {
-      return res.status(400).json({ message: error.message });
+      return res.status(400).json({ code: error.code, message: error.message });
     }
 
     logRequestError(error, req, "OTP_VERIFICATION_ERROR");

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:foodsafe_manila/services/api_service.dart';
+import 'package:foodsafe_manila/services/api_client.dart';
 import 'package:foodsafe_manila/services/session.dart';
 import 'package:foodsafe_manila/utils/format_helpers.dart';
 import 'package:foodsafe_manila/widgets/app_loading.dart';
@@ -16,6 +17,7 @@ class ReportHistoryScreen extends StatefulWidget {
 class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
   List<Map<String, dynamic>> _reports = [];
   bool _isLoading = true;
+  String? _loadError;
 
   int _currentPage = 0;
   final int _itemsPerPage = 10;
@@ -140,43 +142,62 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
   }
 
   Future<void> _fetchReports() async {
-    if (Session.currentUser == null) {
-      setState(() => _isLoading = false);
-      return;
-    }
-
-    final userId = (Session.currentUser!['_id'] ?? Session.currentUser!['id'])
-        ?.toString();
-    if (userId == null) {
-      setState(() => _isLoading = false);
-      return;
-    }
-
-    final data = await ApiService.getUserReports(
-      userId,
-      page: _currentPage + 1,
-      limit: _itemsPerPage,
-    );
-    final rawItems = data['items'];
-    final reports = rawItems is List
-        ? rawItems
-              .whereType<Map>()
-              .map((item) => Map<String, dynamic>.from(item))
-              .toList()
-        : <Map<String, dynamic>>[];
-    final pagination = data['pagination'];
-
+    if (!mounted) return;
     setState(() {
-      _reports = reports;
-      _confirmedReportCount = (data['confirmedReports'] as num?)?.toInt() ?? 0;
-      _totalReportCount = pagination is Map
-          ? (pagination['total'] as num?)?.toInt() ?? reports.length
-          : reports.length;
-      _serverTotalPages = pagination is Map
-          ? (pagination['totalPages'] as num?)?.toInt() ?? 1
-          : 1;
-      _isLoading = false;
+      _isLoading = true;
+      _loadError = null;
     });
+    try {
+      if (Session.currentUser == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final userId = (Session.currentUser!['_id'] ?? Session.currentUser!['id'])
+          ?.toString();
+      if (userId == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final data = await ApiService.getUserReports(
+        userId,
+        page: _currentPage + 1,
+        limit: _itemsPerPage,
+      );
+      final rawItems = data['items'];
+      final reports = rawItems is List
+          ? rawItems
+                .whereType<Map>()
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList()
+          : <Map<String, dynamic>>[];
+      final pagination = data['pagination'];
+      if (!mounted) return;
+      setState(() {
+        _reports = reports;
+        _confirmedReportCount =
+            (data['confirmedReports'] as num?)?.toInt() ?? 0;
+        _totalReportCount = pagination is Map
+            ? (pagination['total'] as num?)?.toInt() ?? reports.length
+            : reports.length;
+        _serverTotalPages = pagination is Map
+            ? (pagination['totalPages'] as num?)?.toInt() ?? 1
+            : 1;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _loadError = ApiClient.safeErrorMessage(
+            error,
+            fallback: 'Reports could not be loaded.',
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _goToPage(int pageIndex) async {
@@ -289,7 +310,10 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                       icon: LucideIcons.fileText,
                       iconBg: const Color(0xFFDBEAFE),
                       iconColor: const Color(0xFF2563EB),
-                      value: _formatNumber(_totalReportCount),
+                      value:
+                          (_isLoading || _loadError != null) && _reports.isEmpty
+                          ? '--'
+                          : _formatNumber(_totalReportCount),
                       label: 'Total Reports',
                     ),
                   ),
@@ -299,7 +323,10 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                       icon: LucideIcons.stethoscope,
                       iconBg: const Color(0xFFF3E8FF),
                       iconColor: const Color(0xFF9333EA),
-                      value: _formatNumber(_confirmedReportCount),
+                      value:
+                          (_isLoading || _loadError != null) && _reports.isEmpty
+                          ? '--'
+                          : _formatNumber(_confirmedReportCount),
                       label: 'Confirmed Reports',
                     ),
                   ),
@@ -312,6 +339,19 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
               Expanded(
                 child: _isLoading
                     ? const AppLoadingCenter(message: 'Loading reports…')
+                    : _loadError != null
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_loadError!, textAlign: TextAlign.center),
+                            TextButton(
+                              onPressed: _fetchReports,
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      )
                     : _reports.isEmpty
                     ? Center(
                         child: Column(
@@ -465,9 +505,6 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                                         report['validation'],
                                       )
                                     : <String, dynamic>{};
-
-
-
 
                                 final findings = <Map<String, String>>[];
 

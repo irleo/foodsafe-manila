@@ -97,7 +97,7 @@ test("closing recovery cannot reset lastSentAt or bypass resend cooldown", async
       body: { email: "victim@example.com" },
     })), /** @type {import('express').Response} */ (/** @type {unknown} */ (res)));
     assert.equal(res.statusCode, 202);
-    assert.equal(res.body?.retryAfterSeconds, undefined);
+    assert.equal(res.body?.retryAfterSeconds, 60);
   }
   assert.equal(delivery.mock.callCount(), 0);
   assert.equal(lastSentAt, sentAt);

@@ -12,6 +12,7 @@ import 'package:foodsafe_manila/services/manila_geo_service.dart';
 import 'package:foodsafe_manila/services/session.dart';
 import 'package:foodsafe_manila/utils/format_helpers.dart';
 import 'package:foodsafe_manila/widgets/app_loading.dart';
+import 'package:foodsafe_manila/widgets/step_progress_indicator.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:foodsafe_manila/screens/legal/policy_screen.dart';
@@ -319,6 +320,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
 
     final lastReportTime = await ApiService.getLastReportTime(userId);
 
+    if (!mounted) return;
     if (lastReportTime == null) return;
 
     final diff = DateTime.now().difference(lastReportTime);
@@ -669,7 +671,11 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _stepProgressBar(),
+                  StepProgressIndicator(
+                    currentStep: _currentStep,
+                    titles: const ['Symptoms', 'Food source', 'Review'],
+                    completedLabel: 'Report submitted',
+                  ),
                 ],
               ),
             ),
@@ -925,32 +931,6 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _stepProgressBar() {
-    int totalSteps = 3;
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: List.generate(totalSteps, (index) {
-        bool isActive = index <= _currentStep;
-        bool isCurrent = index == _currentStep;
-        return Expanded(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            height: 6,
-            decoration: BoxDecoration(
-              color: isCurrent
-                  ? const Color(0xFF134c8c)
-                  : isActive
-                  ? const Color(0xFF93C5FD)
-                  : Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(3),
-            ),
-          ),
-        );
-      }),
     );
   }
 

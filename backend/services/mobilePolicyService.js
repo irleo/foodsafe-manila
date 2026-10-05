@@ -27,9 +27,10 @@ async function saveReceipts(userId, snapshot, session) {
 }
 
 // User creation and acceptance evidence must commit together; requires a replica set.
-/** @param {MobileAccountFields} fields */
-export async function createMobileUserWithPolicies(fields) {
+/** @param {MobileAccountFields} fields @param {((session: mongoose.ClientSession) => Promise<void>)=} authorize */
+export async function createMobileUserWithPolicies(fields, authorize) {
   return mongoose.connection.transaction(async (session) => {
+    if (authorize) await authorize(session);
     const snapshot = policySnapshot();
     const [user] = await MobileUser.create([{ ...fields, policyAcceptance: snapshot }], { session });
     await saveReceipts(user._id, snapshot, session);

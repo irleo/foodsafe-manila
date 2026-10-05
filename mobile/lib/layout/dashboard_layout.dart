@@ -63,13 +63,19 @@ class _DashboardLayoutState extends State<DashboardLayout>
     if (Session.currentUser == null) {
       return;
     }
-    final ok = await ApiClient.refreshSessionOnResume();
-    if (!mounted) return;
-    if (!ok) {
-      Navigator.pushNamed(context, '/login');
-      return;
+    try {
+      final ok = await ApiClient.refreshSessionOnResume();
+      if (!mounted) return;
+      if (!ok) {
+        if (Session.currentUser == null) Navigator.pushNamed(context, '/login');
+        return;
+      }
+      _refreshCurrentTab();
+    } catch (error) {
+      if (mounted) {
+        SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+      }
     }
-    _refreshCurrentTab();
   }
 
   void _refreshCurrentTab() {

@@ -50,27 +50,20 @@ export const registerCitizen = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const verified = await consumeMobileOtpVerification({
-      phone: normalizedPhone,
-      purpose: "registration",
-      verificationToken,
-    });
-
-    if (!verified) {
-      return res.status(403).json({
-        message: "Phone verification is invalid or expired",
-      });
-    }
-
     const mobileUser = await createMobileUserWithPolicies({
       username: String(username).trim(),
       phoneNumber: normalizedPhone,
       password: hashedPassword,
       email: normalizedEmail,
+    }, async (session) => {
+      const verified = await consumeMobileOtpVerification({ phone: normalizedPhone,
+        purpose: "registration", verificationToken }, session);
+      if (!verified) throw Object.assign(new Error("Phone verification is invalid or expired"), { code: "PHONE_PROOF_INVALID" });
     });
 
     return res.status(201).json(sanitizeMobileUser(mobileUser));
   } catch (error) {
+    if (error?.code === "PHONE_PROOF_INVALID") return res.status(403).json({ code: error.code, message: "Phone verification is invalid or expired" });
     if (isDuplicateRecoveryEmail(error)) return res.status(409).json(EMAIL_UNAVAILABLE);
     if (error?.code === "RECOVERY_EMAIL_SETUP_REQUIRED") {
       return res.status(503).json({ code: error.code, message: error.message });
@@ -211,8 +204,8 @@ export const resetCitizenPassword = async (req, res) => {
 
     return res.json({ success: true });
   } catch (error) {
-    if (error?.code === "EMAIL_PROOF_INVALID") return res.status(403).json({ message: "Email verification is invalid or expired" });
-    if (error?.code === "PHONE_PROOF_INVALID") return res.status(403).json({ message: "Phone verification is invalid or expired" });
+    if (error?.code === "EMAIL_PROOF_INVALID") return res.status(403).json({ code: error.code, message: "Email verification is invalid or expired" });
+    if (error?.code === "PHONE_PROOF_INVALID") return res.status(403).json({ code: error.code, message: "Phone verification is invalid or expired" });
     logRequestError(error, req, "CITIZEN_PASSWORD_RESET_ERROR");
     return res.status(500).json({ message: "Failed to reset password" });
   }
@@ -253,7 +246,10 @@ export const refreshCitizenToken = async (req, res) => {
       user: sanitizeMobileUser(mobileUser),
     });
   } catch (error) {
+    if (error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError || error instanceof jwt.NotBeforeError) {
+      return res.status(401).json({ message: "Invalid refresh token" });
+    }
     logRequestError(error, req, "CITIZEN_SESSION_REFRESH_ERROR");
-    return res.status(403).json({ message: "Invalid refresh token" });
+    return res.status(500).json({ code: "AUTHENTICATION_ERROR", message: "Session refresh is temporarily unavailable." });
   }
 };

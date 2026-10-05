@@ -13,7 +13,7 @@ import { hashEmailOtp, hashEmailVerificationToken } from "../services/mobileEmai
 const OTP_TTL_MS = 5 * 60 * 1000;
 const VERIFICATION_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
-const GENERIC_SENT = { message: "If this address is eligible, a verification code will be sent.", expiresInSeconds: 300 };
+const GENERIC_SENT = { message: "If this address is eligible, a verification code will be sent.", expiresInSeconds: 300, retryAfterSeconds: 60 };
 const INVALID_CODE = { message: "Verification code is invalid or expired" };
 export const emailOtpDelivery = { send: sendResetOtpEmail };
 

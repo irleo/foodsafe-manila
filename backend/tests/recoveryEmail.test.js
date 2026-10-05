@@ -99,6 +99,33 @@ test("registration persists normalized email as unverified", async (t) => {
   assert.equal(res.body.emailVerified, false);
 });
 
+test("registration proof consumption participates in account and policy transaction", async (t) => {
+  mockRegistrationProof(t);
+  t.mock.method(mongoose.connection, "transaction", async (callback) => callback("registration-session"));
+  t.mock.method(MobileOtp, "findOneAndUpdate", async (_filter, _update, options) => {
+    assert.equal(options.session, "registration-session");
+    return {};
+  });
+  t.mock.method(MobileUser, "create", async (_records, options) => {
+    assert.equal(options.session, "registration-session");
+    throw Object.assign(new Error("Write conflict"), { code: 11000, keyPattern: { email: 1 } });
+  });
+  const res = response();
+  await registerCitizen(registration("alice@example.com"), res);
+  assert.equal(res.statusCode, 409);
+});
+
+test("expired registration proof cannot create an account and returns restart code", async (t) => {
+  mockRegistrationProof(t);
+  t.mock.method(mongoose.connection, "transaction", async (callback) => callback("registration-session"));
+  t.mock.method(MobileOtp, "findOneAndUpdate", async () => null);
+  t.mock.method(MobileUser, "create", () => { throw new Error("Must not create account"); });
+  const res = response();
+  await registerCitizen(registration("alice@example.com"), res);
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body.code, "PHONE_PROOF_INVALID");
+});
+
 test("concurrent duplicate registration maps email E11000 to a safe conflict", async (t) => {
   mockRegistrationProof(t);
   t.mock.method(mongoose.connection, "transaction", async () => {

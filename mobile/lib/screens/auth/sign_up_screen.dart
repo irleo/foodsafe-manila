@@ -1,5 +1,6 @@
 import 'package:foodsafe_manila/widgets/auth_form_field.dart';
-import 'dart:async';
+import 'package:foodsafe_manila/widgets/step_progress_indicator.dart';
+import 'package:foodsafe_manila/services/otp_flow.dart';
 
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -45,14 +46,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _termsAccepted = false;
   bool _privacyAcknowledged = false;
   String? _policyError;
-  String? _registrationVerificationToken;
+  final _otpFlow = OtpFlow();
+  String? _otpError;
 
   final _passFocus = FocusNode();
   final _confirmPassFocus = FocusNode();
 
   int _currentStep = 0;
-  int _resendSeconds = 0;
-  Timer? _resendTimer;
+  int get _resendSeconds => _otpFlow.retryAfterSeconds;
+  void _otpChanged() {
+    if (mounted) setState(() {});
+  }
 
   // Labels for the step indicator — keep in sync with _buildStepContent().
   static const List<String> _stepTitles = [
@@ -64,6 +68,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   @override
   void initState() {
     super.initState();
+    _otpFlow.addListener(_otpChanged);
     _loadPolicies();
 
     otpControllers = List.generate(6, (_) => TextEditingController());
@@ -108,7 +113,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       f.dispose();
     }
 
-    _resendTimer?.cancel();
+    _otpFlow.dispose();
 
     super.dispose();
   }
@@ -132,39 +137,26 @@ class _SignUpScreenState extends State<SignUpScreen> {
     _otpCtrl.text = otpControllers.map((c) => c.text).join();
   }
 
-  void _startResendTimer() {
-    _resendTimer?.cancel();
-    setState(() => _resendSeconds = 60);
-    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      if (_resendSeconds <= 1) {
-        timer.cancel();
-        setState(() => _resendSeconds = 0);
-      } else {
-        setState(() => _resendSeconds--);
-      }
-    });
-  }
-
   Future<bool> _sendOTP({bool forceNew = false}) async {
+    if (_loading || _resendSeconds > 0) return false;
     setState(() => _loading = true);
     try {
       final phone = toLocalPhilippineMobileNumber(_phoneCtrl.text);
-      await ApiService.sendMobileOtp(phone: phone, purpose: 'registration');
+      final result = await ApiService.sendMobileOtp(
+        phone: phone,
+        purpose: 'registration',
+      );
       if (!mounted) return false;
 
       if (forceNew) {
-        _registrationVerificationToken = null;
         for (final controller in otpControllers) {
           controller.clear();
         }
         _otpCtrl.clear();
       }
 
-      _startResendTimer();
+      _otpError = null;
+      _otpFlow.sent(result);
       SnackbarWidgets.info(
         context,
         "We've sent a verification code to your phone number",
@@ -172,6 +164,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
       return true;
     } catch (error) {
       if (mounted) {
+        if (error is ApiException && error.retryAfterSeconds != null) {
+          _otpFlow.cooldown(error.retryAfterSeconds!);
+        }
         SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
       }
       return false;
@@ -181,6 +176,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   Future<void> _confirmCancelSignup() async {
+    if (_loading) return;
     final confirm = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -248,7 +244,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       ),
     );
     if (!mounted || confirm != true) return;
-    _resendTimer?.cancel();
+    _otpFlow.clear();
     for (final controller in otpControllers) {
       controller.clear();
     }
@@ -260,24 +256,32 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   Future<void> _submit() async {
     if (!_policiesAccepted || _loading) return;
+    if (_otpFlow.expired) return;
+    if (_otpFlow.verificationToken == null && _otpCtrl.text.length != 6) {
+      setState(() => _otpError = 'Enter the 6-digit verification code');
+      return;
+    }
     FocusScope.of(context).unfocus();
 
     setState(() => _loading = true);
 
     try {
       final phone = toLocalPhilippineMobileNumber(_phoneCtrl.text);
-      final verificationToken = _registrationVerificationToken ??=
-          await ApiService.verifyMobileOtp(
-            phone: phone,
-            purpose: 'registration',
-            otp: _otpCtrl.text,
-          );
+      if (_otpFlow.verificationToken == null) {
+        final proof = await ApiService.verifyMobileOtp(
+          phone: phone,
+          purpose: 'registration',
+          otp: _otpCtrl.text,
+        );
+        if (!mounted) return;
+        _otpFlow.verified(proof);
+      }
 
       bool success = await ApiService.registerUser(
         username: _usernameCtrl.text.trim(),
         phone: phone,
         password: _passCtrl.text,
-        verificationToken: verificationToken,
+        verificationToken: _otpFlow.verificationToken!,
         policyAcceptance: _policies!.accountChoices,
       );
 
@@ -290,6 +294,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
       }
     } catch (error) {
       if (mounted) {
+        if (error is ApiException &&
+            (error.code == 'PHONE_PROOF_INVALID' ||
+                error.code == 'OTP_ATTEMPTS_EXCEEDED')) {
+          _otpFlow.invalidate();
+        }
+        setState(() => _otpError = ApiClient.safeErrorMessage(error));
         SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
       }
     } finally {
@@ -298,6 +308,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   Future<void> _nextStep() async {
+    if (_loading) return;
     if (!_policiesAccepted) {
       SnackbarWidgets.info(
         context,
@@ -352,12 +363,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: _currentStep != 2,
+      canPop: !_loading && _currentStep != 2,
       onPopInvokedWithResult: (didPop, result) async {
         if (!didPop && _currentStep == 2) await _confirmCancelSignup();
       },
       child: AuthScreenLayout(
         onBack: () async {
+          if (_loading) return;
           if (_currentStep == 2) {
             await _confirmCancelSignup();
           } else if (mounted) {
@@ -370,80 +382,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _stepProgressBar(),
+              StepProgressIndicator(
+                currentStep: _currentStep,
+                titles: _stepTitles,
+              ),
               const SizedBox(height: 20),
               _buildStepContent(),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  /// Numbered, labeled step indicator — replaces the three plain color bars
-  /// with circles (checkmark once a step is done), connecting lines, and a
-  /// "Step X of N · <title>" caption so the user knows where they are.
-  Widget _stepProgressBar() {
-    final total = _stepTitles.length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: List.generate(total * 2 - 1, (i) {
-            if (i.isOdd) {
-              final leftStep = i ~/ 2;
-              final isDone = leftStep < _currentStep;
-              return Expanded(
-                child: Container(
-                  height: 2,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  color: isDone
-                      ? const Color(0xFF134c8c)
-                      : Colors.grey.shade300,
-                ),
-              );
-            }
-
-            final step = i ~/ 2;
-            final isActive = step == _currentStep;
-            final isDone = step < _currentStep;
-
-            return Container(
-              width: 26,
-              height: 26,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: (isActive || isDone)
-                    ? const Color(0xFF134c8c)
-                    : Colors.grey.shade300,
-              ),
-              child: isDone
-                  ? const Icon(LucideIcons.check, size: 14, color: Colors.white)
-                  : Text(
-                      "${step + 1}",
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: isActive
-                            ? Colors.white
-                            : const Color(0xFF6B7280),
-                      ),
-                    ),
-            );
-          }),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          "Step ${_currentStep + 1} of $total · ${_stepTitles[_currentStep]}",
-          style: GoogleFonts.inter(
-            fontSize: 11.5,
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF6B7280),
-          ),
-        ),
-      ],
     );
   }
 
@@ -672,7 +620,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
           children: [
             Expanded(
               child: OutlinedButton(
-                onPressed: () => setState(() => _currentStep--),
+                onPressed: _loading
+                    ? null
+                    : () => setState(() => _currentStep--),
                 style: OutlinedButton.styleFrom(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -801,12 +751,22 @@ class _SignUpScreenState extends State<SignUpScreen> {
           }),
         ),
         SizedBox(height: 16),
+        if (_otpFlow.expired || _otpError != null)
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              _otpFlow.expired
+                  ? 'This verification has expired. Request a new code.'
+                  : _otpError!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
         Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text('Did not receive code?', style: GoogleFonts.inter()),
             TextButton(
-              onPressed: _resendSeconds > 0
+              onPressed: _loading || _resendSeconds > 0
                   ? null
                   : () {
                       _sendOTP(forceNew: true);
@@ -831,7 +791,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: _loading ? null : _submit,
+            onPressed: _loading || _otpFlow.expired ? null : _submit,
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF134c8c),
               foregroundColor: Colors.white,

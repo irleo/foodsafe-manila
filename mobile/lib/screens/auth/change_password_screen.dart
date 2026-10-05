@@ -1,6 +1,7 @@
 import 'package:foodsafe_manila/widgets/auth_form_field.dart';
+import 'package:foodsafe_manila/widgets/step_progress_indicator.dart';
 import 'package:foodsafe_manila/layout/auth_screen_layout.dart';
-import 'dart:async';
+import 'package:foodsafe_manila/services/otp_flow.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -49,14 +50,19 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   final _confirmPassFocus = FocusNode();
 
   int _currentStep = 0;
-  int _resendSeconds = 0;
-  Timer? _resendTimer;
-  String? _verificationToken;
+  final _otpFlow = OtpFlow();
+  String? _otpError;
+  int get _resendSeconds => _otpFlow.retryAfterSeconds;
+  void _otpChanged() {
+    if (mounted) setState(() {});
+  }
+
   bool _otpSent = false;
 
   @override
   void initState() {
     super.initState();
+    _otpFlow.addListener(_otpChanged);
 
     otpControllers = List.generate(6, (_) => TextEditingController());
     otpFocusNodes = List.generate(6, (_) => FocusNode());
@@ -77,7 +83,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       f.dispose();
     }
 
-    _resendTimer?.cancel();
+    _otpFlow.dispose();
     super.dispose();
   }
 
@@ -98,23 +104,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
   void _updateOtp() {
     _otpCtrl.text = otpControllers.map((c) => c.text).join();
-  }
-
-  void _startResendTimer() {
-    _resendTimer?.cancel();
-    setState(() => _resendSeconds = 60);
-    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      if (_resendSeconds <= 1) {
-        timer.cancel();
-        setState(() => _resendSeconds = 0);
-      } else {
-        setState(() => _resendSeconds--);
-      }
-    });
   }
 
   Future<bool> _isIdentifierLinkedToAccount() async {
@@ -159,33 +148,32 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     return true;
   }
 
-  Future<bool> _sendPasswordResetOtp() async {
-    if (!await _guardAccountIdentifier()) return false;
+  Future<OtpSendResult?> _sendPasswordResetOtp() async {
+    if (!await _guardAccountIdentifier() || !mounted) return null;
 
     if (_useEmail) {
-      await ApiService.sendEmailOtp(
+      return ApiService.sendEmailOtp(
         email: _emailCtrl.text.trim(),
         purpose: 'password_reset',
       );
     } else {
-      await ApiService.sendMobileOtp(
+      return ApiService.sendMobileOtp(
         phone: toLocalPhilippineMobileNumber(_phoneCtrl.text),
         purpose: 'password_reset',
       );
     }
-    return true;
   }
 
   Future<bool> _sendOTP({bool forceNew = false}) async {
+    if (_loading || _resendSeconds > 0) return false;
     setState(() => _loading = true);
 
     try {
       final sent = await _sendPasswordResetOtp();
-      if (!sent) return false;
+      if (sent == null) return false;
 
       if (!mounted) return false;
 
-      _verificationToken = null;
       _otpSent = true;
 
       if (forceNew) {
@@ -196,11 +184,15 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         _otpCtrl.clear();
       }
 
-      _startResendTimer();
+      _otpError = null;
+      _otpFlow.sent(sent);
 
       return true;
     } catch (error) {
       if (mounted) {
+        if (error is ApiException && error.retryAfterSeconds != null) {
+          _otpFlow.cooldown(error.retryAfterSeconds!);
+        }
         SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
       }
 
@@ -213,6 +205,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   }
 
   Future<void> _confirmCancelPasswordChange() async {
+    if (_loading) return;
     final confirm = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -282,7 +275,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     if (!mounted || confirm != true) return;
 
     // Clear only local input; the server challenge and cooldown remain intact.
-    _resendTimer?.cancel();
+    _otpFlow.clear();
 
     for (final controller in otpControllers) {
       controller.clear();
@@ -292,8 +285,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
     setState(() {
       _otpSent = false;
-      _verificationToken = null;
-      _resendSeconds = 0;
     });
 
     // Exit the password-change screen.
@@ -303,6 +294,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   }
 
   Future<void> _nextStep() async {
+    if (_loading) return;
     FocusScope.of(context).unfocus();
 
     // STEP 0: Phone / Email
@@ -331,6 +323,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
     // STEP 1: New Password
     if (_currentStep == 1) {
+      if (!_otpSent && _resendSeconds > 0) return;
       if (!_formKey.currentState!.validate()) return;
 
       setState(() => _loading = true);
@@ -339,13 +332,12 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         // Only send the OTP the first time we enter the OTP step.
         if (!_otpSent) {
           final sent = await _sendPasswordResetOtp();
-          if (!sent) return;
+          if (sent == null) return;
 
           if (!mounted) return;
 
           _otpSent = true;
-          _verificationToken = null;
-          _startResendTimer();
+          _otpFlow.sent(sent);
 
           SnackbarWidgets.info(
             context,
@@ -366,6 +358,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         });
       } catch (error) {
         if (mounted) {
+          if (error is ApiException && error.retryAfterSeconds != null) {
+            _otpFlow.cooldown(error.retryAfterSeconds!);
+          }
           SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
         }
       } finally {
@@ -379,7 +374,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
     // STEP 2: OTP
     if (_currentStep == 2) {
-      if (_otpCtrl.text.length != 6) {
+      if (_otpFlow.expired) return;
+      if (_otpFlow.verificationToken == null && _otpCtrl.text.length != 6) {
         SnackbarWidgets.error(
           context,
           "Please enter the 6-digit verification code",
@@ -391,18 +387,20 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
       try {
         // Verify OTP
-        if (_useEmail) {
-          _verificationToken = await ApiService.verifyEmailOtp(
-            email: _emailCtrl.text.trim(),
-            purpose: 'password_reset',
-            otp: _otpCtrl.text,
-          );
-        } else {
-          _verificationToken = await ApiService.verifyMobileOtp(
-            phone: toLocalPhilippineMobileNumber(_phoneCtrl.text),
-            purpose: 'password_reset',
-            otp: _otpCtrl.text,
-          );
+        if (_otpFlow.verificationToken == null) {
+          final proof = _useEmail
+              ? await ApiService.verifyEmailOtp(
+                  email: _emailCtrl.text.trim(),
+                  purpose: 'password_reset',
+                  otp: _otpCtrl.text,
+                )
+              : await ApiService.verifyMobileOtp(
+                  phone: toLocalPhilippineMobileNumber(_phoneCtrl.text),
+                  purpose: 'password_reset',
+                  otp: _otpCtrl.text,
+                );
+          if (!mounted) return;
+          _otpFlow.verified(proof);
         }
 
         if (!mounted) return;
@@ -414,7 +412,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
               ? null
               : toLocalPhilippineMobileNumber(_phoneCtrl.text),
           newPassword: _newPassCtrl.text,
-          verificationToken: _verificationToken!,
+          verificationToken: _otpFlow.verificationToken!,
         );
 
         if (!mounted) return;
@@ -431,6 +429,13 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         }
       } catch (error) {
         if (mounted) {
+          if (error is ApiException &&
+              (error.code == 'PHONE_PROOF_INVALID' ||
+                  error.code == 'EMAIL_PROOF_INVALID' ||
+                  error.code == 'OTP_ATTEMPTS_EXCEEDED')) {
+            _otpFlow.invalidate();
+          }
+          setState(() => _otpError = ApiClient.safeErrorMessage(error));
           SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
         }
       } finally {
@@ -446,7 +451,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: _currentStep != 2,
+      canPop: !_loading && _currentStep != 2,
       onPopInvokedWithResult: (didPop, result) async {
         if (!didPop && _currentStep == 2) {
           await _confirmCancelPasswordChange();
@@ -454,6 +459,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       },
       child: AuthScreenLayout(
         onBack: () async {
+          if (_loading) return;
           if (_currentStep == 2) {
             await _confirmCancelPasswordChange();
           } else if (mounted) {
@@ -466,34 +472,16 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _stepProgressBar(),
+              StepProgressIndicator(
+                currentStep: _currentStep,
+                titles: const ['Account info', 'New password', 'Verification'],
+              ),
               const SizedBox(height: 20),
               _buildStepContent(),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  Widget _stepProgressBar() {
-    int totalSteps = 3;
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: List.generate(totalSteps, (index) {
-        bool isActive = index <= _currentStep;
-        return Expanded(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            height: 6,
-            decoration: BoxDecoration(
-              color: isActive ? const Color(0xFF134c8c) : Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(3),
-            ),
-          ),
-        );
-      }),
     );
   }
 
@@ -603,9 +591,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     // The verification target changed,
                     // so a new OTP flow is required.
                     _otpSent = false;
-                    _verificationToken = null;
-                    _resendTimer?.cancel();
-                    _resendSeconds = 0;
+                    _otpFlow.clear();
 
                     for (final controller in otpControllers) {
                       controller.clear();
@@ -753,12 +739,22 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
         const SizedBox(height: 16),
 
+        if (_otpFlow.expired || _otpError != null)
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              _otpFlow.expired
+                  ? 'This verification has expired. Request a new code.'
+                  : _otpError!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
         Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text('Did not receive code?', style: GoogleFonts.inter()),
             TextButton(
-              onPressed: _resendSeconds > 0
+              onPressed: _loading || _resendSeconds > 0
                   ? null
                   : () {
                       _sendOTP(forceNew: true);
@@ -784,7 +780,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: _loading ? null : _nextStep,
+            onPressed: _loading || (_currentStep == 2 && _otpFlow.expired)
+                ? null
+                : _nextStep,
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF134c8c),
               foregroundColor: Colors.white,
@@ -889,7 +887,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           children: [
             Expanded(
               child: OutlinedButton(
-                onPressed: () => setState(() => _currentStep--),
+                onPressed: _loading
+                    ? null
+                    : () => setState(() => _currentStep--),
                 style: OutlinedButton.styleFrom(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),

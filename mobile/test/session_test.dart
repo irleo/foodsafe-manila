@@ -238,6 +238,108 @@ void main() {
     expect(await cachedProfile(), isNull);
   });
 
+  for (final status in [429, 500, 503]) {
+    test(
+      'refresh $status preserves credentials on cold start, resume and protected requests',
+      () async {
+        await signedIn();
+        await http.runWithClient(
+          () async {
+            await ApiClient.warmSession();
+            await expectLater(
+              ApiClient.refreshSessionOnResume(),
+              throwsA(isA<ApiException>()),
+            );
+            await expectLater(
+              ApiClient.get('/protected'),
+              throwsA(isA<ApiException>()),
+            );
+          },
+          () => MockClient(
+            (request) async => http.Response(
+              '{}',
+              request.url.path.endsWith('/mobile/refresh') ? status : 401,
+            ),
+          ),
+        );
+        expect(Session.accessToken, 'old-access');
+        expect((await vault())?['refreshToken'], 'old-refresh');
+        expect(await cachedProfile(), isNotNull);
+      },
+    );
+  }
+
+  test(
+    'offline and timeout refresh errors preserve sessions and propagate on resume',
+    () async {
+      await signedIn();
+      for (final error in <Exception>[
+        http.ClientException('Offline'),
+        TimeoutException('Offline'),
+      ]) {
+        await http.runWithClient(() async {
+          await ApiClient.warmSession();
+          await expectLater(
+            ApiClient.refreshSessionOnResume(),
+            throwsA(same(error)),
+          );
+        }, () => MockClient((_) async => throw error));
+        expect(Session.accessToken, 'old-access');
+        expect(await vault(), isNotNull);
+      }
+    },
+  );
+
+  test('malformed refresh response does not erase credentials', () async {
+    await signedIn();
+    for (final body in [
+      '<html>outage</html>',
+      '{}',
+      '{"accessToken":7}',
+      '{"accessToken":"new","user":[]}',
+    ]) {
+      await http.runWithClient(() async {
+        await ApiClient.warmSession();
+        await expectLater(
+          ApiClient.refreshSessionOnResume(),
+          throwsA(isA<ApiException>()),
+        );
+      }, () => MockClient((_) async => http.Response(body, 200)));
+      expect(Session.accessToken, 'old-access');
+    }
+  });
+
+  test(
+    'concurrent failed refresh shares one error without deleting the session',
+    () async {
+      await signedIn();
+      final response = Completer<http.Response>();
+      var calls = 0;
+      await http.runWithClient(
+        () async {
+          final assertions = Future.wait([
+            expectLater(
+              ApiClient.refreshSessionOnResume(),
+              throwsA(isA<ApiException>()),
+            ),
+            expectLater(
+              ApiClient.refreshSessionOnResume(),
+              throwsA(isA<ApiException>()),
+            ),
+          ]);
+          response.complete(http.Response('{}', 503));
+          await assertions;
+        },
+        () => MockClient((_) {
+          calls++;
+          return response.future;
+        }),
+      );
+      expect(calls, 1);
+      expect(Session.accessToken, 'old-access');
+    },
+  );
+
   test(
     'legacy access-only sessions cannot remain signed in on cold start',
     () async {
