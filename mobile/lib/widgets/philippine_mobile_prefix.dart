@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../utils/philippine_mobile_number.dart';
+import 'package:foodsafe_manila/utils/philippine_mobile_number.dart';
 
 class PhilippineMobilePrefix extends StatelessWidget {
   final Color? color;

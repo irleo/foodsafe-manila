@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:foodsafe_manila/screens/policy_screen.dart';
+import 'package:foodsafe_manila/screens/legal/policy_screen.dart';
 import 'package:foodsafe_manila/services/policy_service.dart';
 
 void main() {

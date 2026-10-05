@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../services/api_client.dart';
-import '../services/policy_service.dart';
-import '../services/location_service.dart';
-import '../services/session.dart';
+import 'package:foodsafe_manila/services/api_client.dart';
+import 'package:foodsafe_manila/services/policy_service.dart';
+import 'package:foodsafe_manila/services/location_service.dart';
+import 'package:foodsafe_manila/services/session.dart';
 
 class PolicyLinks extends StatelessWidget {
   final bool compact;

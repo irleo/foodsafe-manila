@@ -1,6 +1,6 @@
 import 'package:latlong2/latlong.dart';
 
-import '../models/facility.dart';
+import 'package:foodsafe_manila/models/facility.dart';
 // ----------------------------------------------------------
 // MOCK FACILITY DATA
 // ----------------------------------------------------------

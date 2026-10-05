@@ -5,9 +5,9 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../data/facilities.dart';
-import '../models/facility.dart';
-import '../services/location_service.dart';
+import 'package:foodsafe_manila/data/facilities.dart';
+import 'package:foodsafe_manila/models/facility.dart';
+import 'package:foodsafe_manila/services/location_service.dart';
 
 class MapScreen extends StatefulWidget {
   final VoidCallback? onBackPressed;
@@ -853,7 +853,7 @@ class _MapScreenState extends State<MapScreen> {
                   physics: const ClampingScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                   itemCount: _filteredFacilities.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, index) {
                     return _buildFacilityCard(_filteredFacilities[index]);
                   },
@@ -1127,6 +1127,7 @@ class _MapScreenState extends State<MapScreen> {
       );
     }
 
+    if (!mounted) return;
     await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,

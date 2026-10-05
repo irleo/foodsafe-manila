@@ -1,9 +1,10 @@
+import 'package:foodsafe_manila/layout/refreshable_screen_layout.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../data/facilities.dart';
-import '../services/location_service.dart';
-import 'report_form_screen.dart';
+import 'package:foodsafe_manila/data/facilities.dart';
+import 'package:foodsafe_manila/services/location_service.dart';
+import 'package:foodsafe_manila/screens/reporting/report_form_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onReportPressed;
@@ -601,36 +602,29 @@ class HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final now = DateTime.now();
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
-      body: SafeArea(
-        bottom: false,
-        child: RefreshIndicator(
-          onRefresh: refreshData,
-          color: const Color(0xFF134c8c),
-          child: SingleChildScrollView(
+    return RefreshableScreenLayout(
+      onRefresh: refreshData,
+      refreshColor: const Color(0xFF134C8C),
+      safeAreaBottom: false,
+      child: Column(
+        children: [
+          _buildHeader(now),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 30),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildHeader(now),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 30),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildHowItWorks(),
-                      const SizedBox(height: 24),
-                      _buildWhenToReport(),
-                      const SizedBox(height: 24),
-                      _buildNearbyClinic(),
-                      const SizedBox(height: 24),
-                      _buildFoodSafetyTips(),
-                    ],
-                  ),
-                ),
+                _buildHowItWorks(),
+                const SizedBox(height: 24),
+                _buildWhenToReport(),
+                const SizedBox(height: 24),
+                _buildNearbyClinic(),
+                const SizedBox(height: 24),
+                _buildFoodSafetyTips(),
               ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }

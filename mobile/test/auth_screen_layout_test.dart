@@ -11,9 +11,9 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:foodsafe_manila/screens/sign_in_screen.dart';
-import 'package:foodsafe_manila/screens/sign_up_screen.dart';
-import 'package:foodsafe_manila/screens/policy_screen.dart';
+import 'package:foodsafe_manila/screens/auth/sign_in_screen.dart';
+import 'package:foodsafe_manila/screens/auth/sign_up_screen.dart';
+import 'package:foodsafe_manila/screens/legal/policy_screen.dart';
 import 'package:foodsafe_manila/services/policy_service.dart';
 import 'package:foodsafe_manila/services/session.dart';
 

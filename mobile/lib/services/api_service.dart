@@ -1,8 +1,8 @@
-import 'api_client.dart';
-import 'session.dart';
-import 'credential_store.dart';
-import 'phone_change_flow.dart';
-import '../utils/recovery_email.dart';
+import 'package:foodsafe_manila/services/api_client.dart';
+import 'package:foodsafe_manila/services/session.dart';
+import 'package:foodsafe_manila/services/credential_store.dart';
+import 'package:foodsafe_manila/services/phone_change_flow.dart';
+import 'package:foodsafe_manila/utils/recovery_email.dart';
 
 class ApiService {
   static Future<Map<String, dynamic>?> login(

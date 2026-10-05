@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../services/api_client.dart';
-import '../services/api_service.dart';
+import 'package:foodsafe_manila/services/api_client.dart';
+import 'package:foodsafe_manila/services/api_service.dart';
 
 class RecoveryEmailVerificationScreen extends StatefulWidget {
   final String email;

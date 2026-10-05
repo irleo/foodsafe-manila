@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:foodsafe_manila/screens/account_information_screen.dart';
+import 'package:foodsafe_manila/screens/account/account_information_screen.dart';
 import 'package:foodsafe_manila/services/session.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_fonts/src/google_fonts_base.dart' as fonts;

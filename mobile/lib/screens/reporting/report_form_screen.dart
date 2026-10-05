@@ -1,21 +1,21 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:foodsafe_manila/screens/report_history_screen.dart';
+import 'package:foodsafe_manila/screens/reporting/report_history_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../widgets/snackbar_widgets.dart';
-import '../services/api_service.dart';
-import '../services/api_client.dart';
-import '../services/location_service.dart';
-import '../services/manila_geo_service.dart';
-import '../services/session.dart';
-import '../utils/format_helpers.dart';
-import '../widgets/app_loading.dart';
+import 'package:foodsafe_manila/widgets/snackbar_widgets.dart';
+import 'package:foodsafe_manila/services/api_service.dart';
+import 'package:foodsafe_manila/services/api_client.dart';
+import 'package:foodsafe_manila/services/location_service.dart';
+import 'package:foodsafe_manila/services/manila_geo_service.dart';
+import 'package:foodsafe_manila/services/session.dart';
+import 'package:foodsafe_manila/utils/format_helpers.dart';
+import 'package:foodsafe_manila/widgets/app_loading.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
-import 'policy_screen.dart';
-import '../services/policy_service.dart';
+import 'package:foodsafe_manila/screens/legal/policy_screen.dart';
+import 'package:foodsafe_manila/services/policy_service.dart';
 
 class ReportFormScreen extends StatefulWidget {
   const ReportFormScreen({super.key});

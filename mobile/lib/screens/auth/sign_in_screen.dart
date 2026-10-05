@@ -1,16 +1,17 @@
+import 'package:foodsafe_manila/widgets/auth_form_field.dart';
 import 'package:flutter/material.dart';
-import 'package:foodsafe_manila/screens/change_password_screen.dart';
+import 'package:foodsafe_manila/screens/auth/change_password_screen.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../widgets/snackbar_widgets.dart';
+import 'package:foodsafe_manila/widgets/snackbar_widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../services/api_service.dart';
-import '../services/api_client.dart';
-import '../utils/philippine_mobile_number.dart';
-import '../widgets/app_loading.dart';
-import '../widgets/philippine_mobile_prefix.dart';
-import '../screens/report_form_screen.dart';
-import 'policy_screen.dart';
-import '../widgets/auth_screen_layout.dart';
+import 'package:foodsafe_manila/services/api_service.dart';
+import 'package:foodsafe_manila/services/api_client.dart';
+import 'package:foodsafe_manila/utils/philippine_mobile_number.dart';
+import 'package:foodsafe_manila/widgets/app_loading.dart';
+import 'package:foodsafe_manila/widgets/philippine_mobile_prefix.dart';
+import 'package:foodsafe_manila/screens/reporting/report_form_screen.dart';
+import 'package:foodsafe_manila/screens/legal/policy_screen.dart';
+import 'package:foodsafe_manila/layout/auth_screen_layout.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -116,7 +117,7 @@ class _SignInScreenState extends State<SignInScreen> {
             key: _formKey,
             child: Column(
               children: [
-                _LabeledField(
+                AuthFormField(
                   label: "Phone Number",
                   child: TextFormField(
                     controller: _phoneCtrl,
@@ -146,7 +147,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                _LabeledField(
+                AuthFormField(
                   label: "Password",
                   child: TextFormField(
                     controller: _passCtrl,
@@ -265,62 +266,6 @@ class _SignInScreenState extends State<SignInScreen> {
           const Center(child: PolicyLinks(compact: true)),
         ],
       ),
-    );
-  }
-}
-
-class _LabeledField extends StatelessWidget {
-  final String label;
-  final Widget child;
-
-  const _LabeledField({required this.label, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF111827),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Theme(
-          data: Theme.of(context).copyWith(
-            inputDecorationTheme: InputDecorationTheme(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 14,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(
-                  color: Color(0xFF134c8c),
-                  width: 2,
-                ),
-              ),
-              errorMaxLines: 2,
-              errorStyle: GoogleFonts.inter(
-                fontSize: 11,
-                color: const Color(0xFFDC2626),
-              ),
-            ),
-          ),
-          child: child,
-        ),
-      ],
     );
   }
 }

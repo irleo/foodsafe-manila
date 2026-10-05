@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
-import 'package:foodsafe_manila/screens/recovery_email_verification_screen.dart';
+import 'package:foodsafe_manila/screens/account/recovery_email_verification_screen.dart';
 import 'package:foodsafe_manila/utils/recovery_email.dart';
 
 void main() {

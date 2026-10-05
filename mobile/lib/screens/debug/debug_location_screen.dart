@@ -2,11 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../services/debug_location_service.dart';
-import '../services/location_service.dart';
-import '../services/manila_geo_service.dart';
-import '../utils/format_helpers.dart';
-import '../widgets/snackbar_widgets.dart';
+import 'package:foodsafe_manila/services/debug_location_service.dart';
+import 'package:foodsafe_manila/services/location_service.dart';
+import 'package:foodsafe_manila/services/manila_geo_service.dart';
+import 'package:foodsafe_manila/utils/format_helpers.dart';
+import 'package:foodsafe_manila/widgets/snackbar_widgets.dart';
 
 /// Debug-only screen to simulate a Manila barangay for testing.
 class DebugLocationScreen extends StatefulWidget {

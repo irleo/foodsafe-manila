@@ -12,8 +12,8 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:foodsafe_manila/screens/policy_screen.dart';
-import 'package:foodsafe_manila/screens/report_form_screen.dart';
+import 'package:foodsafe_manila/screens/legal/policy_screen.dart';
+import 'package:foodsafe_manila/screens/reporting/report_form_screen.dart';
 import 'package:foodsafe_manila/services/api_client.dart';
 import 'package:foodsafe_manila/services/policy_service.dart';
 import 'package:foodsafe_manila/services/session.dart';

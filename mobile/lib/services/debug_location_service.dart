@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'manila_geo_service.dart';
+import 'package:foodsafe_manila/services/manila_geo_service.dart';
 
 /// Debug-only simulated GPS within Manila for developers outside the city.
 class DebugLocationService {

@@ -61,7 +61,14 @@ Replace the example with your deployed API URL. The Android release configuratio
 
 | Path | Purpose |
 | --- | --- |
-| `lib/screens/` | Home, insights, maps, reporting, account, and policy interfaces |
+| `lib/screens/auth/` | Sign in, registration, and password recovery/change |
+| `lib/screens/account/` | Account information and recovery email verification |
+| `lib/screens/dashboard/` | Home and insights content |
+| `lib/screens/map/` | Health facility map |
+| `lib/screens/reporting/` | Report form and report history |
+| `lib/screens/legal/` | Policy readers and reporting disclosure |
+| `lib/screens/debug/` | Development-only location simulation |
+| `lib/layout/` | Authentication shell, dashboard navigation, and shared refreshable pages |
 | `lib/services/` | API access, sessions, credential storage, policies, and location handling |
 | `lib/config/` | API base URL configuration |
 | `lib/models/` and `lib/data/` | Facility models and bundled facility data |

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 
-import '../utils/format_helpers.dart';
+import 'package:foodsafe_manila/utils/format_helpers.dart';
 
 class ManilaLocation {
   final String district;

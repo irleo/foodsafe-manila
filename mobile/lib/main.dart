@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'screens/bottom_nav_bar_screen.dart';
-import 'screens/sign_in_screen.dart';
-import 'screens/sign_up_screen.dart';
-import 'screens/change_password_screen.dart';
-import 'services/api_client.dart';
-import 'services/session.dart';
-import 'services/policy_service.dart';
-import 'screens/policy_screen.dart';
+import 'package:foodsafe_manila/layout/dashboard_layout.dart';
+import 'package:foodsafe_manila/screens/auth/sign_in_screen.dart';
+import 'package:foodsafe_manila/screens/auth/sign_up_screen.dart';
+import 'package:foodsafe_manila/screens/auth/change_password_screen.dart';
+import 'package:foodsafe_manila/services/api_client.dart';
+import 'package:foodsafe_manila/services/session.dart';
+import 'package:foodsafe_manila/services/policy_service.dart';
+import 'package:foodsafe_manila/screens/legal/policy_screen.dart';
 
 final appNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -121,7 +121,7 @@ class MainApp extends StatelessWidget {
             '/login': (context) => const SignInScreen(),
             '/signup': (context) => const SignUpScreen(),
             '/change_password': (context) => const ChangePasswordScreen(),
-            '/dashboard': (context) => const BottomNavBarScreen(),
+            '/dashboard': (context) => const DashboardLayout(),
             '/policies': (context) => const PolicyScreen(),
           },
         );

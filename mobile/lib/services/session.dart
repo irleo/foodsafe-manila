@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'credential_store.dart';
-import 'session_profile.dart';
+import 'package:foodsafe_manila/services/credential_store.dart';
+import 'package:foodsafe_manila/services/session_profile.dart';
 
 class Session {
   static Map<String, dynamic>? _currentUser;

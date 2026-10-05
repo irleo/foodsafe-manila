@@ -1,29 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:foodsafe_manila/screens/report_history_screen.dart';
-import 'package:foodsafe_manila/screens/report_form_screen.dart';
+import 'package:foodsafe_manila/screens/reporting/report_history_screen.dart';
+import 'package:foodsafe_manila/screens/reporting/report_form_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'home_screen.dart';
-import '../screens/map_screen.dart';
-import '../services/api_client.dart';
-import '../services/session.dart';
-import '../widgets/snackbar_widgets.dart';
-import 'account_information_screen.dart';
-import 'change_password_screen.dart';
+import 'package:foodsafe_manila/screens/dashboard/home_screen.dart';
+import 'package:foodsafe_manila/screens/map/map_screen.dart';
+import 'package:foodsafe_manila/services/api_client.dart';
+import 'package:foodsafe_manila/services/session.dart';
+import 'package:foodsafe_manila/widgets/snackbar_widgets.dart';
+import 'package:foodsafe_manila/screens/account/account_information_screen.dart';
+import 'package:foodsafe_manila/screens/auth/change_password_screen.dart';
 import 'package:flutter/foundation.dart';
-import '../screens/debug_location_screen.dart';
-import 'insights_screen.dart';
+import 'package:foodsafe_manila/screens/debug/debug_location_screen.dart';
+import 'package:foodsafe_manila/screens/dashboard/insights_screen.dart';
 
-class BottomNavBarScreen extends StatefulWidget {
-  const BottomNavBarScreen({super.key});
+class DashboardLayout extends StatefulWidget {
+  const DashboardLayout({super.key});
 
   @override
-  State<BottomNavBarScreen> createState() => _BottomNavBarScreenState();
+  State<DashboardLayout> createState() => _DashboardLayoutState();
 }
 
-class _BottomNavBarScreenState extends State<BottomNavBarScreen>
+class _DashboardLayoutState extends State<DashboardLayout>
     with WidgetsBindingObserver {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final GlobalKey<HomeScreenState> _homeKey = GlobalKey<HomeScreenState>();
@@ -185,8 +185,11 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
                 ),
               ],
               Spacer(),
-              TextButton.icon(onPressed: () => Navigator.pushNamed(context, '/policies'),
-                icon: const Icon(Icons.privacy_tip_outlined), label: const Text('Privacy and Terms')),
+              TextButton.icon(
+                onPressed: () => Navigator.pushNamed(context, '/policies'),
+                icon: const Icon(Icons.privacy_tip_outlined),
+                label: const Text('Privacy and Terms'),
+              ),
               Container(
                 color: Colors.white,
                 padding: const EdgeInsets.symmetric(

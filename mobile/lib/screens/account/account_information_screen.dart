@@ -5,17 +5,17 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-import '../services/api_client.dart';
-import '../services/api_service.dart';
-import '../services/session.dart';
-import '../services/phone_change_flow.dart';
-import '../utils/philippine_mobile_number.dart';
-import '../widgets/app_loading.dart';
-import '../widgets/philippine_mobile_prefix.dart';
-import '../widgets/snackbar_widgets.dart';
-import 'policy_screen.dart';
-import 'recovery_email_verification_screen.dart';
-import '../utils/recovery_email.dart';
+import 'package:foodsafe_manila/services/api_client.dart';
+import 'package:foodsafe_manila/services/api_service.dart';
+import 'package:foodsafe_manila/services/session.dart';
+import 'package:foodsafe_manila/services/phone_change_flow.dart';
+import 'package:foodsafe_manila/utils/philippine_mobile_number.dart';
+import 'package:foodsafe_manila/widgets/app_loading.dart';
+import 'package:foodsafe_manila/widgets/philippine_mobile_prefix.dart';
+import 'package:foodsafe_manila/widgets/snackbar_widgets.dart';
+import 'package:foodsafe_manila/screens/legal/policy_screen.dart';
+import 'package:foodsafe_manila/screens/account/recovery_email_verification_screen.dart';
+import 'package:foodsafe_manila/utils/recovery_email.dart';
 
 class AccountInformationScreen extends StatefulWidget {
   const AccountInformationScreen({super.key});

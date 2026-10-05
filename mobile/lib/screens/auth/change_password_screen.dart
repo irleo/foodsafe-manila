@@ -1,3 +1,5 @@
+import 'package:foodsafe_manila/widgets/auth_form_field.dart';
+import 'package:foodsafe_manila/layout/auth_screen_layout.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -6,12 +8,12 @@ import 'package:foodsafe_manila/services/session.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-import '../services/api_service.dart';
-import '../services/api_client.dart';
-import '../utils/philippine_mobile_number.dart';
-import '../widgets/app_loading.dart';
-import '../widgets/philippine_mobile_prefix.dart';
-import '../widgets/snackbar_widgets.dart';
+import 'package:foodsafe_manila/services/api_service.dart';
+import 'package:foodsafe_manila/services/api_client.dart';
+import 'package:foodsafe_manila/utils/philippine_mobile_number.dart';
+import 'package:foodsafe_manila/widgets/app_loading.dart';
+import 'package:foodsafe_manila/widgets/philippine_mobile_prefix.dart';
+import 'package:foodsafe_manila/widgets/snackbar_widgets.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
   final bool isForgot;
@@ -444,92 +446,31 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: PopScope(
-        canPop: _currentStep != 2,
-        onPopInvokedWithResult: (didPop, result) async {
-          if (didPop) return;
-
+    return PopScope(
+      canPop: _currentStep != 2,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (!didPop && _currentStep == 2) {
+          await _confirmCancelPasswordChange();
+        }
+      },
+      child: AuthScreenLayout(
+        onBack: () async {
           if (_currentStep == 2) {
             await _confirmCancelPasswordChange();
+          } else if (mounted) {
+            Navigator.maybePop(context);
           }
         },
-        child: SafeArea(
-          top: true,
-          child: Container(
-            decoration: const BoxDecoration(color: Color(0xFF134c8c)),
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-                    child: Column(
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: InkWell(
-                            onTap: () async {
-                              if (_currentStep == 2) {
-                                await _confirmCancelPasswordChange();
-                                return;
-                              }
-
-                              Navigator.pop(context);
-                            },
-                            child: Row(
-                              children: [
-                                Icon(
-                                  LucideIcons.chevronLeft,
-                                  color: Colors.white70,
-                                ),
-                                SizedBox(width: 4),
-                                Text(
-                                  "Back",
-                                  style: GoogleFonts.inter(
-                                    color: Colors.white70,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Image.asset('assets/foodsafe_logo.png'),
-                      ],
-                    ),
-                  ),
-                  // White sheet (but still in SAME scroll)
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(24),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Form(
-                          key: _formKey,
-                          autovalidateMode: AutovalidateMode.onUserInteraction,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 20),
-                              _stepProgressBar(),
-                              const SizedBox(height: 20),
-                              _buildStepContent(),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+        child: Form(
+          key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _stepProgressBar(),
+              const SizedBox(height: 20),
+              _buildStepContent(),
+            ],
           ),
         ),
       ),
@@ -598,7 +539,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         const SizedBox(height: 14),
 
         if (_useEmail)
-          _LabeledField(
+          AuthFormField(
             label: "Email Address",
             child: TextFormField(
               key: const ValueKey('email-field'),
@@ -630,7 +571,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
             ),
           )
         else
-          _LabeledField(
+          AuthFormField(
             label: "Phone Number",
             child: TextFormField(
               key: const ValueKey('phone-field'),
@@ -881,7 +822,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           "Set new password",
           "Must be at least 8 characters with uppercase, lowercase, numbers, and symbols",
         ),
-        _LabeledField(
+        AuthFormField(
           label: "New Password",
           child: TextFormField(
             controller: _newPassCtrl,
@@ -914,7 +855,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
         const SizedBox(height: 14),
 
-        _LabeledField(
+        AuthFormField(
           label: "Confirm Password",
           child: TextFormField(
             controller: _confirmPassCtrl,
@@ -1019,60 +960,4 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       ],
     ),
   );
-}
-
-class _LabeledField extends StatelessWidget {
-  final String label;
-  final Widget child;
-
-  const _LabeledField({required this.label, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF111827),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Theme(
-          data: Theme.of(context).copyWith(
-            inputDecorationTheme: InputDecorationTheme(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 14,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(
-                  color: Color(0xFF134c8c),
-                  width: 2,
-                ),
-              ),
-              errorMaxLines: 2,
-              errorStyle: GoogleFonts.inter(
-                fontSize: 11,
-                color: const Color(0xFFDC2626),
-              ),
-            ),
-          ),
-          child: child,
-        ),
-      ],
-    );
-  }
 }

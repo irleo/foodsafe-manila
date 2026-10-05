@@ -1,9 +1,9 @@
 import 'package:geocoding/geocoding.dart';
 import 'package:location/location.dart' as loc;
 
-import 'debug_location_service.dart';
-import 'manila_geo_service.dart';
-import 'policy_service.dart';
+import 'package:foodsafe_manila/services/debug_location_service.dart';
+import 'package:foodsafe_manila/services/manila_geo_service.dart';
+import 'package:foodsafe_manila/services/policy_service.dart';
 
 class LocationService {
   static final loc.Location _location = loc.Location();

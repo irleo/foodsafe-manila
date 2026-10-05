@@ -1,3 +1,4 @@
+import 'package:foodsafe_manila/widgets/auth_form_field.dart';
 import 'dart:async';
 
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -6,14 +7,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:foodsafe_manila/widgets/snackbar_widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../services/api_service.dart';
-import '../services/api_client.dart';
-import '../utils/philippine_mobile_number.dart';
-import '../widgets/app_loading.dart';
-import '../widgets/philippine_mobile_prefix.dart';
-import '../services/policy_service.dart';
-import 'policy_screen.dart';
-import '../widgets/auth_screen_layout.dart';
+import 'package:foodsafe_manila/services/api_service.dart';
+import 'package:foodsafe_manila/services/api_client.dart';
+import 'package:foodsafe_manila/utils/philippine_mobile_number.dart';
+import 'package:foodsafe_manila/widgets/app_loading.dart';
+import 'package:foodsafe_manila/widgets/philippine_mobile_prefix.dart';
+import 'package:foodsafe_manila/services/policy_service.dart';
+import 'package:foodsafe_manila/screens/legal/policy_screen.dart';
+import 'package:foodsafe_manila/layout/auth_screen_layout.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -496,7 +497,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           "Create your account",
           "Fill up your personal information",
         ),
-        _LabeledField(
+        AuthFormField(
           label: "Name",
           child: TextFormField(
             controller: _usernameCtrl,
@@ -516,7 +517,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         ),
         const SizedBox(height: 14),
 
-        _LabeledField(
+        AuthFormField(
           label: "Phone Number",
           child: TextFormField(
             controller: _phoneCtrl,
@@ -603,7 +604,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           "Set your password",
           'Must be at least 8 characters with uppercase, lowercase, numbers, and symbols',
         ),
-        _LabeledField(
+        AuthFormField(
           label: "Password",
           child: TextFormField(
             controller: _passCtrl,
@@ -636,7 +637,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
         const SizedBox(height: 14),
 
-        _LabeledField(
+        AuthFormField(
           label: "Confirm Password",
           child: TextFormField(
             controller: _confirmPassCtrl,
@@ -854,63 +855,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     style: GoogleFonts.inter(fontWeight: FontWeight.w800),
                   ),
           ),
-        ),
-      ],
-    );
-  }
-}
-
-/// SHARED INPUT STYLE (SAME AS LOGIN)
-class _LabeledField extends StatelessWidget {
-  final String label;
-  final Widget child;
-
-  const _LabeledField({required this.label, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: const Color(0xFF111827),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Theme(
-          data: Theme.of(context).copyWith(
-            inputDecorationTheme: InputDecorationTheme(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 14,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(
-                  color: Color(0xFF134c8c),
-                  width: 2,
-                ),
-              ),
-              errorMaxLines: 2,
-              errorStyle: GoogleFonts.inter(
-                fontSize: 11,
-                color: const Color(0xFFDC2626),
-              ),
-            ),
-          ),
-          child: child,
         ),
       ],
     );

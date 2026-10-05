@@ -3,9 +3,9 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../config/api_config.dart';
-import 'session.dart';
-import 'credential_store.dart';
+import 'package:foodsafe_manila/config/api_config.dart';
+import 'package:foodsafe_manila/services/session.dart';
+import 'package:foodsafe_manila/services/credential_store.dart';
 
 class ApiException implements Exception {
   final int statusCode;

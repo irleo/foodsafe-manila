@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../services/api_service.dart';
-import '../services/session.dart';
-import '../utils/format_helpers.dart';
-import '../widgets/app_loading.dart';
+import 'package:foodsafe_manila/services/api_service.dart';
+import 'package:foodsafe_manila/services/session.dart';
+import 'package:foodsafe_manila/utils/format_helpers.dart';
+import 'package:foodsafe_manila/widgets/app_loading.dart';
 
 class ReportHistoryScreen extends StatefulWidget {
   const ReportHistoryScreen({super.key});

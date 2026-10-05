@@ -1,8 +1,9 @@
+import 'package:foodsafe_manila/layout/refreshable_screen_layout.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../services/api_service.dart';
+import 'package:foodsafe_manila/services/api_service.dart';
 
 class InsightsScreen extends StatefulWidget {
   final VoidCallback onProfilePressed;
@@ -552,42 +553,36 @@ class InsightsScreenState extends State<InsightsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: refreshData,
-          color: const Color(0xFF2563EB),
-          child: SingleChildScrollView(
+    return RefreshableScreenLayout(
+      onRefresh: refreshData,
+      refreshColor: const Color(0xFF2563EB),
+      safeAreaBottom: true,
+      child: Column(
+        children: [
+          // Header
+          _buildHeader(DateTime.now()),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 30),
             child: Column(
               children: [
-                // Header
-                _buildHeader(DateTime.now()),
+                _buildOverviewCard(title: 'Summary'),
 
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 30),
-                  child: Column(
-                    children: [
-                      _buildOverviewCard(title: 'Summary'),
+                const SizedBox(height: 24),
 
-                      const SizedBox(height: 24),
+                _buildForecast(),
 
-                      _buildForecast(),
+                const SizedBox(height: 24),
 
-                      const SizedBox(height: 24),
+                _buildDistrictSection(),
 
-                      _buildDistrictSection(),
+                const SizedBox(height: 24),
 
-                      const SizedBox(height: 24),
-
-                      _buildDiseaseSection(),
-                    ],
-                  ),
-                ),
+                _buildDiseaseSection(),
               ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }
