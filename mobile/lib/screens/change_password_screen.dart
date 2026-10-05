@@ -118,7 +118,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   Future<bool> _isIdentifierLinkedToAccount() async {
     if (widget.isForgot) {
       return _useEmail
-          ? ApiService.checkEmailExists(_emailCtrl.text.trim())
+          ? true
           : ApiService.checkPhoneExists(
               toLocalPhilippineMobileNumber(_phoneCtrl.text),
             );
@@ -134,6 +134,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           .trim()
           .toLowerCase();
       return accountEmail != null &&
+          currentUser['emailVerified'] == true &&
           accountEmail.isNotEmpty &&
           enteredEmail == accountEmail;
     }
@@ -222,7 +223,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           style: GoogleFonts.inter(fontWeight: FontWeight.w600),
         ),
         content: Text(
-          "Your password change will be cancelled. The verification code will no longer be used. Are you sure?",
+          "Leave without changing your password? Unused verification codes expire automatically.",
           style: GoogleFonts.inter(),
         ),
         actions: [
@@ -231,7 +232,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
               Expanded(
                 child: OutlinedButton(
                   onPressed: () {
-                    // Keep changing password
                     Navigator.pop(context, true);
                   },
                   style: OutlinedButton.styleFrom(
@@ -242,7 +242,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   child: Text(
-                    "Yes",
+                    "Leave",
                     style: GoogleFonts.inter(
                       fontWeight: FontWeight.w500,
                       color: const Color(0xFF134c8c),
@@ -254,7 +254,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
               Expanded(
                 child: ElevatedButton(
                   onPressed: () {
-                    // Cancel password change
                     Navigator.pop(context, false);
                   },
                   style: ElevatedButton.styleFrom(
@@ -265,7 +264,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   child: Text(
-                    "No",
+                    "Stay",
                     style: GoogleFonts.inter(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
@@ -281,14 +280,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
     if (!mounted || confirm != true) return;
 
-    if (_useEmail) {
-      await ApiService.cancelEmailOtp(
-        email: _emailCtrl.text.trim(),
-        purpose: 'password_reset',
-      );
-    }
-
-    // Dispose/invalidate the current OTP flow locally.
+    // Clear only local input; the server challenge and cooldown remain intact.
     _resendTimer?.cancel();
 
     for (final controller in otpControllers) {
@@ -356,7 +348,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
           SnackbarWidgets.info(
             context,
-            "We've sent a verification code to your ${_useEmail ? 'email' : 'phone number'}",
+            _useEmail
+                ? 'If this address is eligible, a recovery code will be sent.'
+                : "We've sent a verification code to your phone number",
           );
         }
 
@@ -819,7 +813,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
         const SizedBox(height: 16),
 
-        Row(
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text('Did not receive code?', style: GoogleFonts.inter()),
             TextButton(

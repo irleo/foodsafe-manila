@@ -10,6 +10,7 @@ import '../utils/philippine_mobile_number.dart';
 import '../widgets/app_loading.dart';
 import '../widgets/philippine_mobile_prefix.dart';
 import '../screens/report_form_screen.dart';
+import 'policy_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -337,6 +338,8 @@ class _LogInScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ),
+                        const SizedBox(height: 12),
+                        const Center(child: PolicyLinks(compact: true)),
                       ],
                     ),
                   ),

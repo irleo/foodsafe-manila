@@ -8,10 +8,14 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../services/api_client.dart';
 import '../services/api_service.dart';
 import '../services/session.dart';
+import '../services/phone_change_flow.dart';
 import '../utils/philippine_mobile_number.dart';
 import '../widgets/app_loading.dart';
 import '../widgets/philippine_mobile_prefix.dart';
 import '../widgets/snackbar_widgets.dart';
+import 'policy_screen.dart';
+import 'recovery_email_verification_screen.dart';
+import '../utils/recovery_email.dart';
 
 class AccountInformationScreen extends StatefulWidget {
   const AccountInformationScreen({super.key});
@@ -34,6 +38,32 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
   bool _updated = false;
   bool _isEditing = false;
 
+  Future<void> _verifyRecoveryEmail() async {
+    final email = normalizeRecoveryEmail(
+      Session.currentUser?['email'] as String?,
+    );
+    if (email.isEmpty) return;
+    try {
+      final verified = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => RecoveryEmailVerificationScreen(email: email),
+        ),
+      );
+      if (mounted && verified == true) {
+        setState(
+          () =>
+              _emailCtrl.text = Session.currentUser?['email'] as String? ?? '',
+        );
+        SnackbarWidgets.success(context, 'Recovery email verified');
+      }
+    } catch (error) {
+      if (mounted) {
+        SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+      }
+    }
+  }
+
   // OTP verification related
   bool _isOtpVerificationMode = false;
   String? _pendingPhoneNumber;
@@ -43,6 +73,12 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
   late List<FocusNode> otpFocusNodes;
   Timer? _resendTimer;
   int _resendSeconds = 0;
+  PhoneChangeFlow? _phoneFlow;
+  DateTime? _resendAt;
+  DateTime? _expiresAt;
+  bool _flowExpired = false;
+  String? _otpError;
+  int _flowGeneration = 0;
 
   @override
   void initState() {
@@ -98,19 +134,27 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
     _otpCtrl.text = otpControllers.map((c) => c.text).join();
   }
 
-  void _startResendTimer() {
+  void _startResendTimer(int seconds) {
     _resendTimer?.cancel();
-    setState(() => _resendSeconds = 60);
+    _resendAt = DateTime.now().add(Duration(seconds: seconds));
+    setState(() => _resendSeconds = seconds);
     _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
       }
-      if (_resendSeconds <= 1) {
+      final now = DateTime.now();
+      final remaining = (_resendAt!.difference(now).inMilliseconds / 1000)
+          .ceil();
+      setState(() {
+        _resendSeconds = remaining > 0 ? remaining : 0;
+        if (_expiresAt != null && !now.isBefore(_expiresAt!)) {
+          _flowExpired = true;
+          _otpError = 'This code has expired. Start verification again.';
+        }
+      });
+      if (_resendSeconds == 0 && (_expiresAt == null || _flowExpired)) {
         timer.cancel();
-        setState(() => _resendSeconds = 0);
-      } else {
-        setState(() => _resendSeconds--);
       }
     });
   }
@@ -123,12 +167,19 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
   }
 
   void _cancelPhoneChange() {
+    if (_loading) return;
+    _flowGeneration++;
     _resendTimer?.cancel();
     _clearOtpFields();
     setState(() {
       _isOtpVerificationMode = false;
       _pendingPhoneNumber = null;
       _resendSeconds = 0;
+      _phoneFlow = null;
+      _expiresAt = null;
+      _otpError = null;
+      _flowExpired = false;
+      _phoneCtrl.text = _originalPhoneNumber ?? '';
     });
   }
 
@@ -137,18 +188,27 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
     bool beginVerification = false,
   }) async {
     final phone = _pendingPhoneNumber;
-    if (phone == null) return;
+    if (phone == null || _loading || _resendSeconds > 0) return;
+    final version = ++_flowGeneration;
 
     setState(() => _loading = true);
     try {
-      await ApiService.sendPhoneChangeOtp(phone: phone);
-      if (!mounted) return;
+      if (!await ensureAccountPolicies(context) || !mounted) return;
+      final flow = await ApiService.sendPhoneChangeOtp(
+        phone: phone,
+        flowId: resend && !_flowExpired ? _phoneFlow?.id : null,
+      );
+      if (!mounted || version != _flowGeneration) return;
+      _phoneFlow = flow;
+      _expiresAt = DateTime.now().add(Duration(seconds: flow.expiresInSeconds));
+      _flowExpired = false;
+      _otpError = null;
 
       if (beginVerification) {
         setState(() => _isOtpVerificationMode = true);
       }
       if (resend) _clearOtpFields();
-      _startResendTimer();
+      _startResendTimer(flow.retryAfterSeconds);
       SnackbarWidgets.info(
         context,
         "We've sent a verification code to your phone number",
@@ -156,6 +216,13 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
       FocusScope.of(context).requestFocus(otpFocusNodes[0]);
     } catch (error) {
       if (mounted) {
+        if (error is ApiException && error.retryAfterSeconds != null) {
+          _startResendTimer(error.retryAfterSeconds!);
+        }
+        if (error is ApiException && error.code == 'OTP_FLOW_EXPIRED') {
+          _flowExpired = true;
+        }
+        if (!beginVerification) _otpError = ApiClient.safeErrorMessage(error);
         if (beginVerification) {
           setState(() => _pendingPhoneNumber = null);
         }
@@ -175,9 +242,9 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
 
   Future<void> _verifyPhoneChangeOtp() async {
     final phone = _pendingPhoneNumber;
-    if (phone == null) return;
+    if (phone == null || _loading || _phoneFlow == null || _flowExpired) return;
     if (_otpCtrl.text.length != 6) {
-      SnackbarWidgets.error(context, "Enter the 6-digit verification code");
+      setState(() => _otpError = 'Enter the 6-digit verification code');
       return;
     }
 
@@ -189,16 +256,14 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
 
     setState(() => _loading = true);
     try {
-      final verificationToken = await ApiService.verifyPhoneChangeOtp(
-        phone: phone,
-        otp: _otpCtrl.text,
-      );
+      if (!await ensureAccountPolicies(context) || !mounted) return;
       final updatedUser = await ApiService.updateUser(
         id: userId,
         username: _nameCtrl.text.trim(),
         phone: phone,
         email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
-        verificationToken: verificationToken,
+        flowId: _phoneFlow!.id,
+        otp: _otpCtrl.text,
       );
 
       if (!mounted) return;
@@ -206,9 +271,6 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
         SnackbarWidgets.error(context, "Update failed");
         return;
       }
-
-      await Session.saveCurrentUser(updatedUser);
-      if (!mounted) return;
 
       _resendTimer?.cancel();
       _clearOtpFields();
@@ -221,13 +283,24 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
         _isOtpVerificationMode = false;
         _pendingPhoneNumber = null;
         _resendSeconds = 0;
+        _phoneFlow = null;
+        _expiresAt = null;
+        _otpError = null;
+        _flowExpired = false;
         _isEditing = false;
         _updated = true;
       });
       SnackbarWidgets.success(context, "Profile updated successfully");
     } catch (error) {
       if (mounted) {
-        SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+        setState(() {
+          _otpError = ApiClient.safeErrorMessage(error);
+          if (error is ApiException &&
+              (error.code == 'OTP_FLOW_EXPIRED' ||
+                  error.code == 'OTP_ATTEMPTS_EXCEEDED')) {
+            _flowExpired = true;
+          }
+        });
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -245,67 +318,75 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
         ),
         const SizedBox(height: 10),
         Text(
-          "Enter the 6-digit code sent to your phone number.",
+          'Enter the 6-digit code sent to ${_phoneFlow?.maskedPhone ?? 'your new phone'}.',
           style: GoogleFonts.inter(fontSize: 14),
         ),
         const SizedBox(height: 30),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: List.generate(6, (index) {
-            return SizedBox(
-              height: 50,
-              width: 48,
-              child: KeyboardListener(
-                focusNode: FocusNode(),
-                onKeyEvent: (event) => _handleOtpKey(index, event),
-                child: TextFormField(
-                  controller: otpControllers[index],
-                  focusNode: otpFocusNodes[index],
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: SizedBox(
+                  height: 50,
+                  child: KeyboardListener(
+                    focusNode: FocusNode(),
+                    onKeyEvent: (event) => _handleOtpKey(index, event),
+                    child: TextFormField(
+                      controller: otpControllers[index],
+                      focusNode: otpFocusNodes[index],
 
-                  keyboardType: TextInputType.number,
-                  textInputAction: TextInputAction.next,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.next,
 
-                  textAlign: TextAlign.center,
-                  textAlignVertical: TextAlignVertical.center,
+                      textAlign: TextAlign.center,
+                      textAlignVertical: TextAlignVertical.center,
 
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w800),
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w800),
 
-                  inputFormatters: [
-                    LengthLimitingTextInputFormatter(1),
-                    FilteringTextInputFormatter.digitsOnly,
-                  ],
+                      inputFormatters: [
+                        LengthLimitingTextInputFormatter(1),
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
 
-                  onChanged: (value) {
-                    _updateOtp();
+                      onChanged: (value) {
+                        _updateOtp();
 
-                    if (value.isNotEmpty && index < 5) {
-                      FocusScope.of(
-                        context,
-                      ).requestFocus(otpFocusNodes[index + 1]);
-                    }
-                  },
+                        if (value.isNotEmpty && index < 5) {
+                          FocusScope.of(
+                            context,
+                          ).requestFocus(otpFocusNodes[index + 1]);
+                        }
+                      },
 
-                  decoration: InputDecoration(
-                    contentPadding: EdgeInsets.zero,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF134c8c),
-                        width: 2,
+                      decoration: InputDecoration(
+                        contentPadding: EdgeInsets.zero,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFD1D5DB),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFD1D5DB),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF134c8c),
+                            width: 2,
+                          ),
+                        ),
+                        errorMaxLines: 2,
+                        errorStyle: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: const Color(0xFFDC2626),
+                        ),
                       ),
-                    ),
-                    errorMaxLines: 2,
-                    errorStyle: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: const Color(0xFFDC2626),
                     ),
                   ),
                 ),
@@ -314,8 +395,16 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
           }),
         ),
         const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.start,
+        if (_otpError != null)
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              _otpError!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text('Did not receive code?', style: GoogleFonts.inter()),
             TextButton(
@@ -328,6 +417,8 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
               child: Text(
                 _resendSeconds > 0
                     ? "Resend in $_resendSeconds s"
+                    : _flowExpired
+                    ? 'Start again'
                     : "Resend Code",
                 style: GoogleFonts.inter(
                   fontWeight: FontWeight.w600,
@@ -344,7 +435,9 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
           children: [
             Expanded(
               child: ElevatedButton(
-                onPressed: _loading ? null : _verifyPhoneChangeOtp,
+                onPressed: _loading || _flowExpired
+                    ? null
+                    : _verifyPhoneChangeOtp,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF134c8c),
                   foregroundColor: Colors.white,
@@ -400,6 +493,7 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
 
     try {
       if (user == null) return;
+      if (!await ensureAccountPolicies(context) || !mounted) return;
 
       final userId = (user!['_id'] ?? user!['id'])?.toString();
       if (userId == null || userId.isEmpty) return;
@@ -434,6 +528,10 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
       } else {
         SnackbarWidgets.error(context, "Update failed");
       }
+    } catch (error) {
+      if (mounted) {
+        SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -442,12 +540,14 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      bottomNavigationBar: const SafeArea(top: false, child: PolicyLinks()),
       backgroundColor: const Color(0xFFF9FAFB), // bg-gray-50
       body: SafeArea(
         top: true,
         child: PopScope(
           canPop: (_isEditing || _isOtpVerificationMode) ? false : true,
           onPopInvokedWithResult: (didPop, result) async {
+            if (_loading) return;
             if (didPop) {
               return;
             }
@@ -618,7 +718,9 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     InkWell(
-                      onTap: _isOtpVerificationMode
+                      onTap: _loading
+                          ? null
+                          : _isOtpVerificationMode
                           ? () async {
                               final confirm = await showDialog<bool>(
                                 context: context,
@@ -939,19 +1041,8 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                       child: TextFormField(
                                         controller: _emailCtrl,
                                         enabled: _isEditing,
-                                        validator: (v) {
-                                          final value = (v ?? "").trim();
-                                          if (value.isEmpty) {
-                                            return null; // optional
-                                          }
-                                          final emailRegex = RegExp(
-                                            r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                                          );
-                                          if (!emailRegex.hasMatch(value)) {
-                                            return "Enter a valid email address.";
-                                          }
-                                          return null;
-                                        },
+                                        validator: (value) =>
+                                            validateRecoveryEmail(value),
                                         keyboardType:
                                             TextInputType.emailAddress,
                                         style: GoogleFonts.inter(),
@@ -979,6 +1070,29 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                       ),
                                     ),
 
+                                    if (!_isEditing &&
+                                        normalizeRecoveryEmail(
+                                          Session.currentUser?['email']
+                                              as String?,
+                                        ).isNotEmpty) ...[
+                                      Text(
+                                        Session.currentUser?['emailVerified'] ==
+                                                true
+                                            ? 'Verified recovery email'
+                                            : 'Unverified: email recovery is unavailable',
+                                      ),
+                                      if (Session
+                                              .currentUser?['emailVerified'] !=
+                                          true)
+                                        TextButton(
+                                          onPressed: _loading
+                                              ? null
+                                              : _verifyRecoveryEmail,
+                                          child: const Text(
+                                            'Verify recovery email',
+                                          ),
+                                        ),
+                                    ],
                                     const SizedBox(height: 24),
 
                                     SizedBox(

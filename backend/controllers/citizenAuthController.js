@@ -11,9 +11,15 @@ import { consumeMobileOtpVerification } from "../services/mobileOtpService.js";
 import { consumeEmailOtpVerification } from "../services/mobileEmailOtpService.js";
 import { logRequestError } from "../utils/serverLogger.js";
 import { isTokenVersionCurrent } from "../utils/tokenVersion.js";
+import { validatePolicyChoices } from "../policies/mobilePolicies.js";
+import { createMobileUserWithPolicies } from "../services/mobilePolicyService.js";
+import { EMAIL_UNAVAILABLE, isDuplicateRecoveryEmail, isValidRecoveryEmail, normalizeRecoveryEmail } from "../utils/recoveryEmail.js";
+import { findVerifiedRecoveryAccount, recoveryEmailIndexReady, recoveryEmailTaken, requireRecoveryEmailIndex } from "../services/recoveryEmailService.js";
 
 // POST /api/auth/register
 export const registerCitizen = async (req, res) => {
+  const policyFailure = validatePolicyChoices(req.body?.policyAcceptance);
+  if (policyFailure) return res.status(policyFailure.status).json(policyFailure);
   const { username, phone, password, email, verificationToken } = req.body;
 
   if (!username || !phone || !password || !verificationToken) {
@@ -25,12 +31,21 @@ export const registerCitizen = async (req, res) => {
     return res.status(400).json({ message: passwordValidation.message });
   }
 
+  if (!isValidRecoveryEmail(email)) {
+    return res.status(400).json({ message: "Enter a valid recovery email address." });
+  }
+  const normalizedEmail = normalizeRecoveryEmail(email);
+
   try {
     const normalizedPhone = normalizePhone(phone);
     const existing = await MobileUser.findOne({ phoneNumber: normalizedPhone });
 
     if (existing) {
       return res.status(409).json({ message: "Phone number already registered" });
+    }
+    if (normalizedEmail) {
+      if (await recoveryEmailTaken(normalizedEmail)) return res.status(409).json(EMAIL_UNAVAILABLE);
+      await requireRecoveryEmailIndex();
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -46,15 +61,19 @@ export const registerCitizen = async (req, res) => {
       });
     }
 
-    const mobileUser = await MobileUser.create({
+    const mobileUser = await createMobileUserWithPolicies({
       username: String(username).trim(),
       phoneNumber: normalizedPhone,
       password: hashedPassword,
-      email: email ? String(email).trim() : "",
+      email: normalizedEmail,
     });
 
     return res.status(201).json(sanitizeMobileUser(mobileUser));
   } catch (error) {
+    if (isDuplicateRecoveryEmail(error)) return res.status(409).json(EMAIL_UNAVAILABLE);
+    if (error?.code === "RECOVERY_EMAIL_SETUP_REQUIRED") {
+      return res.status(503).json({ code: error.code, message: error.message });
+    }
     if (error?.code === 11000) {
       return res.status(409).json({ message: "Phone number already registered" });
     }
@@ -119,19 +138,8 @@ export const checkPhoneExists = async (req, res) => {
 
 // GET /api/auth/user/email-exists?email=
 export const checkEmailExists = async (req, res) => {
-  const email = String(req.query.email || "").trim().toLowerCase();
-
-  if (!email) {
-    return res.status(400).json({ message: "Email query is required" });
-  }
-
-  try {
-    const exists = await MobileUser.exists({ email });
-    return res.json({ exists: Boolean(exists) });
-  } catch (error) {
-    logRequestError(error, req, "EMAIL_LOOKUP_ERROR");
-    return res.status(500).json({ message: "Failed to check email address" });
-  }
+  // Compatibility endpoint for older apps: never disclose account existence.
+  return res.json({ exists: true, message: "If eligible, a recovery code can be sent." });
 };
 
 // POST /api/auth/reset-password
@@ -149,32 +157,29 @@ export const resetCitizenPassword = async (req, res) => {
 
   try {
     if (email) {
-      const normalizedEmail = String(email).trim().toLowerCase();
-
-      const mobileUser = await MobileUser.findOne({
-        email: normalizedEmail,
-      });
-
-      if (!mobileUser) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      // This must call an email verification-token consumer.
+      const failure = { message: "Email verification is invalid or expired" };
+      if (!isValidRecoveryEmail(email, true)) return res.status(403).json(failure);
+      const normalizedEmail = normalizeRecoveryEmail(email);
+      const mobileUser = await findVerifiedRecoveryAccount(normalizedEmail);
+      if (!mobileUser) return res.status(403).json(failure);
+      if (!await recoveryEmailIndexReady()) return res.status(403).json(failure);
       const verified = await consumeEmailOtpVerification({
         email: normalizedEmail,
         purpose: "password_reset",
         verificationToken,
+        userId: mobileUser._id,
+        emailVersion: mobileUser.emailVersion || 0,
       });
 
       if (!verified) {
-        return res.status(403).json({
-          message: "Email verification is invalid or expired",
-        });
+        return res.status(403).json(failure);
       }
-
-      mobileUser.password = await bcrypt.hash(newPassword, 10);
-      mobileUser.tokenVersion = (mobileUser.tokenVersion || 0) + 1;
-      await mobileUser.save();
+      const changed = await MobileUser.findOneAndUpdate(
+        { _id: mobileUser._id, email: normalizedEmail, emailVerified: true, emailVersion: mobileUser.emailVersion || 0 },
+        { $set: { password: await bcrypt.hash(newPassword, 10) }, $inc: { tokenVersion: 1 } },
+        { new: true, runValidators: true },
+      );
+      if (!changed) return res.status(403).json(failure);
 
       return res.json({ success: true });
     }

@@ -21,8 +21,11 @@ export function sanitizeMobileUser(mobileUser) {
     username: obj.username,
     phoneNumber: obj.phoneNumber,
     email: obj.email || "",
+    emailVerified: obj.emailVerified === true,
+    emailVerifiedAt: obj.emailVerifiedAt || null,
     role: "citizen",
     accountType: "citizen",
+    policyAcceptance: obj.policyAcceptance || null,
   };
 }
 

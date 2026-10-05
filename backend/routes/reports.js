@@ -1,4 +1,5 @@
 import express from "express";
+import { requireCurrentMobilePolicies } from "../controllers/mobilePolicyController.js";
 import {
   requireCitizenAccount,
   verifyToken,
@@ -24,7 +25,7 @@ const reportLogRoles = verifyRoles("admin", "cesu", "surveillance_team");
 
 router.get("/", verifyToken, reportLogRoles, getReports);
 router.get("/:id/audit", verifyToken, reportLogRoles, getReportAudit);
-router.post("/", verifyToken, requireCitizenAccount, createReport);
+router.post("/", verifyToken, requireCitizenAccount, requireCurrentMobilePolicies, createReport);
 router.post("/:id/investigation", verifyToken, reportLogRoles, completeInvestigation);
 router.post("/:id/mark-suspected", verifyToken, reportLogRoles, markReportSuspected);
 router.post("/:id/rule-out", verifyToken, reportLogRoles, ruleOutReport);

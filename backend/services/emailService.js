@@ -1,7 +1,7 @@
 const BREVO_SEND_URL = "https://api.brevo.com/v3/smtp/email";
 const DEFAULT_BREVO_TIMEOUT_MS = 5_000;
 
-function brevoTimeoutMs() {
+export function brevoTimeoutMs() {
   const configured = Number(process.env.BREVO_TIMEOUT_MS);
   return Number.isInteger(configured) && configured > 0
     ? configured

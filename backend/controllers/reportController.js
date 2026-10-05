@@ -2,6 +2,7 @@ import Report from "../models/Report.js";
 import Dataset from "../models/Dataset.js";
 import WebUser from "../models/WebUser.js";
 import mongoose from "mongoose";
+import { mobilePolicies, reportingProcessing, validateReportingChoices } from "../policies/mobilePolicies.js";
 import { manilaDistrictCoords } from "../constants/manilaDistrictCoords.js";
 import {
   createNotification,
@@ -100,6 +101,8 @@ export const createReport = async (req, res) => {
     if (req.user.accountType !== "citizen" || req.user.role !== "citizen") {
       return res.status(403).json({ message: "Citizen account required." });
     }
+    const disclosureFailure = validateReportingChoices(req.body?.reportDisclosure);
+    if (disclosureFailure) return res.status(disclosureFailure.status).json(disclosureFailure);
 
     const {
       datasetId,
@@ -273,6 +276,15 @@ export const createReport = async (req, res) => {
           ? String(exposureDescription).trim()
           : null,
       symptoms: normalizedSymptoms,
+      policyDisclosure: {
+        termsVersion: req.mobilePolicyAcceptance?.terms?.version || mobilePolicies.terms.version,
+        privacyVersion: req.mobilePolicyAcceptance?.privacy?.version || mobilePolicies.privacy.version,
+        reportingVersion: mobilePolicies.reporting.version,
+        locationVersion: mobilePolicies.location.version,
+        acknowledgedAt: now,
+        lawfulBasis: reportingProcessing.lawfulBasis,
+        healthConsent: reportingProcessing.consentRequired ? true : null,
+      },
       caseCount: clampedCaseCount,
       foodSource: foodSource ? String(foodSource).trim() : null,
       reportedAt: parsedReportedAt,

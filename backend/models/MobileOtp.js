@@ -6,8 +6,11 @@ const mobileOtpSchema = new mongoose.Schema(
     purpose: {
       type: String,
       required: true,
-      enum: ["registration", "password_reset"],
+      enum: ["registration", "password_reset", "phone_change"],
     },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "MobileUser" },
+    flowId: { type: String },
+    originalPhone: { type: String },
     otpHash: { type: String, default: null, select: false },
     attempts: { type: Number, default: 0 },
     lastSentAt: { type: Date, required: true },

@@ -5,18 +5,22 @@ import '../screens/login_screen.dart';
 import '../screens/signup_screen.dart';
 import 'screens/change_password_screen.dart';
 import 'services/api_client.dart';
-import 'services/location_service.dart';
 import 'services/session.dart';
+import 'services/policy_service.dart';
+import 'screens/policy_screen.dart';
+
+final appNavigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Session.initialize();
-  await LocationService.initializePermission();
-  await LocationService.preloadLocation();
-  runApp(
-    MainApp(),
-  );
-  ApiClient.warmSession();
+  await ApiClient.warmSession();
+  await PolicyService.initialize();
+  PolicyService.requestLocationDisclosure = () async {
+    final context = appNavigatorKey.currentContext;
+    return context == null ? false : showLocationDisclosure(context);
+  };
+  runApp(MainApp());
 }
 
 class MainApp extends StatelessWidget {
@@ -27,6 +31,7 @@ class MainApp extends StatelessWidget {
     return ScreenUtilInit(
       builder: (context, child) {
         return MaterialApp(
+          navigatorKey: appNavigatorKey,
           debugShowCheckedModeBanner: false,
           initialRoute: '/dashboard',
           routes: {
@@ -34,6 +39,7 @@ class MainApp extends StatelessWidget {
             '/signup': (context) => const SignupScreen(),
             '/change_password': (context) => const ChangePasswordScreen(),
             '/dashboard': (context) => const BottomNavBarScreen(),
+            '/policies': (context) => const PolicyScreen(),
           },
         );
       },

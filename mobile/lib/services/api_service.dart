@@ -1,5 +1,7 @@
 import 'api_client.dart';
 import 'session.dart';
+import 'phone_change_flow.dart';
+import '../utils/recovery_email.dart';
 
 class ApiService {
   static Future<Map<String, dynamic>?> login(
@@ -18,7 +20,12 @@ class ApiService {
     final accessToken = data['accessToken'] as String?;
     final refreshToken = data['refreshToken'] as String?;
 
-    if (accessToken == null) return null;
+    if (accessToken == null ||
+        accessToken.isEmpty ||
+        refreshToken == null ||
+        refreshToken.isEmpty) {
+      return null;
+    }
 
     await Session.saveTokens(
       accessToken: accessToken,
@@ -34,6 +41,7 @@ class ApiService {
     required String phone,
     required String password,
     required String verificationToken,
+    required Map<String, Object> policyAcceptance,
     String? email,
   }) async {
     final response = await ApiClient.post(
@@ -43,7 +51,8 @@ class ApiService {
         'phone': phone,
         'password': password,
         'verificationToken': verificationToken,
-        'email': email ?? '',
+        'email': normalizeRecoveryEmail(email),
+        'policyAcceptance': policyAcceptance,
       },
       auth: false,
     );
@@ -76,7 +85,7 @@ class ApiService {
   }) async {
     final response = await ApiClient.post(
       '/auth/email/otp/send',
-      body: {'email': email, 'purpose': purpose},
+      body: {'email': normalizeRecoveryEmail(email), 'purpose': purpose},
       auth: false,
     );
 
@@ -109,19 +118,19 @@ class ApiService {
     return token;
   }
 
-  static Future<int> sendPhoneChangeOtp({required String phone}) {
-    return sendMobileOtp(phone: phone, purpose: 'registration');
-  }
-
-  static Future<String> verifyPhoneChangeOtp({
+  static Future<PhoneChangeFlow> sendPhoneChangeOtp({
     required String phone,
-    required String otp,
-  }) {
-    return verifyMobileOtp(
-      phone: phone,
-      purpose: 'registration',
-      otp: otp,
+    String? flowId,
+  }) async {
+    final response = await ApiClient.post(
+      '/auth/mobile/phone-change/otp/send',
+      body: {'phone': phone, if (flowId != null) 'flowId': flowId},
     );
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Could not send phone verification code',
+    );
+    return PhoneChangeFlow.fromJson(ApiClient.decodeMap(response));
   }
 
   static Future<bool> checkPhoneExists(String phone) async {
@@ -140,7 +149,7 @@ class ApiService {
   static Future<bool> checkEmailExists(String email) async {
     final response = await ApiClient.get(
       '/auth/user/email-exists',
-      query: {'email': email},
+      query: {'email': normalizeRecoveryEmail(email)},
       auth: false,
     );
 
@@ -157,7 +166,11 @@ class ApiService {
   }) async {
     final response = await ApiClient.post(
       '/auth/email/otp/verify',
-      body: {'email': email, 'purpose': purpose, 'otp': otp},
+      body: {
+        'email': normalizeRecoveryEmail(email),
+        'purpose': purpose,
+        'otp': otp,
+      },
       auth: false,
     );
 
@@ -173,22 +186,6 @@ class ApiService {
     return token;
   }
 
-  static Future<void> cancelEmailOtp({
-    required String email,
-    required String purpose,
-  }) async {
-    final response = await ApiClient.post(
-      '/auth/email/otp/cancel',
-      body: {'email': email, 'purpose': purpose},
-      auth: false,
-    );
-
-    ApiClient.throwIfError(
-      response,
-      fallback: 'Failed to cancel verification code',
-    );
-  }
-
   static Future<bool> updatePassword({
     String? phone,
     String? email,
@@ -199,7 +196,8 @@ class ApiService {
       '/auth/reset-password',
       body: {
         if (phone != null && phone.isNotEmpty) 'phone': phone,
-        if (email != null && email.isNotEmpty) 'email': email,
+        if (email != null && email.isNotEmpty)
+          'email': normalizeRecoveryEmail(email),
         'newPassword': newPassword,
         'verificationToken': verificationToken,
       },
@@ -217,25 +215,57 @@ class ApiService {
     required String phone,
     String? email,
     String? verificationToken,
+    String? flowId,
+    String? otp,
   }) async {
     final response = await ApiClient.put(
       '/users/$id',
       body: {
         'username': username,
         'phone': phone,
-        'email': email ?? '',
+        'email': normalizeRecoveryEmail(email),
         if (verificationToken != null) 'verificationToken': verificationToken,
+        if (flowId != null) 'flowId': flowId,
+        if (otp != null) 'otp': otp,
       },
     );
 
-    if (response.statusCode != 200) return null;
-
+    ApiClient.throwIfError(response, fallback: 'Failed to update profile');
     final data = ApiClient.decodeMap(response);
     await Session.saveCurrentUser(data);
     return data;
   }
 
+  static Future<void> sendRecoveryEmailVerification(String email) async {
+    final response = await ApiClient.post(
+      '/auth/mobile/recovery-email/otp/send',
+      body: {'email': normalizeRecoveryEmail(email)},
+    );
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Could not send email verification',
+    );
+  }
+
+  static Future<Map<String, dynamic>> verifyRecoveryEmail({
+    required String email,
+    required String otp,
+  }) async {
+    final response = await ApiClient.post(
+      '/auth/mobile/recovery-email/otp/verify',
+      body: {'email': normalizeRecoveryEmail(email), 'otp': otp.trim()},
+    );
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Could not verify recovery email',
+    );
+    final user = ApiClient.decodeMap(response);
+    await Session.saveCurrentUser(user);
+    return user;
+  }
+
   static Future<bool> submitReport({
+    required Map<String, Object?> reportDisclosure,
     required String reportLocation,
     required List<String> symptoms,
     required String foodSource,
@@ -249,6 +279,7 @@ class ApiService {
       '/reports',
       body: {
         'reportLocation': reportLocation,
+        'reportDisclosure': reportDisclosure,
         'symptoms': symptoms,
         'foodSource': foodSource,
         'exposureDistrict': exposureDistrict,

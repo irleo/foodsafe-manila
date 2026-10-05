@@ -11,6 +11,8 @@ import '../services/api_client.dart';
 import '../utils/philippine_mobile_number.dart';
 import '../widgets/app_loading.dart';
 import '../widgets/philippine_mobile_prefix.dart';
+import '../services/policy_service.dart';
+import 'policy_screen.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -37,6 +39,11 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _showPass = false;
   bool _showConfirmPass = false;
   bool _loading = false;
+  PolicyBundle? _policies;
+  bool _termsAccepted = false;
+  bool _privacyAcknowledged = false;
+  String? _policyError;
+  String? _registrationVerificationToken;
 
   final _passFocus = FocusNode();
   final _confirmPassFocus = FocusNode();
@@ -48,10 +55,32 @@ class _SignupScreenState extends State<SignupScreen> {
   @override
   void initState() {
     super.initState();
+    _loadPolicies();
 
     otpControllers = List.generate(6, (_) => TextEditingController());
     otpFocusNodes = List.generate(6, (_) => FocusNode());
   }
+
+  Future<void> _loadPolicies() async {
+    try {
+      final bundle = await PolicyService.load();
+      if (mounted) {
+        setState(() {
+          _policies = bundle;
+          _policyError = null;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _policyError = ApiClient.safeErrorMessage(error));
+      }
+    }
+  }
+
+  bool get _policiesAccepted =>
+      _policies?.accountPublished == true &&
+      _termsAccepted &&
+      _privacyAcknowledged;
 
   @override
   void dispose() {
@@ -119,6 +148,7 @@ class _SignupScreenState extends State<SignupScreen> {
       if (!mounted) return false;
 
       if (forceNew) {
+        _registrationVerificationToken = null;
         for (final controller in otpControllers) {
           controller.clear();
         }
@@ -126,7 +156,10 @@ class _SignupScreenState extends State<SignupScreen> {
       }
 
       _startResendTimer();
-      SnackbarWidgets.info(context, "We've sent a verification code to your phone number");
+      SnackbarWidgets.info(
+        context,
+        "We've sent a verification code to your phone number",
+      );
       return true;
     } catch (error) {
       if (mounted) {
@@ -217,23 +250,26 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Future<void> _submit() async {
+    if (!_policiesAccepted || _loading) return;
     FocusScope.of(context).unfocus();
 
     setState(() => _loading = true);
 
     try {
       final phone = toLocalPhilippineMobileNumber(_phoneCtrl.text);
-      final verificationToken = await ApiService.verifyMobileOtp(
-        phone: phone,
-        purpose: 'registration',
-        otp: _otpCtrl.text,
-      );
+      final verificationToken = _registrationVerificationToken ??=
+          await ApiService.verifyMobileOtp(
+            phone: phone,
+            purpose: 'registration',
+            otp: _otpCtrl.text,
+          );
 
       bool success = await ApiService.registerUser(
         username: _usernameCtrl.text.trim(),
         phone: phone,
         password: _passCtrl.text,
         verificationToken: verificationToken,
+        policyAcceptance: _policies!.accountChoices,
       );
 
       if (!mounted) return;
@@ -253,6 +289,13 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Future<void> _nextStep() async {
+    if (!_policiesAccepted) {
+      SnackbarWidgets.info(
+        context,
+        'Accept the current Terms and acknowledge the Privacy Policy.',
+      );
+      return;
+    }
     if (_currentStep == 0) {
       FocusScope.of(context).unfocus();
       if (!_formKey.currentState!.validate()) return;
@@ -264,7 +307,10 @@ class _SignupScreenState extends State<SignupScreen> {
         if (!mounted) return;
 
         if (exists) {
-          SnackbarWidgets.info(context, "Please check your information and try again.");
+          SnackbarWidgets.info(
+            context,
+            "Please check your information and try again.",
+          );
           return;
         }
 
@@ -310,9 +356,7 @@ class _SignupScreenState extends State<SignupScreen> {
         child: SafeArea(
           top: true,
           child: Container(
-            decoration: const BoxDecoration(
-              color: Color(0xFF134c8c),
-            ),
+            decoration: const BoxDecoration(color: Color(0xFF134c8c)),
             child: SingleChildScrollView(
               child: Column(
                 children: [
@@ -374,6 +418,8 @@ class _SignupScreenState extends State<SignupScreen> {
                           _stepProgressBar(),
                           const SizedBox(height: 20),
                           _buildStepContent(),
+                          const SizedBox(height: 12),
+                          const Center(child: PolicyLinks(compact: true)),
                         ],
                       ),
                     ),
@@ -496,6 +542,19 @@ class _SignupScreenState extends State<SignupScreen> {
           ),
         ),
         _helper(philippineMobileHelper),
+        if (_policyError != null) ...[
+          Text(_policyError!),
+          TextButton(onPressed: _loadPolicies, child: const Text('Retry')),
+        ],
+        PolicyChoices(
+          termsAccepted: _termsAccepted,
+          privacyAcknowledged: _privacyAcknowledged,
+          enabled: !_loading,
+          showLinks: false,
+          onTermsChanged: (value) => setState(() => _termsAccepted = value),
+          onPrivacyChanged: (value) =>
+              setState(() => _privacyAcknowledged = value),
+        ),
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
@@ -760,7 +819,7 @@ class _SignupScreenState extends State<SignupScreen> {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: _submit,
+            onPressed: _loading ? null : _submit,
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF134c8c),
               foregroundColor: Colors.white,

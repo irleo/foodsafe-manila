@@ -185,6 +185,8 @@ class _BottomNavBarScreenState extends State<BottomNavBarScreen>
                 ),
               ],
               Spacer(),
+              TextButton.icon(onPressed: () => Navigator.pushNamed(context, '/policies'),
+                icon: const Icon(Icons.privacy_tip_outlined), label: const Text('Privacy and Terms')),
               Container(
                 color: Colors.white,
                 padding: const EdgeInsets.symmetric(

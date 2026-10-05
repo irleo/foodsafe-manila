@@ -1,5 +1,7 @@
 import express from "express";
-import { verifyRole, verifyToken } from "../middleware/authMiddleware.js";
+import rateLimit from "express-rate-limit";
+import { verifyRole, verifyToken, requireCitizenAccount } from "../middleware/authMiddleware.js";
+import { requireCurrentMobilePolicies } from "../controllers/mobilePolicyController.js";
 import {
   getUsers,
   getUserStats,
@@ -11,6 +13,7 @@ import {
 import { updateMobileProfile } from "../controllers/mobileUserController.js";
 
 const router = express.Router();
+const profileUpdateLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
 
 /**
  * ADMIN ROUTES
@@ -40,6 +43,6 @@ router.delete("/:id", verifyToken, verifyRole("admin"), deleteUser);
 router.get("/me", verifyToken, getProfile);
 
 // Citizen mobile profile update
-router.put("/:id", verifyToken, updateMobileProfile);
+router.put("/:id", verifyToken, requireCitizenAccount, profileUpdateLimiter, requireCurrentMobilePolicies, updateMobileProfile);
 
 export default router;

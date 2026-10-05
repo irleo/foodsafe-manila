@@ -3,6 +3,15 @@ import { SURVEILLANCE_DISEASES } from "../constants/surveillanceMethodology.js";
 
 const reportSchema = new mongoose.Schema(
   {
+    policyDisclosure: {
+      termsVersion: String,
+      privacyVersion: String,
+      reportingVersion: String,
+      locationVersion: String,
+      acknowledgedAt: Date,
+      lawfulBasis: String,
+      healthConsent: Boolean,
+    },
     datasetId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Dataset",

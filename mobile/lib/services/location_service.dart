@@ -3,6 +3,7 @@ import 'package:location/location.dart' as loc;
 
 import 'debug_location_service.dart';
 import 'manila_geo_service.dart';
+import 'policy_service.dart';
 
 class LocationService {
   static final loc.Location _location = loc.Location();
@@ -12,10 +13,20 @@ class LocationService {
 
   static bool _permissionInitialized = false;
 
+  static void clearCachedLocation() {
+    _permissionInitialized = false;
+    cachedAddress = null;
+    cachedManilaLocation = null;
+  }
+
   /// Initializes the device location service and permission.
   ///
   /// Call this once during app startup before runApp().
   static Future<bool> initializePermission() async {
+    if (!await PolicyService.ensureLocationDisclosure()) {
+      clearCachedLocation();
+      return false;
+    }
     if (_permissionInitialized) {
       return true;
     }
@@ -55,18 +66,12 @@ class LocationService {
   ///
   /// Permission should already have been initialized by initializePermission().
   static Future<void> preloadLocation() async {
+    if (!await initializePermission()) return;
     final simulated = await DebugLocationService.getSimulatedLocation();
 
     if (simulated != null) {
       cachedManilaLocation = simulated;
       cachedAddress = simulated.formatted;
-      return;
-    }
-
-    final permissionGranted = await initializePermission();
-
-    if (!permissionGranted) {
-      cachedAddress = 'Location unavailable';
       return;
     }
 
@@ -84,7 +89,8 @@ class LocationService {
   static Future<ManilaLocation?> resolveManilaLocation({
     bool forceRefresh = false,
   }) async {
-    if (cachedManilaLocation != null && !forceRefresh) {
+    if (!await initializePermission()) return null;
+    if (PolicyService.locationEnabled && cachedManilaLocation != null && !forceRefresh) {
       return cachedManilaLocation;
     }
 
@@ -94,12 +100,6 @@ class LocationService {
       cachedManilaLocation = simulated;
       cachedAddress = simulated.formatted;
       return simulated;
-    }
-
-    final permissionGranted = await initializePermission();
-
-    if (!permissionGranted) {
-      return null;
     }
 
     try {
@@ -131,6 +131,7 @@ class LocationService {
   static Future<String> getUserAddress({
     bool forceRefresh = false,
   }) async {
+    if (!await initializePermission()) return 'Location unavailable';
     if (cachedAddress != null && !forceRefresh) {
       return cachedAddress!;
     }
@@ -141,12 +142,6 @@ class LocationService {
       cachedManilaLocation = simulated;
       cachedAddress = simulated.formatted;
       return simulated.formatted;
-    }
-
-    final permissionGranted = await initializePermission();
-
-    if (!permissionGranted) {
-      return 'Location unavailable';
     }
 
     try {
@@ -180,16 +175,11 @@ class LocationService {
   }
 
   static Future<Map<String, double>?> getCurrentCoordinates() async {
+    if (!await initializePermission()) return null;
     final simulated = await DebugLocationService.getSimulatedCoordinates();
 
     if (simulated != null) {
       return simulated;
-    }
-
-    final permissionGranted = await initializePermission();
-
-    if (!permissionGranted) {
-      return null;
     }
 
     try {

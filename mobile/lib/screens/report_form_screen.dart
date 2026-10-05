@@ -14,6 +14,8 @@ import '../utils/format_helpers.dart';
 import '../widgets/app_loading.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
+import 'policy_screen.dart';
+import '../services/policy_service.dart';
 
 class ReportFormScreen extends StatefulWidget {
   const ReportFormScreen({super.key});
@@ -25,6 +27,29 @@ class ReportFormScreen extends StatefulWidget {
 class _ReportFormScreenState extends State<ReportFormScreen> {
   bool isLoading = false;
   int _currentStep = 0;
+  PolicyBundle? _reportPolicies;
+  bool _healthConsent = false;
+
+  Future<void> _beginReport(PolicyBundle bundle, bool healthConsent) async {
+    if (Session.currentUser == null) {
+      await _promptSignIn();
+      return;
+    }
+    if (!await ensureAccountPolicies(context) || !mounted) return;
+    if (!await showLocationDisclosure(context) || !mounted) return;
+    if (!await LocationService.initializePermission() || !mounted) {
+      if (mounted) SnackbarWidgets.info(context, 'Location permission is needed for this reporting feature.');
+      return;
+    }
+    final resolved = await LocationService.resolveManilaLocation(forceRefresh: true);
+    if (!mounted) return;
+    setState(() {
+      _reportPolicies = bundle;
+      _healthConsent = healthConsent;
+      locationText = resolved?.formatted ?? 'Location unavailable';
+    });
+    await _initCooldown();
+  }
 
   Future<void> _nextStep() async {
     if (_currentStep == 0) {
@@ -46,6 +71,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
   }
 
   Future<bool> _submit() async {
+    if (_reportPolicies == null) return false;
     if (isLoading) return false;
 
     setState(() => isLoading = true);
@@ -138,6 +164,13 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       }
 
       final success = await ApiService.submitReport(
+        reportDisclosure: {
+          'version': _reportPolicies!.policy('reporting').version,
+          'acknowledged': true,
+          'locationVersion': _reportPolicies!.policy('location').version,
+          'locationAcknowledged': true,
+          'healthConsent': _healthConsent,
+        },
         reportLocation: resolved.formatted,
         symptoms: reportedSymptoms,
         foodSource: selectedFoodSource ?? 'Not specified',
@@ -402,16 +435,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       }
     });
 
-    _loadHeader();
-    locationText = LocationService.cachedAddress ?? 'Fetching...';
-
-    LocationService.resolveManilaLocation(forceRefresh: true).then((resolved) {
-      if (!mounted || resolved == null) return;
-      setState(() {
-        locationText = resolved.formatted;
-      });
-    });
-    _initCooldown();
+    locationText = 'Location not requested';
   }
 
   Future<void> _promptSignIn() async {
@@ -514,14 +538,6 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
     super.dispose();
   }
 
-  Future<void> _loadHeader() async {
-    LocationService.getUserAddress().then((address) {
-      setState(() {
-        locationText = address;
-      });
-    });
-  }
-
   String get _exposureLocationDisplay {
     if (selectedAteFoodLocation == 'Choose a different district') {
       return FormatHelpers.formatLocationDisplay(
@@ -534,6 +550,9 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_reportPolicies == null) {
+      return ReportingDisclosureScreen(onContinue: _beginReport);
+    }
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       body: SafeArea(
