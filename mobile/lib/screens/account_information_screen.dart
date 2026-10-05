@@ -540,7 +540,6 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      bottomNavigationBar: const SafeArea(top: false, child: PolicyLinks()),
       backgroundColor: const Color(0xFFF9FAFB), // bg-gray-50
       body: SafeArea(
         top: true,

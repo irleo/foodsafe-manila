@@ -1,6 +1,6 @@
 import express from 'express';
 import { verifyToken, requireCitizenAccount } from "../middleware/authMiddleware.js";
-import { getMobilePolicies, getMobilePolicyStatus, acceptMobilePolicies } from "../controllers/mobilePolicyController.js";
+import { getMobilePolicies, getMobilePolicyStatus, acceptMobilePolicies, acceptReportingPolicies } from "../controllers/mobilePolicyController.js";
 import rateLimit from "express-rate-limit";
 import { requestPhoneChangeOtp } from "../controllers/phoneChangeOtpController.js";
 import { requireCurrentMobilePolicies } from "../controllers/mobilePolicyController.js";
@@ -81,6 +81,7 @@ const router = express.Router();
 router.get('/mobile/policies', getMobilePolicies);
 router.get('/mobile/policies/status', verifyToken, requireCitizenAccount, getMobilePolicyStatus);
 router.post('/mobile/policies/accept', verifyToken, requireCitizenAccount, acceptMobilePolicies);
+router.post('/mobile/policies/reporting/accept', verifyToken, requireCitizenAccount, requireCurrentMobilePolicies, acceptReportingPolicies);
 
 router.post('/login', login);
 router.post('/logout', logout);

@@ -13,15 +13,16 @@ import '../widgets/app_loading.dart';
 import '../widgets/philippine_mobile_prefix.dart';
 import '../services/policy_service.dart';
 import 'policy_screen.dart';
+import '../widgets/auth_screen_layout.dart';
 
-class SignupScreen extends StatefulWidget {
-  const SignupScreen({super.key});
+class SignUpScreen extends StatefulWidget {
+  const SignUpScreen({super.key});
 
   @override
-  State<SignupScreen> createState() => _SignupScreenState();
+  State<SignUpScreen> createState() => _SignUpScreenState();
 }
 
-class _SignupScreenState extends State<SignupScreen> {
+class _SignUpScreenState extends State<SignUpScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _usernameCtrl = TextEditingController();
@@ -51,6 +52,13 @@ class _SignupScreenState extends State<SignupScreen> {
   int _currentStep = 0;
   int _resendSeconds = 0;
   Timer? _resendTimer;
+
+  // Labels for the step indicator — keep in sync with _buildStepContent().
+  static const List<String> _stepTitles = [
+    "Personal info",
+    "Security",
+    "Verification",
+  ];
 
   @override
   void initState() {
@@ -342,115 +350,99 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: PopScope(
-        canPop: _currentStep != 2,
-        onPopInvokedWithResult: (didPop, result) async {
-          if (didPop) return;
-
+    return PopScope(
+      canPop: _currentStep != 2,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (!didPop && _currentStep == 2) await _confirmCancelSignup();
+      },
+      child: AuthScreenLayout(
+        onBack: () async {
           if (_currentStep == 2) {
             await _confirmCancelSignup();
+          } else if (mounted) {
+            Navigator.maybePop(context);
           }
         },
-        child: SafeArea(
-          top: true,
-          child: Container(
-            decoration: const BoxDecoration(color: Color(0xFF134c8c)),
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  /// HEADER
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-                    child: Column(
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: InkWell(
-                            onTap: () async {
-                              if (_currentStep == 2) {
-                                await _confirmCancelSignup();
-                                return;
-                              }
-
-                              Navigator.pop(context);
-                            },
-                            child: Row(
-                              children: [
-                                Icon(
-                                  LucideIcons.chevronLeft,
-                                  color: Colors.white70,
-                                ),
-                                SizedBox(width: 4),
-                                Text(
-                                  "Back",
-                                  style: GoogleFonts.inter(
-                                    color: Colors.white70,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Image.asset('assets/foodsafe_logo.png'),
-                      ],
-                    ),
-                  ),
-
-                  /// WHITE SHEET
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(24),
-                      ),
-                    ),
-                    child: Form(
-                      key: _formKey,
-                      autovalidateMode: AutovalidateMode.onUserInteraction,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 20),
-                          _stepProgressBar(),
-                          const SizedBox(height: 20),
-                          _buildStepContent(),
-                          const SizedBox(height: 12),
-                          const Center(child: PolicyLinks(compact: true)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+        child: Form(
+          key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _stepProgressBar(),
+              const SizedBox(height: 20),
+              _buildStepContent(),
+            ],
           ),
         ),
       ),
     );
   }
 
+  /// Numbered, labeled step indicator — replaces the three plain color bars
+  /// with circles (checkmark once a step is done), connecting lines, and a
+  /// "Step X of N · <title>" caption so the user knows where they are.
   Widget _stepProgressBar() {
-    int totalSteps = 3;
+    final total = _stepTitles.length;
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: List.generate(totalSteps, (index) {
-        bool isActive = index <= _currentStep;
-        return Expanded(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            height: 6,
-            decoration: BoxDecoration(
-              color: isActive ? const Color(0xFF134c8c) : Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(3),
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: List.generate(total * 2 - 1, (i) {
+            if (i.isOdd) {
+              final leftStep = i ~/ 2;
+              final isDone = leftStep < _currentStep;
+              return Expanded(
+                child: Container(
+                  height: 2,
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  color: isDone
+                      ? const Color(0xFF134c8c)
+                      : Colors.grey.shade300,
+                ),
+              );
+            }
+
+            final step = i ~/ 2;
+            final isActive = step == _currentStep;
+            final isDone = step < _currentStep;
+
+            return Container(
+              width: 26,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: (isActive || isDone)
+                    ? const Color(0xFF134c8c)
+                    : Colors.grey.shade300,
+              ),
+              child: isDone
+                  ? const Icon(LucideIcons.check, size: 14, color: Colors.white)
+                  : Text(
+                      "${step + 1}",
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: isActive
+                            ? Colors.white
+                            : const Color(0xFF6B7280),
+                      ),
+                    ),
+            );
+          }),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          "Step ${_currentStep + 1} of $total · ${_stepTitles[_currentStep]}",
+          style: GoogleFonts.inter(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF6B7280),
           ),
-        );
-      }),
+        ),
+      ],
     );
   }
 
@@ -542,19 +534,32 @@ class _SignupScreenState extends State<SignupScreen> {
           ),
         ),
         _helper(philippineMobileHelper),
+        const SizedBox(height: 16),
+
+        // Consent checkboxes grouped into a shaded panel instead of
+        // floating loosely in the form — reads as one "agree to continue"
+        // unit rather than two stray form fields.
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F3F6),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: PolicyChoices(
+            termsAccepted: _termsAccepted,
+            privacyAcknowledged: _privacyAcknowledged,
+            enabled: !_loading,
+            showLinks: false,
+            inlineLinks: true,
+            onTermsChanged: (value) => setState(() => _termsAccepted = value),
+            onPrivacyChanged: (value) =>
+                setState(() => _privacyAcknowledged = value),
+          ),
+        ),
         if (_policyError != null) ...[
           Text(_policyError!),
           TextButton(onPressed: _loadPolicies, child: const Text('Retry')),
         ],
-        PolicyChoices(
-          termsAccepted: _termsAccepted,
-          privacyAcknowledged: _privacyAcknowledged,
-          enabled: !_loading,
-          showLinks: false,
-          onTermsChanged: (value) => setState(() => _termsAccepted = value),
-          onPrivacyChanged: (value) =>
-              setState(() => _privacyAcknowledged = value),
-        ),
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
@@ -578,8 +583,10 @@ class _SignupScreenState extends State<SignupScreen> {
                       color: Colors.white,
                     ),
                   )
+                // Renamed from "Submit" — this only advances to step 2,
+                // it doesn't create the account yet.
                 : Text(
-                    "Submit",
+                    "Continue",
                     style: GoogleFonts.inter(fontWeight: FontWeight.w800),
                   ),
           ),
@@ -703,7 +710,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                       )
                     : Text(
-                        "Confirm",
+                        "Continue",
                         style: GoogleFonts.inter(fontWeight: FontWeight.w800),
                       ),
               ),
@@ -728,60 +735,63 @@ class _SignupScreenState extends State<SignupScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: List.generate(6, (index) {
-            return SizedBox(
-              height: 54,
-              width: 50,
-              child: KeyboardListener(
-                focusNode: FocusNode(),
-                onKeyEvent: (event) => _handleOtpKey(index, event),
-                child: TextFormField(
-                  controller: otpControllers[index],
-                  focusNode: otpFocusNodes[index],
-
-                  keyboardType: TextInputType.number,
-                  textInputAction: TextInputAction.next,
-
-                  textAlign: TextAlign.center,
-                  textAlignVertical: TextAlignVertical.center,
-
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w800),
-
-                  inputFormatters: [
-                    LengthLimitingTextInputFormatter(1),
-                    FilteringTextInputFormatter.digitsOnly,
-                  ],
-
-                  onChanged: (value) {
-                    _updateOtp();
-
-                    if (value.isNotEmpty && index < 5) {
-                      FocusScope.of(
-                        context,
-                      ).requestFocus(otpFocusNodes[index + 1]);
-                    }
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(right: index == 5 ? 0 : 6),
+                child: Focus(
+                  onKeyEvent: (node, event) {
+                    _handleOtpKey(index, event);
+                    return KeyEventResult.ignored;
                   },
+                  child: TextFormField(
+                    controller: otpControllers[index],
+                    focusNode: otpFocusNodes[index],
 
-                  decoration: InputDecoration(
-                    contentPadding: EdgeInsets.zero,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF134c8c),
-                        width: 2,
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.next,
+
+                    textAlign: TextAlign.center,
+                    textAlignVertical: TextAlignVertical.center,
+
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w800),
+
+                    inputFormatters: [
+                      LengthLimitingTextInputFormatter(1),
+                      FilteringTextInputFormatter.digitsOnly,
+                    ],
+
+                    onChanged: (value) {
+                      _updateOtp();
+
+                      if (value.isNotEmpty && index < 5) {
+                        FocusScope.of(
+                          context,
+                        ).requestFocus(otpFocusNodes[index + 1]);
+                      }
+                    },
+
+                    decoration: InputDecoration(
+                      contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
                       ),
-                    ),
-                    errorMaxLines: 2,
-                    errorStyle: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: const Color(0xFFDC2626),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF134c8c),
+                          width: 2,
+                        ),
+                      ),
+                      errorMaxLines: 2,
+                      errorStyle: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: const Color(0xFFDC2626),
+                      ),
                     ),
                   ),
                 ),
@@ -790,7 +800,8 @@ class _SignupScreenState extends State<SignupScreen> {
           }),
         ),
         SizedBox(height: 16),
-        Row(
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text('Did not receive code?', style: GoogleFonts.inter()),
             TextButton(
@@ -839,7 +850,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                   )
                 : Text(
-                    "Submit",
+                    "Create account",
                     style: GoogleFonts.inter(fontWeight: FontWeight.w800),
                   ),
           ),

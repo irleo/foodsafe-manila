@@ -30,6 +30,10 @@ class PolicyDocument {
   );
 
   bool get published => status == 'published' || status == 'testing';
+
+  /// Strip Markdown heading syntax at display time, including API documents.
+  String get displayText =>
+      text.replaceAll(RegExp(r'^[ \t]{0,3}#{1,6}[ \t]+', multiLine: true), '');
 }
 
 class PolicyBundle {
@@ -133,7 +137,9 @@ class PolicyService {
   }
 
   static Future<bool> requiresAccountAcknowledgement() async {
-    final response = await ApiClient.get('/auth/mobile/policies/status');
+    final response = await ApiClient.get(
+      '/auth/mobile/policies/status',
+    ).timeout(const Duration(seconds: 15));
     ApiClient.throwIfError(response);
     return ApiClient.decodeMap(response)['requiresAcknowledgement'] as bool;
   }
@@ -142,8 +148,71 @@ class PolicyService {
     final response = await ApiClient.post(
       '/auth/mobile/policies/accept',
       body: {'policyAcceptance': bundle.accountChoices},
+      timeout: const Duration(seconds: 30),
     );
     ApiClient.throwIfError(response);
     await Session.saveCurrentUser(ApiClient.decodeMap(response));
   }
+
+  static Future<ReportingPolicyStatus> reportingStatus(
+    PolicyBundle bundle,
+  ) async {
+    final response = await ApiClient.get(
+      '/auth/mobile/policies/status',
+    ).timeout(const Duration(seconds: 15));
+    ApiClient.throwIfError(response);
+    final data = ApiClient.decodeMap(response);
+    final receipt = data['reportingAcceptance'];
+    final current =
+        receipt is Map<String, dynamic> &&
+        receipt['version'] == bundle.policy('reporting').version &&
+        receipt['locationVersion'] == bundle.policy('location').version &&
+        receipt['lawfulBasis'] == bundle.lawfulBasis &&
+        (bundle.healthConsentRequired != true ||
+            receipt['healthConsent'] == true);
+    return ReportingPolicyStatus(
+      accountAcknowledgementRequired: data['requiresAcknowledgement'] != false,
+      reportingAcknowledgementRequired:
+          data['requiresReportingAcknowledgement'] != false ||
+          !current ||
+          !bundle.reportingPublished,
+      healthConsent:
+          receipt is Map<String, dynamic> && receipt['healthConsent'] == true,
+    );
+  }
+
+  static Future<void> acceptReportingPolicies(
+    PolicyBundle bundle,
+    bool healthConsent,
+  ) async {
+    final response = await ApiClient.post(
+      '/auth/mobile/policies/reporting/accept',
+      body: {
+        'reportDisclosure': {
+          'version': bundle.policy('reporting').version,
+          'acknowledged': true,
+          'locationVersion': bundle.policy('location').version,
+          'locationAcknowledged': true,
+          'healthConsent': healthConsent,
+        },
+      },
+      timeout: const Duration(seconds: 30),
+    );
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Reporting consent could not be saved.',
+    );
+  }
+}
+
+class ReportingPolicyStatus {
+  final bool accountAcknowledgementRequired;
+  final bool reportingAcknowledgementRequired;
+  final bool healthConsent;
+
+  const ReportingPolicyStatus({
+    required this.accountAcknowledgementRequired,
+    required this.reportingAcknowledgementRequired,
+    required this.healthConsent,
+  });
 }

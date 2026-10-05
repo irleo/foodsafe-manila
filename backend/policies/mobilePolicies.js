@@ -21,9 +21,9 @@ export const mobilePolicies = {
     text: readFileSync(new URL("./private-testing-terms.md", import.meta.url), "utf8"),
   },
   reporting: {
-    type: "reporting", title: "Before You Report", version, requiredVersion: version,
+    type: "reporting", title: "Before You Report", version: "2026-10-05.testing.3", requiredVersion: "2026-10-05.testing.3",
     status: "testing",
-    text: "For this private trial, enter simulated symptoms and fictional food/exposure details only. Do not submit genuine health information or personal information about other people. Your test report sends these entries, report dates, your account reference, district/barangay, and precise device coordinates to the backend to test reporting, review, and analytics. Even a simulated report can identify you through your account or location.\n\nRead the testing Privacy Policy before entering report details. Reporting is optional: you can skip this test activity. Terms acceptance, Privacy acknowledgement, and OS permission are separate from the report/location consent requested below. Contact the test organizer to ask about stored test data or withdraw this consent; stopping location access does not automatically delete existing reports.",
+    text: readFileSync(new URL("./private-testing-reporting.md", import.meta.url), "utf8"),
   },
   location: {
     type: "location", title: "Before Using Location", version, requiredVersion: version,
@@ -90,4 +90,16 @@ export function validateReportingChoices(choices, registry = mobilePolicies, pro
     return { status: 400, code: "REPORT_DISCLOSURE_REQUIRED", message: "Review the current reporting and location disclosures before submitting." };
   }
   return null;
+}
+
+/**
+ * @param {unknown} snapshot
+ * @param {Record<PolicyType, Policy>} [registry]
+ * @param {{lawfulBasis: string, consentRequired: boolean | null, consentText: string}} [processing]
+ */
+export function hasRequiredReportingAcceptance(snapshot, registry = mobilePolicies, processing = reportingProcessing) {
+  const value = /** @type {{version?: string, locationVersion?: string, acceptedAt?: Date, lawfulBasis?: string, healthConsent?: boolean} | null} */ (snapshot);
+  return value?.acceptedAt instanceof Date && Number.isFinite(value.acceptedAt.getTime())
+    && value.lawfulBasis === processing.lawfulBasis
+    && validateReportingChoices({ ...value, acknowledged: true, locationAcknowledged: true }, registry, processing) === null;
 }

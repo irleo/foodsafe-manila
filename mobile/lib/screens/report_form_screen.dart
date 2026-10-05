@@ -29,14 +29,65 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
   int _currentStep = 0;
   PolicyBundle? _reportPolicies;
   bool _healthConsent = false;
+  bool _checkingPolicies = true;
+  String? _entryError;
 
-  Future<void> _beginReport(PolicyBundle bundle, bool healthConsent) async {
+  Future<void> _prepareReport() async {
+    setState(() {
+      _checkingPolicies = true;
+      _entryError = null;
+    });
+    try {
+      if (Session.currentUser == null) {
+        await _promptSignIn();
+        return;
+      }
+      final bundle = await PolicyService.load();
+      final status = await PolicyService.reportingStatus(bundle);
+      if (!mounted) return;
+      if (status.accountAcknowledgementRequired || status.reportingAcknowledgementRequired) return;
+      setState(() {
+        _reportPolicies = bundle;
+        _healthConsent = status.healthConsent;
+        locationText = LocationService.cachedManilaLocation?.formatted ?? 'Location unavailable';
+      });
+      if (PolicyService.locationEnabled) {
+        final resolved = await LocationService.resolveManilaLocation(forceRefresh: true)
+            .timeout(const Duration(seconds: 15));
+        if (!mounted) return;
+        setState(() => locationText = resolved?.formatted ?? 'Location unavailable');
+      }
+      await _initCooldown().timeout(const Duration(seconds: 15));
+    } catch (error) {
+      if (mounted) {
+        if (_reportPolicies == null) {
+          setState(() => _entryError = ApiClient.safeErrorMessage(error, fallback: 'Could not check reporting consent. Please retry.'));
+        } else {
+          SnackbarWidgets.info(context, ApiClient.safeErrorMessage(error, fallback: 'Some report information could not be loaded.'));
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _checkingPolicies = false);
+    }
+  }
+
+  Future<void> _beginReport(PolicyBundle bundle, bool healthConsent, bool accountAcknowledgementRequired) async {
     if (Session.currentUser == null) {
       await _promptSignIn();
       return;
     }
-    if (!await ensureAccountPolicies(context) || !mounted) return;
-    if (!await showLocationDisclosure(context) || !mounted) return;
+    // All in-app notices and choices were reviewed on Before you report.
+    if (accountAcknowledgementRequired) {
+      await PolicyService.acceptAccountPolicies(bundle);
+    }
+    if (!mounted) return;
+    await PolicyService.acceptReportingPolicies(bundle, healthConsent);
+    if (!mounted) return;
+    await PolicyService.setLocationEnabled(
+      true,
+      version: bundle.policy('location').version,
+    );
+    if (!mounted) return;
     if (!await LocationService.initializePermission() || !mounted) {
       if (mounted) SnackbarWidgets.info(context, 'Location permission is needed for this reporting feature.');
       return;
@@ -197,6 +248,14 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       }
     } on ApiException catch (e) {
       if (mounted) {
+        if (e.code == 'POLICY_REACCEPTANCE_REQUIRED' ||
+            e.code == 'POLICY_ACCEPTANCE_REQUIRED' ||
+            e.code == 'REPORT_DISCLOSURE_REQUIRED') {
+          setState(() {
+            _reportPolicies = null;
+            _healthConsent = false;
+          });
+        }
         SnackbarWidgets.error(context, ApiClient.safeErrorMessage(e));
       }
       return false;
@@ -430,9 +489,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (Session.currentUser == null) {
-        _promptSignIn();
-      }
+      _prepareReport();
     });
 
     locationText = 'Location not requested';
@@ -550,6 +607,20 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_reportPolicies == null && (_checkingPolicies || _entryError != null)) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Report')),
+        body: Center(child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: _entryError == null
+              ? const CircularProgressIndicator(color: Color(0xFF134C8C))
+              : Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(_entryError!, textAlign: TextAlign.center),
+                  TextButton(onPressed: _prepareReport, child: const Text('Retry')),
+                ]),
+        )),
+      );
+    }
     if (_reportPolicies == null) {
       return ReportingDisclosureScreen(onContinue: _beginReport);
     }

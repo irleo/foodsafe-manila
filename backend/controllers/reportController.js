@@ -2,7 +2,7 @@ import Report from "../models/Report.js";
 import Dataset from "../models/Dataset.js";
 import WebUser from "../models/WebUser.js";
 import mongoose from "mongoose";
-import { mobilePolicies, reportingProcessing, validateReportingChoices } from "../policies/mobilePolicies.js";
+import { mobilePolicies, reportingProcessing, hasRequiredReportingAcceptance } from "../policies/mobilePolicies.js";
 import { manilaDistrictCoords } from "../constants/manilaDistrictCoords.js";
 import {
   createNotification,
@@ -101,8 +101,9 @@ export const createReport = async (req, res) => {
     if (req.user.accountType !== "citizen" || req.user.role !== "citizen") {
       return res.status(403).json({ message: "Citizen account required." });
     }
-    const disclosureFailure = validateReportingChoices(req.body?.reportDisclosure);
-    if (disclosureFailure) return res.status(disclosureFailure.status).json(disclosureFailure);
+    if (!hasRequiredReportingAcceptance(req.mobileReportingAcceptance)) {
+      return res.status(400).json({ code: "REPORT_DISCLOSURE_REQUIRED", message: "Review the current reporting and location disclosures before submitting." });
+    }
 
     const {
       datasetId,
@@ -281,9 +282,9 @@ export const createReport = async (req, res) => {
         privacyVersion: req.mobilePolicyAcceptance?.privacy?.version || mobilePolicies.privacy.version,
         reportingVersion: mobilePolicies.reporting.version,
         locationVersion: mobilePolicies.location.version,
-        acknowledgedAt: now,
+        acknowledgedAt: req.mobileReportingAcceptance.acceptedAt,
         lawfulBasis: reportingProcessing.lawfulBasis,
-        healthConsent: reportingProcessing.consentRequired ? true : null,
+        healthConsent: reportingProcessing.consentRequired ? req.mobileReportingAcceptance.healthConsent : null,
       },
       caseCount: clampedCaseCount,
       foodSource: foodSource ? String(foodSource).trim() : null,

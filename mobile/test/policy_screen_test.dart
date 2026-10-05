@@ -7,6 +7,24 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
+    'policy display strips heading markers while preserving literal hashes',
+    () {
+      const document = PolicyDocument(
+        type: 'terms',
+        title: 'Terms of Use',
+        version: 'test',
+        status: 'testing',
+        text: '# Terms of Use\n\n## 1. Scope\nKeep #tags and C# text.',
+      );
+      expect(
+        document.displayText,
+        'Terms of Use\n\n1. Scope\nKeep #tags and C# text.',
+      );
+      expect(document.text, startsWith('# Terms of Use'));
+    },
+  );
+
+  test(
     'bundled testing policies are readable without an API or legal gate',
     () async {
       final bundle = await PolicyService.loadBundled();

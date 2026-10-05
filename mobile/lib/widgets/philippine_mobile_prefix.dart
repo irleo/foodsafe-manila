@@ -6,28 +6,22 @@ import '../utils/philippine_mobile_number.dart';
 class PhilippineMobilePrefix extends StatelessWidget {
   final Color? color;
 
-  const PhilippineMobilePrefix({
-    super.key,
-    this.color,
-  });
+  const PhilippineMobilePrefix({super.key, this.color});
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 88,
-      child: Padding(
-        padding: const EdgeInsets.only(left: 12),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.phone_outlined, color: color, size: 21),
-            const SizedBox(width: 8),
-            Text(
-              philippineMobilePrefix,
-              style: GoogleFonts.inter(color: color, fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.only(left: 12),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.phone_outlined, color: color, size: 21),
+          const SizedBox(width: 8),
+          Text(
+            philippineMobilePrefix,
+            style: GoogleFonts.inter(color: color, fontWeight: FontWeight.w600),
+          ),
+        ],
       ),
     );
   }

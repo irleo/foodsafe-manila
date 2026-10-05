@@ -1,17 +1,17 @@
-# FoodSafe Manila - Private Testing Privacy Policy
+FoodSafe Manila - Private Testing Privacy Policy
 
 This general notice describes the private testing build. Use fictional report
 details. Real contact details and location still identify testers. This notice
 does not claim institutional or legal certification.
 
-## 1. Who Handles Your Data
+1. Who Handles Your Data
 
 The test is arranged by the FoodSafe Manila development/testing team that provided
 your access. Contact the organizer through the channel used to arrange testing
 with privacy questions or requests. No affiliation with a government agency or
 university is implied by this general test notice.
 
-## 2. Account and Contact Information
+2. Account and Contact Information
 
 The service stores the name you provide, mobile number, password hash, and any
 recovery email you provide. This supports test accounts, authentication, and account
@@ -23,7 +23,7 @@ The backend records your account ID, accepted Terms version, acknowledged Privac
 Policy version, and server timestamp. Privacy acknowledgement records that the
 notice was acknowledged; it is not blanket consent to every use of your data.
 
-## 3. Simulated Reports and Symptoms
+3. Simulated Reports and Symptoms
 
 For this trial, enter simulated symptoms and fictional food/exposure descriptions,
 not genuine health information. Reports contain these test entries, report dates,
@@ -32,10 +32,10 @@ review, investigation workflows, and aggregated analytics. Even a fictional repo
 can identify a tester when linked to an account or precise coordinates.
 
 Do not include information about other people. Collection of genuine health data
-is outside this private trial notice and requires a reviewed lawful basis and revised
+is outside this draft trial notice and requires a reviewed lawful basis and revised
 disclosure before it starts.
 
-## 4. Precise and Geographic Location
+4. Precise and Geographic Location
 
 If you choose location features, the app reads device coordinates to identify a
 district/barangay and provide nearby information. Submitting a test report sends
@@ -49,7 +49,7 @@ of this Policy. Disable the app's location preference in Privacy and Terms to st
 future app location reads; you may also revoke device permission in OS settings.
 This does not automatically delete coordinates in existing reports.
 
-## 5. Purposes, Lawful Bases, and Recipients
+5. Purposes, Lawful Bases, and Recipients
 
 The trial purposes are account access/recovery, feature and usability testing,
 debugging, and evaluating simulated reporting and analytics. Account details are
@@ -62,7 +62,7 @@ test records through the backend's role-controlled interfaces.
 Agreement to Terms is not consent to unrelated processing.
 No marketing or unrelated research consent is requested by these screens.
 
-## 6. Retention and Your Choices
+6. Retention and Your Choices
 
 The testing period is the period arranged with your test organizer. The application
 does not currently implement automatic deletion of account or report records.
@@ -77,15 +77,15 @@ processing relies on consent, use the same channel to withdraw it. The organizer
 must explain applicable limits and the effect on testing features. Signing out
 or stopping testing does not itself erase stored records.
 
-## 7. Changes
+7. Changes
 
 The app displays this notice's version. The organizer must explain significant
 changes before new processing, and obtain fresh acknowledgement or consent when
-required. Existing acceptance evidence remains stored until the organizer deletes
-it. An updated notice does not retroactively authorize a new
+required. Existing acceptance evidence is retained according to the completed
+retention arrangements. An updated notice does not retroactively authorize a new
 purpose for previously collected data.
 
-## 8. Private Testing Scope
+8. Private Testing Scope
 
 Do not submit genuine health reports or another person's personal information.
 Ask the organizer before involving minors or extending the trial to real health

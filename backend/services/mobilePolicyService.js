@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import MobileUser from "../models/MobileUser.js";
 import PolicyAcceptance from "../models/PolicyAcceptance.js";
-import { mobilePolicies } from "../policies/mobilePolicies.js";
+import { mobilePolicies, reportingProcessing } from "../policies/mobilePolicies.js";
 
 /** @typedef {{version: string, acceptedAt: Date}} PolicyReceipt */
 /** @typedef {{terms: PolicyReceipt, privacy: PolicyReceipt}} AccountPolicySnapshot */
@@ -47,4 +47,28 @@ export async function acknowledgeMobilePolicies(userId) {
     await saveReceipts(user._id, snapshot, session);
     return user;
   });
+}
+
+/** @param {string} userId */
+export async function acknowledgeReportingPolicies(userId) {
+  const snapshot = {
+    version: mobilePolicies.reporting.version,
+    locationVersion: mobilePolicies.location.version,
+    acceptedAt: new Date(),
+    lawfulBasis: reportingProcessing.lawfulBasis,
+    healthConsent: reportingProcessing.consentRequired === true,
+  };
+  // Preserve the first server timestamp on retries for the same processing.
+  const user = await MobileUser.findOneAndUpdate({
+    _id: userId,
+    $or: [
+      { "reportingAcceptance.version": { $ne: snapshot.version } },
+      { "reportingAcceptance.locationVersion": { $ne: snapshot.locationVersion } },
+      { "reportingAcceptance.lawfulBasis": { $ne: snapshot.lawfulBasis } },
+      { "reportingAcceptance.healthConsent": { $ne: snapshot.healthConsent } },
+      { "reportingAcceptance.acceptedAt": null },
+    ],
+  }, { $set: { reportingAcceptance: snapshot } }, { new: true, runValidators: true })
+    .select("reportingAcceptance").lean();
+  return user ?? MobileUser.findById(userId).select("reportingAcceptance").lean();
 }

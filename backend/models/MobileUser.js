@@ -9,6 +9,13 @@ const AccountPolicySchema = new mongoose.Schema({
   terms: { type: PolicyReceiptSchema, required: true },
   privacy: { type: PolicyReceiptSchema, required: true },
 }, { _id: false });
+const ReportingAcceptanceSchema = new mongoose.Schema({
+  version: { type: String, required: true, trim: true },
+  locationVersion: { type: String, required: true, trim: true },
+  acceptedAt: { type: Date, required: true },
+  lawfulBasis: { type: String, required: true, trim: true },
+  healthConsent: { type: Boolean, required: true },
+}, { _id: false });
 
 const mobileUserSchema = new mongoose.Schema(
   {
@@ -24,6 +31,7 @@ const mobileUserSchema = new mongoose.Schema(
     emailVersion: { type: Number, default: 0, min: 0 },
     tokenVersion: { type: Number, default: 0, min: 0 },
     policyAcceptance: { type: AccountPolicySchema, default: undefined },
+    reportingAcceptance: { type: ReportingAcceptanceSchema, default: undefined },
   },
   {
     timestamps: true,
