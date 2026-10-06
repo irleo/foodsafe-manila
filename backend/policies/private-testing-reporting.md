@@ -18,6 +18,6 @@ The testing period is arranged with your organizer. Automatic deletion of accoun
 
 5. Separate reporting consent
 
-Reporting is optional. Terms acceptance and Privacy Policy acknowledgement do not give consent to reporting or location processing. The controls below separately record reporting acknowledgement, permission to use location for reporting, and purpose-specific consent for the simulated report, account reference, and precise location. Device permission is requested separately by Android or iOS when needed. You may decline and continue using other features.
+Reporting is optional. Terms acceptance and Privacy Policy acknowledgement do not give consent to reporting or location processing. The controls below record acknowledgement of the reporting and location disclosures and purpose-specific consent for the simulated report, account reference, and precise location. Android or iOS controls device location access; there is no separate in-app location toggle or checkbox. When phone permission is granted and location services are enabled, the app automatically displays your location. You may decline and continue using other features.
 
 Your reporting acknowledgement/consent version, location notice version, and server timestamp are saved with your account and referenced on submitted reports. Once accepted, this disclosure applies to later reports under the same versions; it is shown for acceptance again when the disclosure or applicable processing changes. Review the Terms of Use and Privacy Policy for the wider account and testing context.

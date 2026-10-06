@@ -25,7 +25,8 @@ class ReportFormScreen extends StatefulWidget {
   State<ReportFormScreen> createState() => _ReportFormScreenState();
 }
 
-class _ReportFormScreenState extends State<ReportFormScreen> {
+class _ReportFormScreenState extends State<ReportFormScreen> with WidgetsBindingObserver {
+  bool _refreshingLocation = false;
   bool isLoading = false;
   int _currentStep = 0;
   PolicyBundle? _reportPolicies;
@@ -50,14 +51,10 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       setState(() {
         _reportPolicies = bundle;
         _healthConsent = status.healthConsent;
-        locationText = LocationService.cachedManilaLocation?.formatted ?? 'Location unavailable';
+        locationText = 'Getting your location...';
+        _checkingPolicies = false;
       });
-      if (PolicyService.locationEnabled) {
-        final resolved = await LocationService.resolveManilaLocation(forceRefresh: true)
-            .timeout(const Duration(seconds: 15));
-        if (!mounted) return;
-        setState(() => locationText = resolved?.formatted ?? 'Location unavailable');
-      }
+      unawaited(_refreshLocation());
       await _initCooldown().timeout(const Duration(seconds: 15));
     } catch (error) {
       if (mounted) {
@@ -84,22 +81,11 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
     if (!mounted) return;
     await PolicyService.acceptReportingPolicies(bundle, healthConsent);
     if (!mounted) return;
-    await PolicyService.setLocationEnabled(
-      true,
-      version: bundle.policy('location').version,
-    );
-    if (!mounted) return;
-    if (!await LocationService.initializePermission() || !mounted) {
-      if (mounted) SnackbarWidgets.info(context, 'Location permission is needed for this reporting feature.');
-      return;
-    }
-    final resolved = await LocationService.resolveManilaLocation(forceRefresh: true);
-    if (!mounted) return;
     setState(() {
       _reportPolicies = bundle;
       _healthConsent = healthConsent;
-      locationText = resolved?.formatted ?? 'Location unavailable';
     });
+    unawaited(_refreshLocation());
     await _initCooldown();
   }
 
@@ -495,6 +481,31 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
     });
 
     locationText = 'Location not requested';
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _reportPolicies != null) {
+      unawaited(_refreshLocation(requestIfDenied: false));
+    }
+  }
+
+  Future<void> _refreshLocation({bool requestIfDenied = true}) async {
+    if (!mounted || _refreshingLocation) return;
+    _refreshingLocation = true;
+    setState(() => locationText = 'Getting your location...');
+    try {
+      final resolved = await LocationService.resolveManilaLocation(
+        forceRefresh: true,
+        requestIfDenied: requestIfDenied,
+      ).timeout(const Duration(seconds: 15));
+      if (mounted) setState(() => locationText = resolved?.formatted ?? LocationService.unavailableMessage);
+    } catch (error) {
+      if (mounted) setState(() => locationText = LocationService.unavailableMessage);
+    } finally {
+      _refreshingLocation = false;
+    }
   }
 
   Future<void> _promptSignIn() async {
@@ -592,6 +603,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _locationDescriptionController.dispose();
     _cooldownTimer?.cancel();
     super.dispose();

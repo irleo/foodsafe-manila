@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'package:foodsafe_manila/services/api_client.dart';
 import 'package:foodsafe_manila/services/policy_service.dart';
-import 'package:foodsafe_manila/services/location_service.dart';
 import 'package:foodsafe_manila/services/session.dart';
 
 class PolicyLinks extends StatelessWidget {
@@ -345,41 +344,6 @@ class _PolicyScreenState extends State<PolicyScreen> {
                     for (final document in documents)
                       _PolicyDocumentView(document: document),
                     if (widget.type == null) ...[
-                      SwitchListTile(
-                        title: const Text('Use device location (optional)'),
-                        subtitle: const Text(
-                          'OS permission is separate from Privacy Policy acknowledgement.',
-                        ),
-                        value: PolicyService.locationEnabled,
-                        onChanged: _saving
-                            ? null
-                            : (enabled) async {
-                                try {
-                                  if (enabled) {
-                                    if (!await showLocationDisclosure(
-                                      context,
-                                    )) {
-                                      return;
-                                    }
-                                    await LocationService.initializePermission();
-                                  } else {
-                                    await PolicyService.setLocationEnabled(
-                                      false,
-                                    );
-                                    LocationService.clearCachedLocation();
-                                  }
-                                  if (mounted) setState(() {});
-                                } catch (error) {
-                                  if (mounted) {
-                                    setState(
-                                      () => _error = ApiClient.safeErrorMessage(
-                                        error,
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
-                      ),
                       if (widget.requireAcknowledgement &&
                           Session.currentUser != null) ...[
                         const Text(
@@ -587,71 +551,6 @@ class _PolicyDocumentView extends StatelessWidget {
   }
 }
 
-Future<bool> showLocationDisclosure(BuildContext context) async {
-  try {
-    final bundle = await PolicyService.load();
-    if (!context.mounted) return false;
-    final notice = bundle.policy('location');
-    bool selected = false;
-    final agreed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Before using location'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SelectableText(
-                  'Version ${notice.version}\n\n${notice.displayText}',
-                ),
-                CheckboxListTile(
-                  value: selected,
-                  onChanged: notice.published
-                      ? (value) => setState(() => selected = value == true)
-                      : null,
-                  title: const Text(
-                    'Use device location for location features (optional).',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Decline'),
-            ),
-            FilledButton(
-              onPressed: notice.published && selected
-                  ? () => Navigator.pop(dialogContext, true)
-                  : null,
-              child: const Text('Continue to device permission'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (agreed != true) return false;
-    await PolicyService.setLocationEnabled(true, version: notice.version);
-    return true;
-  } catch (error) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            ApiClient.safeErrorMessage(
-              error,
-              fallback: 'Location disclosure could not be loaded.',
-            ),
-          ),
-        ),
-      );
-    }
-    return false;
-  }
-}
-
 Future<bool> ensureAccountPolicies(BuildContext context) async {
   if (!await PolicyService.requiresAccountAcknowledgement()) return true;
   if (!context.mounted) return false;
@@ -678,7 +577,6 @@ class _ReportingDisclosureScreenState extends State<ReportingDisclosureScreen> {
   bool _acknowledged = false;
   bool _termsAccepted = false;
   bool _privacyAcknowledged = false;
-  bool _locationAcknowledged = false;
   bool _healthConsent = false;
   bool _busy = false;
   String? _error;
@@ -722,7 +620,6 @@ class _ReportingDisclosureScreenState extends State<ReportingDisclosureScreen> {
                   error.code == 'REPORT_DISCLOSURE_REQUIRED')) {
             _termsAccepted = false;
             _privacyAcknowledged = false;
-            _locationAcknowledged = false;
             _acknowledged = false;
             _healthConsent = false;
             _future = _loadReview();
@@ -837,23 +734,7 @@ class _ReportingDisclosureScreenState extends State<ReportingDisclosureScreen> {
                                 setState(() => _acknowledged = value == true)
                           : null,
                       title: const Text(
-                        'I have read the reporting disclosure.',
-                      ),
-                      controlAffinity: ListTileControlAffinity.leading,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                    CheckboxListTile(
-                      value: _locationAcknowledged,
-                      onChanged: enabled
-                          ? (value) => setState(
-                              () => _locationAcknowledged = value == true,
-                            )
-                          : null,
-                      title: const Text(
-                        'I agree to use device location for this reporting feature.',
-                      ),
-                      subtitle: const Text(
-                        'Android or iOS may ask for device permission next. You can decline and leave without submitting a report.',
+                        'I have read the reporting and location disclosures.',
                       ),
                       controlAffinity: ListTileControlAffinity.leading,
                       contentPadding: EdgeInsets.zero,
@@ -887,7 +768,6 @@ class _ReportingDisclosureScreenState extends State<ReportingDisclosureScreen> {
                           bundle.reportingPublished &&
                               (!review.accountAcknowledgementRequired ||
                                   (_termsAccepted && _privacyAcknowledged)) &&
-                              _locationAcknowledged &&
                               _acknowledged &&
                               !_busy &&
                               (bundle.healthConsentRequired != true ||

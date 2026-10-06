@@ -1,66 +1,86 @@
 import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart' show Geolocator;
 import 'package:location/location.dart' as loc;
 
 import 'package:foodsafe_manila/services/debug_location_service.dart';
 import 'package:foodsafe_manila/services/manila_geo_service.dart';
-import 'package:foodsafe_manila/services/policy_service.dart';
+
+enum LocationAccessStatus {
+  unknown,
+  serviceDisabled,
+  permissionDenied,
+  permissionDeniedForever,
+  granted,
+}
 
 class LocationService {
   static final loc.Location _location = loc.Location();
 
   static String? cachedAddress;
   static ManilaLocation? cachedManilaLocation;
+  static LocationAccessStatus _accessStatus = LocationAccessStatus.unknown;
 
-  static bool _permissionInitialized = false;
+  static bool get needsPermission =>
+      _accessStatus == LocationAccessStatus.permissionDenied ||
+      _accessStatus == LocationAccessStatus.permissionDeniedForever;
+
+  static String get unavailableMessage => 'Location unavailable';
 
   static void clearCachedLocation() {
-    _permissionInitialized = false;
     cachedAddress = null;
     cachedManilaLocation = null;
   }
 
-  /// Initializes the device location service and permission.
-  ///
-  /// Call this once during app startup before runApp().
-  static Future<bool> initializePermission() async {
-    if (!await PolicyService.ensureLocationDisclosure()) {
-      clearCachedLocation();
-      return false;
-    }
-    if (_permissionInitialized) {
-      return true;
-    }
-
+  /// Rechecks phone permission on each access so grants and revocations apply.
+  static Future<bool> initializePermission({
+    bool requestIfDenied = true,
+  }) async {
     try {
       // Make sure the device's location service is enabled.
       var serviceEnabled = await _location.serviceEnabled();
 
-      if (!serviceEnabled) {
+      if (!serviceEnabled && requestIfDenied) {
         serviceEnabled = await _location.requestService();
 
         if (!serviceEnabled) {
+          _accessStatus = LocationAccessStatus.serviceDisabled;
+          clearCachedLocation();
           return false;
         }
+      }
+      if (!serviceEnabled) {
+        _accessStatus = LocationAccessStatus.serviceDisabled;
+        clearCachedLocation();
+        return false;
       }
 
       // Check the current permission.
       var permission = await _location.hasPermission();
 
       // Request permission if it has not been granted yet.
-      if (permission == loc.PermissionStatus.denied) {
+      if (permission == loc.PermissionStatus.denied && requestIfDenied) {
         permission = await _location.requestPermission();
       }
 
-      if (permission != loc.PermissionStatus.granted) {
+      if (permission != loc.PermissionStatus.granted &&
+          permission != loc.PermissionStatus.grantedLimited) {
+        _accessStatus = permission == loc.PermissionStatus.deniedForever
+            ? LocationAccessStatus.permissionDeniedForever
+            : LocationAccessStatus.permissionDenied;
+        clearCachedLocation();
         return false;
       }
 
-      _permissionInitialized = true;
+      _accessStatus = LocationAccessStatus.granted;
       return true;
     } catch (_) {
+      _accessStatus = LocationAccessStatus.unknown;
+      clearCachedLocation();
       return false;
     }
   }
+
+  static Future<bool> openPermissionSettings() => Geolocator.openAppSettings();
 
   /// Preloads the user's location and resolves it to a Manila barangay.
   ///
@@ -88,9 +108,12 @@ class LocationService {
 
   static Future<ManilaLocation?> resolveManilaLocation({
     bool forceRefresh = false,
+    bool requestIfDenied = true,
   }) async {
-    if (!await initializePermission()) return null;
-    if (PolicyService.locationEnabled && cachedManilaLocation != null && !forceRefresh) {
+    if (!await initializePermission(requestIfDenied: requestIfDenied)) {
+      return null;
+    }
+    if (cachedManilaLocation != null && !forceRefresh) {
       return cachedManilaLocation;
     }
 
@@ -130,8 +153,11 @@ class LocationService {
 
   static Future<String> getUserAddress({
     bool forceRefresh = false,
+    bool requestIfDenied = true,
   }) async {
-    if (!await initializePermission()) return 'Location unavailable';
+    if (!await initializePermission(requestIfDenied: requestIfDenied)) {
+      return unavailableMessage;
+    }
     if (cachedAddress != null && !forceRefresh) {
       return cachedAddress!;
     }
@@ -153,7 +179,7 @@ class LocationService {
       final lng = locationData.longitude;
 
       if (lat == null || lng == null) {
-        return 'Location unavailable';
+        return unavailableMessage;
       }
 
       final resolved = ManilaGeoService.lookup(lat, lng);
@@ -170,7 +196,7 @@ class LocationService {
 
       return fallback;
     } catch (_) {
-      return 'Location unavailable';
+      return unavailableMessage;
     }
   }
 
@@ -192,10 +218,7 @@ class LocationService {
         return null;
       }
 
-      return {
-        'lat': lat,
-        'lng': lng,
-      };
+      return {'lat': lat, 'lng': lng};
     } catch (_) {
       return null;
     }
@@ -209,12 +232,12 @@ class LocationService {
       final lng = locationData.longitude;
 
       if (lat == null || lng == null) {
-        return 'Location unavailable';
+        return unavailableMessage;
       }
 
       return await _getPlacemarkAddress(lat, lng);
     } catch (_) {
-      return 'Location unavailable';
+      return unavailableMessage;
     }
   }
 
@@ -223,10 +246,7 @@ class LocationService {
     double longitude,
   ) async {
     try {
-      final placemarks = await placemarkFromCoordinates(
-        latitude,
-        longitude,
-      );
+      final placemarks = await placemarkFromCoordinates(latitude, longitude);
 
       if (placemarks.isEmpty) {
         return 'Unknown location';
@@ -254,7 +274,7 @@ class LocationService {
 
       return result.isEmpty ? 'Unknown location' : result;
     } catch (_) {
-      return 'Location unavailable';
+      return unavailableMessage;
     }
   }
 

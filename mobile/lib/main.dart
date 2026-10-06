@@ -6,7 +6,6 @@ import 'package:foodsafe_manila/screens/auth/sign_up_screen.dart';
 import 'package:foodsafe_manila/screens/auth/change_password_screen.dart';
 import 'package:foodsafe_manila/services/api_client.dart';
 import 'package:foodsafe_manila/services/session.dart';
-import 'package:foodsafe_manila/services/policy_service.dart';
 import 'package:foodsafe_manila/screens/legal/policy_screen.dart';
 
 final appNavigatorKey = GlobalKey<NavigatorState>();
@@ -37,11 +36,6 @@ class _StartupAppState extends State<_StartupApp> {
     try {
       await Session.initialize();
       await ApiClient.warmSession();
-      await PolicyService.initialize();
-      PolicyService.requestLocationDisclosure = () async {
-        final context = appNavigatorKey.currentContext;
-        return context == null ? false : showLocationDisclosure(context);
-      };
     } catch (error, stack) {
       Error.throwWithStackTrace(error, stack);
     }

@@ -14,7 +14,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:foodsafe_manila/screens/dashboard/home_screen.dart';
 import 'package:foodsafe_manila/services/location_service.dart';
 import 'package:foodsafe_manila/services/manila_geo_service.dart';
-import 'package:foodsafe_manila/services/policy_service.dart';
 
 class _OfflineFonts implements AssetManifest {
   @override
@@ -39,24 +38,18 @@ void main() {
   var permissionRequests = 0;
   var permission = 1;
   var requestedPermission = 1;
+  var serviceEnabled = true;
   Completer<Map<String, double>>? pendingPosition;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     LocationService.clearCachedLocation();
-    PolicyService.requestLocationDisclosure = null;
     policyJson = await File('assets/mobile-policies.json').readAsString();
-    final bundle = PolicyBundle.fromJson(
-      jsonDecode(policyJson) as Map<String, dynamic>,
-    );
-    await PolicyService.setLocationEnabled(
-      true,
-      version: bundle.policy('location').version,
-    );
     gpsCalls = 0;
     permissionRequests = 0;
     permission = 1;
     requestedPermission = 1;
+    serviceEnabled = true;
     pendingPosition = null;
 
     GoogleFonts.config.allowRuntimeFetching = false;
@@ -108,7 +101,8 @@ void main() {
     messenger.setMockMethodCallHandler(channel, (call) async {
       switch (call.method) {
         case 'serviceEnabled':
-          return 1;
+        case 'requestService':
+          return serviceEnabled ? 1 : 0;
         case 'hasPermission':
           return permission;
         case 'requestPermission':
@@ -128,7 +122,6 @@ void main() {
       messenger.setMockMessageHandler('flutter/assets', null);
       messenger.setMockMethodCallHandler(channel, null);
       LocationService.clearCachedLocation();
-      PolicyService.locationEnabled = false;
     });
   });
 
@@ -156,39 +149,44 @@ void main() {
       expect(key.currentState!.isLocationLoading, isFalse);
       expect(key.currentState!.locationText, contains('Barangay'));
       expect(find.text(key.currentState!.locationText), findsOneWidget);
+      expect(
+        tester
+            .widget<InkWell>(find.byKey(const ValueKey('home-location-box')))
+            .onTap,
+        isNull,
+      );
       expect(tester.takeException(), isNull);
     }, () => MockClient((_) async => http.Response(policyJson, 200)));
   });
 
-  testWidgets('OS permission alone does not bypass location opt-in', (
-    tester,
-  ) async {
-    await PolicyService.setLocationEnabled(false);
-    await http.runWithClient(() async {
-      final key = GlobalKey<HomeScreenState>();
-      await showHome(tester, key);
-      expect(gpsCalls, 0);
-      expect(key.currentState!.locationText, 'Location unavailable');
-      final bundle = PolicyBundle.fromJson(
-        jsonDecode(policyJson) as Map<String, dynamic>,
-      );
-      await PolicyService.setLocationEnabled(
-        true,
-        version: bundle.policy('location').version,
-      );
-      final refresh = key.currentState!.refreshData();
-      await tester.pumpAndSettle();
-      await refresh;
-      expect(gpsCalls, 1);
-      expect(key.currentState!.locationText, contains('Barangay'));
-      await PolicyService.setLocationEnabled(false);
-      final disabledRefresh = key.currentState!.refreshData();
-      await tester.pumpAndSettle();
-      await disabledRefresh;
-      expect(gpsCalls, 1);
-      expect(key.currentState!.locationText, 'Location unavailable');
-    }, () => MockClient((_) async => http.Response(policyJson, 200)));
-  });
+  testWidgets(
+    'phone permission controls location despite a legacy disabled opt-in',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'policy_location_enabled': false,
+      });
+      await http.runWithClient(() async {
+        final key = GlobalKey<HomeScreenState>();
+        await showHome(tester, key);
+        expect(gpsCalls, 1);
+        expect(permissionRequests, 0);
+        expect(key.currentState!.locationText, contains('Barangay'));
+        permission = 2;
+        final refresh = key.currentState!.refreshData();
+        await tester.pumpAndSettle();
+        await refresh;
+        expect(gpsCalls, 1);
+        expect(LocationService.cachedManilaLocation, isNull);
+        expect(key.currentState!.locationText, 'Location unavailable');
+        permission = 1;
+        final grantedRefresh = key.currentState!.refreshData();
+        await tester.pumpAndSettle();
+        await grantedRefresh;
+        expect(gpsCalls, 2);
+        expect(key.currentState!.locationText, contains('Barangay'));
+      }, () => MockClient((_) async => http.Response(policyJson, 200)));
+    },
+  );
 
   testWidgets('denied permission stops loading without querying GPS', (
     tester,
@@ -204,6 +202,101 @@ void main() {
       expect(key.currentState!.locationText, 'Location unavailable');
     }, () => MockClient((_) async => http.Response(policyJson, 200)));
   });
+
+  testWidgets('disabled phone location still exposes the settings shortcut', (
+    tester,
+  ) async {
+    serviceEnabled = false;
+    final key = GlobalKey<HomeScreenState>();
+    await showHome(tester, key);
+    expect(gpsCalls, 0);
+    expect(permissionRequests, 0);
+    expect(key.currentState!.locationText, 'Location unavailable');
+    expect(find.text('Location unavailable'), findsOneWidget);
+    expect(
+      tester
+          .widget<InkWell>(find.byKey(const ValueKey('home-location-box')))
+          .onTap,
+      isNotNull,
+    );
+    expect(
+      find.byKey(const ValueKey('home-location-settings')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final deniedPermission in [0, 2]) {
+    testWidgets(
+      'Home settings shortcut opens settings when permission is $deniedPermission',
+      (tester) async {
+        permission = deniedPermission;
+        requestedPermission = deniedPermission;
+        var settingsOpened = 0;
+        const settingsChannel = MethodChannel(
+          'flutter.baseflow.com/geolocator',
+        );
+        final messenger =
+            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+        messenger.setMockMethodCallHandler(settingsChannel, (call) async {
+          expect(call.method, 'openAppSettings');
+          settingsOpened++;
+          return true;
+        });
+        addTearDown(
+          () => messenger.setMockMethodCallHandler(settingsChannel, null),
+        );
+        final key = GlobalKey<HomeScreenState>();
+        await showHome(tester, key);
+        expect(key.currentState!.locationText, 'Location unavailable');
+        expect(find.text('Please allow location access.'), findsOneWidget);
+        final box = find.byKey(const ValueKey('home-location-box'));
+        final icon = find.byKey(const ValueKey('home-location-settings'));
+        expect(tester.widget<InkWell>(box).onTap, isNotNull);
+        expect(
+          find.descendant(of: icon, matching: find.byIcon(Icons.open_in_new)),
+          findsOneWidget,
+        );
+        await tester.tap(deniedPermission == 0 ? box : icon);
+        await tester.pumpAndSettle();
+        expect(settingsOpened, 1);
+        expect(permissionRequests, deniedPermission == 0 ? 1 : 0);
+        expect(gpsCalls, 0);
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        permission = 1;
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pumpAndSettle();
+        expect(gpsCalls, 1);
+        expect(key.currentState!.locationText, contains('Barangay'));
+        expect(tester.widget<InkWell>(box).onTap, isNull);
+        expect(icon, findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'returning from phone settings automatically displays granted location',
+    (tester) async {
+      permission = 0;
+      requestedPermission = 0;
+      final key = GlobalKey<HomeScreenState>();
+      await showHome(tester, key);
+      expect(gpsCalls, 0);
+      expect(permissionRequests, 1);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      permission = 1;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(gpsCalls, 1);
+      expect(permissionRequests, 1);
+      expect(find.text(key.currentState!.locationText), findsOneWidget);
+      expect(key.currentState!.locationText, contains('Barangay'));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('simultaneous refreshes do not duplicate a pending GPS request', (
     tester,
@@ -233,6 +326,16 @@ void main() {
       await tester.pump(const Duration(seconds: 26));
       expect(key.currentState!.isLocationLoading, isFalse);
       expect(key.currentState!.locationText, 'Location unavailable');
+      expect(
+        find.byKey(const ValueKey('home-location-settings')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<InkWell>(find.byKey(const ValueKey('home-location-box')))
+            .onTap,
+        isNotNull,
+      );
       await tester.pumpWidget(const SizedBox.shrink());
       pendingPosition!.complete(point);
       await tester.pumpAndSettle();

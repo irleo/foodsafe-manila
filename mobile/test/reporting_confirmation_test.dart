@@ -43,8 +43,7 @@ Future<void> _checkAll(
   final labels = [
     if (includeAccountChoices) 'I accept the Terms of Use (required).',
     if (includeAccountChoices) 'I acknowledge the Privacy Policy.',
-    'I have read the reporting disclosure.',
-    'I agree to use device location for this reporting feature.',
+    'I have read the reporting and location disclosures.',
     bundle.healthConsentText,
   ];
   for (final label in labels) {
@@ -62,10 +61,21 @@ void main() {
   late String policyJson;
 
   setUp(() async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('lyokone/location'),
+          (call) async => call.method == 'serviceEnabled' ? 1 : 2,
+        );
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            const MethodChannel('lyokone/location'),
+            null,
+          ),
+    );
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     await Session.initialize();
-    PolicyService.locationEnabled = false;
     policyJson = await File('assets/mobile-policies.json').readAsString();
     GoogleFonts.config.allowRuntimeFetching = false;
     final config =
@@ -249,6 +259,10 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(PolicyChoices), findsNothing);
+      expect(
+        find.text('I agree to use device location for this reporting feature.'),
+        findsNothing,
+      );
       expect(find.text('Terms of Use'), findsOneWidget);
       expect(find.text('Privacy Policy'), findsOneWidget);
       await _checkAll(tester, policyJson, includeAccountChoices: false);
@@ -410,12 +424,8 @@ void main() {
               ),
             );
             await tester.pumpAndSettle();
-            await tester.scrollUntilVisible(
-              find.text('Use device location (optional)'),
-              400,
-              scrollable: find.byType(Scrollable).first,
-            );
-            await tester.pumpAndSettle();
+            expect(find.text('Device location permission'), findsNothing);
+            expect(find.byType(SwitchListTile), findsNothing);
             if (requireAcknowledgement) {
               await tester.scrollUntilVisible(
                 find.text('Save acknowledgement'),

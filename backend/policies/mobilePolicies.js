@@ -11,7 +11,7 @@ const version = "2026-10-05.testing.2";
 /** @type {Record<PolicyType, Policy>} */
 export const mobilePolicies = {
   privacy: {
-    type: "privacy", title: "Privacy Policy", version, requiredVersion: version,
+    type: "privacy", title: "Privacy Policy", version: "2026-10-06.testing.4", requiredVersion: "2026-10-06.testing.4",
     status: "testing",
     text: readFileSync(new URL("./private-testing-privacy.md", import.meta.url), "utf8"),
   },
@@ -21,18 +21,18 @@ export const mobilePolicies = {
     text: readFileSync(new URL("./private-testing-terms.md", import.meta.url), "utf8"),
   },
   reporting: {
-    type: "reporting", title: "Before You Report", version: "2026-10-05.testing.3", requiredVersion: "2026-10-05.testing.3",
+    type: "reporting", title: "Before You Report", version: "2026-10-06.testing.4", requiredVersion: "2026-10-06.testing.4",
     status: "testing",
     text: readFileSync(new URL("./private-testing-reporting.md", import.meta.url), "utf8"),
   },
   location: {
-    type: "location", title: "Before Using Location", version, requiredVersion: version,
+    type: "location", title: "Before Using Location", version: "2026-10-06.testing.4", requiredVersion: "2026-10-06.testing.4",
     status: "testing",
-    text: "Using location reads precise device coordinates to identify your district/barangay and provide nearby information during private testing. Reports send precise coordinates to the backend. Address lookup may use platform geocoding services; map tiles are requested from OpenStreetMap.\n\nLocation is optional for browsing public information. Continuing to device permission is separate from acknowledging the Privacy Policy or accepting Terms. You can decline, or disable location in the app's Privacy and Terms area. This stops future location reads, but does not delete coordinates in existing test reports. Contact the test organizer about those records.",
+    text: "Using location reads precise device coordinates to identify your district/barangay and provide nearby information during private testing. Reports send precise coordinates to the backend. Address lookup may use platform geocoding services; map tiles are requested from OpenStreetMap.\n\nLocation is optional for browsing public information. Continuing to device permission is separate from acknowledging the Privacy Policy or accepting Terms. Once phone permission is granted and location services are enabled, location-based screens automatically display your location. There is no separate in-app location toggle. You can decline or revoke permission in your phone settings. This stops future location reads, but does not delete coordinates in existing test reports. Contact the test organizer about those records.",
   },
 };
 
-// Private testing uses a separate opt-in for simulated reports and precise location.
+// Private testing records reporting consent covering simulated reports and precise location.
 /** @type {{lawfulBasis: string, consentRequired: boolean | null, consentText: string}} */
 export const reportingProcessing = {
   lawfulBasis: "consent",

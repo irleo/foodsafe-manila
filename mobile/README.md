@@ -7,7 +7,7 @@ The current bundled policies describe a **private testing trial**. Test reports 
 ## Features
 
 - **Home and insights:** View case summaries, district and disease distributions, historical trends, and forecasts supplied by the backend.
-- **Health facility map:** Browse Manila health centers and hospitals, filter facility types, and view facility details and distance when location is available.
+- **Health facility map:** Browse Manila health centers and hospitals, filter facility types, and view facility details and distance when location is available. Location loads automatically once phone permission and location services are enabled; access is managed in phone settings, with no in-app location toggle.
 - **Reporting:** Complete a guided report with symptoms, food/exposure details, and geographic information; review it before submission and view your report history.
 - **Accounts:** Register and sign in with a Philippine mobile number, verify SMS codes, update account information, change passwords, and manage recovery email verification.
 - **Privacy controls:** Read Terms of Use and the Privacy Policy before registration. Review separate reporting/location disclosures on first use; the backend saves the versions and acknowledgement/consent timestamp so later reports open the form directly unless policies change. Bundled notices remain readable when the API is unavailable.

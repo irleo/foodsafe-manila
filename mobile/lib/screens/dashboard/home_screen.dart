@@ -1,5 +1,8 @@
 import 'package:foodsafe_manila/layout/refreshable_screen_layout.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:foodsafe_manila/widgets/snackbar_widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:foodsafe_manila/data/facilities.dart';
@@ -425,11 +428,16 @@ class _ReportSheetData {
   });
 }
 
-class HomeScreenState extends State<HomeScreen> {
+class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late String locationText;
   bool isLocationLoading = true;
   bool _refreshingLocation = false;
+  bool _openingLocationSettings = false;
+  bool _permissionToastShown = false;
   int? expandedTip;
+
+  bool get _canOpenLocationSettings =>
+      !isLocationLoading && locationText == LocationService.unavailableMessage;
 
   String _normalizeDistrictLabel(String value) {
     final cleaned = value
@@ -553,9 +561,10 @@ class HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     locationText = _composeHeaderLocation(
-      LocationService.cachedAddress ?? "Location unavailable",
+      LocationService.cachedAddress ?? 'Getting your location...',
     );
 
     isLocationLoading = false;
@@ -564,7 +573,20 @@ class HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> refreshData() async {
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(refreshData(requestIfDenied: false));
+    }
+  }
+
+  Future<void> refreshData({bool requestIfDenied = true}) async {
     if (!mounted || _refreshingLocation) return;
     _refreshingLocation = true;
     setState(() {
@@ -574,6 +596,7 @@ class HomeScreenState extends State<HomeScreen> {
     try {
       final updated = await LocationService.getUserAddress(
         forceRefresh: true,
+        requestIfDenied: requestIfDenied,
       ).timeout(const Duration(seconds: 25));
 
       if (!mounted) return;
@@ -581,15 +604,39 @@ class HomeScreenState extends State<HomeScreen> {
       setState(() {
         locationText = _composeHeaderLocation(updated);
       });
+      if (LocationService.needsPermission && !_permissionToastShown) {
+        _permissionToastShown = true;
+        SnackbarWidgets.info(context, 'Please allow location access.');
+      } else if (!LocationService.needsPermission) {
+        _permissionToastShown = false;
+      }
     } catch (_) {
       if (!mounted) return;
 
       setState(() {
-        locationText = 'Location unavailable';
+        locationText = LocationService.unavailableMessage;
       });
     } finally {
       _refreshingLocation = false;
       if (mounted) setState(() => isLocationLoading = false);
+    }
+  }
+
+  Future<void> _allowLocationPermission() async {
+    if (!_canOpenLocationSettings || _openingLocationSettings) return;
+    try {
+      _openingLocationSettings = true;
+      SnackbarWidgets.info(context, 'Please allow location access.');
+      final opened = await LocationService.openPermissionSettings();
+      if (!opened && mounted) {
+        SnackbarWidgets.info(context, 'Open phone settings to allow location access.');
+      }
+    } catch (error) {
+      if (mounted) {
+        SnackbarWidgets.info(context, 'Open phone settings to allow location access.');
+      }
+    } finally {
+      _openingLocationSettings = false;
     }
   }
 
@@ -689,7 +736,13 @@ class HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 22),
 
           // Location card
-          Container(
+          InkWell(
+            key: const ValueKey('home-location-box'),
+            borderRadius: BorderRadius.circular(12),
+            onTap: _canOpenLocationSettings
+                ? _allowLocationPermission
+                : null,
+            child: Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -716,10 +769,9 @@ class HomeScreenState extends State<HomeScreen> {
                     // Location text / skeleton
                     isLocationLoading
                         ? _buildSkeleton(width: 180, height: 22)
-                        : Flexible(
+                        : Expanded(
                             child: Text(
                               locationText,
-                              overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.inter(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
@@ -727,6 +779,15 @@ class HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                           ),
+                    if (_canOpenLocationSettings) ...[
+                      const SizedBox(width: 8),
+                      IconButton(
+                        key: const ValueKey('home-location-settings'),
+                        tooltip: 'Location access settings',
+                        onPressed: _allowLocationPermission,
+                        icon: const Icon(Icons.open_in_new, color: Colors.white, size: 18),
+                      ),
+                    ],
                   ],
                 ),
 
@@ -743,6 +804,7 @@ class HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
               ],
+            ),
             ),
           ),
         ],

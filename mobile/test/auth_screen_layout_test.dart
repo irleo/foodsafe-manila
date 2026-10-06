@@ -16,7 +16,6 @@ import 'package:foodsafe_manila/screens/auth/sign_in_screen.dart';
 import 'package:foodsafe_manila/screens/auth/sign_up_screen.dart';
 import 'package:foodsafe_manila/screens/auth/change_password_screen.dart';
 import 'package:foodsafe_manila/screens/legal/policy_screen.dart';
-import 'package:foodsafe_manila/services/policy_service.dart';
 import 'package:foodsafe_manila/services/session.dart';
 import 'package:foodsafe_manila/widgets/step_progress_indicator.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -43,7 +42,6 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     await Session.initialize();
-    PolicyService.locationEnabled = false;
     policyJson = await File('assets/mobile-policies.json').readAsString();
     GoogleFonts.config.allowRuntimeFetching = false;
     final config =

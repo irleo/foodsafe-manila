@@ -44,9 +44,10 @@ browsing; the current geographic report workflow requires it. You may skip that
 test activity. Address lookup may use platform geocoding services, and map tiles
 are loaded from OpenStreetMap.
 
-An in-app disclosure precedes device permission. OS permission is not acceptance
-of this Policy. Disable the app's location preference in Privacy and Terms to stop
-future app location reads; you may also revoke device permission in OS settings.
+When phone location permission is granted and location services are enabled, the
+app automatically displays your location on location-based screens. There is no
+separate in-app location toggle. OS permission is not acceptance of this Policy.
+Revoke device permission in your phone settings to stop future location reads.
 This does not automatically delete coordinates in existing reports.
 
 5. Purposes, Lawful Bases, and Recipients

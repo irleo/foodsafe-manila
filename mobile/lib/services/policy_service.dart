@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:foodsafe_manila/services/api_client.dart';
 import 'package:foodsafe_manila/services/session.dart';
@@ -76,16 +75,6 @@ class PolicyBundle {
 }
 
 class PolicyService {
-  static bool locationEnabled = false;
-  static String? _locationVersion;
-  static Future<bool> Function()? requestLocationDisclosure;
-
-  static Future<void> initialize() async {
-    final prefs = await SharedPreferences.getInstance();
-    locationEnabled = prefs.getBool('policy_location_enabled') ?? false;
-    _locationVersion = prefs.getString('policy_location_version');
-  }
-
   static Future<PolicyBundle> loadBundled() async {
     final text = await rootBundle.loadString('assets/mobile-policies.json');
     return PolicyBundle.fromJson(jsonDecode(text) as Map<String, dynamic>);
@@ -106,33 +95,6 @@ class PolicyService {
       // Reading notices must not depend on connectivity. The API still validates
       // the submitted versions before recording any acceptance.
       return loadBundled();
-    }
-  }
-
-  static Future<bool> ensureLocationDisclosure() async {
-    if (!locationEnabled) return false;
-    try {
-      final bundle = await load();
-      final notice = bundle.policy('location');
-      if (notice.published && _locationVersion == notice.version) return true;
-      return await requestLocationDisclosure?.call() ?? false;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  static Future<void> setLocationEnabled(
-    bool enabled, {
-    String? version,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    locationEnabled = enabled;
-    _locationVersion = enabled ? version : null;
-    await prefs.setBool('policy_location_enabled', enabled);
-    if (_locationVersion != null) {
-      await prefs.setString('policy_location_version', _locationVersion!);
-    } else {
-      await prefs.remove('policy_location_version');
     }
   }
 
