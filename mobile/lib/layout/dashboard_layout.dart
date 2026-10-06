@@ -75,7 +75,14 @@ class _DashboardLayoutState extends State<DashboardLayout>
       if (_selectedIndex != 0) _refreshCurrentTab();
     } catch (error) {
       if (mounted) {
-        SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+        SnackbarWidgets.error(
+          context,
+          ApiClient.safeErrorMessage(
+            error,
+            fallback:
+                "We couldn't reconnect your session. Please try again shortly.",
+          ),
+        );
       }
     }
   }
@@ -202,7 +209,11 @@ class _DashboardLayoutState extends State<DashboardLayout>
                     if (context.mounted) {
                       SnackbarWidgets.error(
                         context,
-                        ApiClient.safeErrorMessage(error),
+                        ApiClient.safeErrorMessage(
+                          error,
+                          fallback:
+                              "We couldn't open the account policies. Please try again.",
+                        ),
                       );
                     }
                   }

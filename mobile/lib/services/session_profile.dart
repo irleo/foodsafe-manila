@@ -3,6 +3,7 @@ class SessionProfile {
   final String username;
   final String phoneNumber;
   final String email;
+  // Historical recovery evidence, not permission to reset this account.
   final bool emailVerified;
 
   const SessionProfile({

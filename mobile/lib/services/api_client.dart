@@ -35,18 +35,58 @@ class ApiClient {
   );
 
   static const Map<String, String> _safeCodeMessages = {
-    'INTERNAL_ERROR': 'The request could not be completed.',
-    'DASHBOARD_DATA_ERROR': 'Dashboard data could not be loaded.',
-    'DATASET_UPLOAD_ERROR': 'The file could not be processed.',
-    'DATASET_SERVICE_ERROR': 'The dataset request could not be completed.',
-    'REPORT_SERVICE_ERROR': 'Reports could not be loaded.',
-    'HEATMAP_SERVICE_ERROR': 'Heatmap data is currently unavailable.',
-    'ANALYTICS_SERVICE_ERROR': 'Analytics data could not be loaded.',
-    'PREDICTION_SERVICE_ERROR': 'Prediction data is currently unavailable.',
+    'INTERNAL_ERROR':
+        "We couldn't complete this action. Please try again later.",
+    'DASHBOARD_DATA_ERROR':
+        "We couldn't load the dashboard. Please refresh and try again.",
+    'DATASET_UPLOAD_ERROR':
+        "We couldn't process this file. Check the upload list before trying again.",
+    'DATASET_SERVICE_ERROR':
+        "We couldn't load the uploaded data. Please refresh and try again.",
+    'REPORT_SERVICE_ERROR':
+        "We couldn't load your reports. Please refresh and try again.",
+    'HEATMAP_SERVICE_ERROR':
+        "We couldn't load the risk map. Please refresh and try again.",
+    'ANALYTICS_SERVICE_ERROR':
+        "We couldn't load the health insights. Please refresh and try again.",
+    'PREDICTION_SERVICE_ERROR':
+        "We couldn't load the forecasts. Please refresh and try again.",
+    'USER_SERVICE_ERROR':
+        "We couldn't load your account information. Please try again.",
+    'NOTIFICATION_SERVICE_ERROR':
+        "We couldn't load your notifications. Please try again.",
     'AUTHENTICATION_ERROR':
-        'The authentication request could not be completed.',
-    'AUTHORIZATION_ERROR': 'You do not have access to this action.',
+        "We couldn't complete your account request. Please try again later.",
+    'AUTHORIZATION_ERROR':
+        "You don't have permission to do this. Please contact the test administrator.",
   };
+
+  static bool _isPublicMessage(String value) =>
+      value.trim().isNotEmpty &&
+      value.length <= 500 &&
+      !_unsafeDetails.hasMatch(value) &&
+      !RegExp(
+        r'^(?:Request failed|Update failed|Failed to .+|User data could not be loaded\.|The request could not be completed\.|The authentication request could not be completed\.)$',
+      ).hasMatch(value);
+
+  static String _statusMessage(int status, String? fallback) {
+    if (status == 401) {
+      return 'Your session has expired. Please sign in again.';
+    }
+    if (status == 403) {
+      return "You don't have permission to do this. Please contact the test administrator.";
+    }
+    if (status == 429) {
+      return "You've made too many attempts. Please wait before trying again.";
+    }
+    if (status == 413) {
+      return 'This file is too large. Choose a smaller file and try again.';
+    }
+    return fallback ??
+        (status >= 500
+            ? "We couldn't complete this action. Please try again later."
+            : 'Please check your details and try again.');
+  }
 
   static const Map<String, String> jsonHeaders = {
     'Content-Type': 'application/json',
@@ -296,7 +336,7 @@ class ApiClient {
   static void throwIfError(http.Response response, {String? fallback}) {
     if (response.statusCode >= 200 && response.statusCode < 300) return;
 
-    String message = fallback ?? 'Request failed';
+    String message = _statusMessage(response.statusCode, fallback);
     String? code;
     String? errorId;
     int? retryAfterSeconds = int.tryParse(
@@ -308,24 +348,31 @@ class ApiClient {
     try {
       final data = jsonDecode(response.body);
       if (data is Map) {
-        code = data['code']?.toString();
-        errorId = data['errorId']?.toString();
+        final responseCode = data['code'];
+        if (responseCode is String) code = responseCode;
+        final reference = data['errorId'];
+        if (reference is String &&
+            RegExp(r'^ERR-[A-F0-9]{8}$').hasMatch(reference)) {
+          errorId = reference;
+        }
         final retry = data['retryAfterSeconds'];
         if (retry is num && retry.isFinite && retry > 0) {
           retryAfterSeconds = retry.ceil();
         }
         final codedMessage = _safeCodeMessages[code];
-        final candidate = data['message']?.toString() ?? '';
-        if (codedMessage != null) {
-          message = codedMessage;
-        } else if (candidate.isNotEmpty &&
-            candidate.length <= 500 &&
-            !_unsafeDetails.hasMatch(candidate)) {
+        final responseMessage = data['message'];
+        final candidate = responseMessage is String ? responseMessage : '';
+        if (_isPublicMessage(candidate)) {
           message = candidate;
+        } else if (fallback == null &&
+            response.statusCode >= 500 &&
+            codedMessage != null) {
+          message = codedMessage;
         }
       }
-    } catch (_) {
-      message = fallback ?? 'Request failed';
+    } on FormatException {
+      // Outage/proxy responses may be HTML rather than the API error envelope.
+      message = _statusMessage(response.statusCode, fallback);
     }
 
     throw ApiException(
@@ -339,7 +386,8 @@ class ApiClient {
 
   static String safeErrorMessage(
     Object error, {
-    String fallback = 'The request could not be completed.',
+    String fallback =
+        "We couldn't complete this action. Please try again later.",
   }) {
     if (error is SessionStorageException) return error.message;
     if (error is TimeoutException) {
@@ -349,13 +397,9 @@ class ApiClient {
       return 'Could not connect to the server. Check your connection and try again.';
     }
     if (error is! ApiException) return fallback;
-    final message =
-        error.message.isNotEmpty &&
-            error.message.length <= 500 &&
-            !_unsafeDetails.hasMatch(error.message)
-        ? error.message
-        : fallback;
-    return error.errorId == null
+    final message = _isPublicMessage(error.message) ? error.message : fallback;
+    return error.errorId == null ||
+            !RegExp(r'^ERR-[A-F0-9]{8}$').hasMatch(error.errorId!)
         ? message
         : '$message Reference: ${error.errorId}';
   }

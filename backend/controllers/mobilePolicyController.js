@@ -41,7 +41,7 @@ export const requireCurrentMobilePolicies = async (req, res, next) => {
     next();
   } catch (error) {
     logRequestError(error, req, "POLICY_REQUIREMENT_ERROR");
-    return res.status(503).json({ message: "Policy requirements could not be checked." });
+    return res.status(503).json({ code: "POLICY_CHECK_UNAVAILABLE", message: "Policy requirements could not be checked." });
   }
 };
 

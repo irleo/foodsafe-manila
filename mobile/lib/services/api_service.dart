@@ -72,7 +72,10 @@ class ApiService {
       auth: false,
     );
 
-    ApiClient.throwIfError(response, fallback: 'Failed to create account');
+    ApiClient.throwIfError(
+      response,
+      fallback: "We couldn't create your account. Please try again later.",
+    );
     return response.statusCode == 201;
   }
 
@@ -88,29 +91,36 @@ class ApiService {
 
     ApiClient.throwIfError(
       response,
-      fallback: 'Failed to send verification code',
+      fallback:
+          "We couldn't send a verification code right now. Please wait a moment and try again.",
     );
     final data = ApiClient.decodeMap(response);
     return OtpSendResult.fromJson(data);
   }
 
-  static Future<OtpSendResult> sendEmailOtp({
-    required String email,
+  static Future<EmailRecoverySendResult> sendEmailOtp({
+    required String phone,
     required String purpose,
+    String? flowId,
   }) async {
     final response = await ApiClient.post(
       '/auth/email/otp/send',
-      body: {'email': normalizeRecoveryEmail(email), 'purpose': purpose},
+      body: {
+        'phone': phone,
+        'purpose': purpose,
+        if (flowId != null) 'flowId': flowId,
+      },
       auth: false,
     );
 
     ApiClient.throwIfError(
       response,
-      fallback: 'Failed to send verification code',
+      fallback:
+          "We couldn't send the recovery email right now. Please wait a moment and try again.",
     );
 
     final data = ApiClient.decodeMap(response);
-    return OtpSendResult.fromJson(data);
+    return EmailRecoverySendResult.fromJson(data);
   }
 
   static Future<OtpVerificationResult> verifyMobileOtp({
@@ -124,7 +134,11 @@ class ApiService {
       auth: false,
     );
 
-    ApiClient.throwIfError(response, fallback: 'Failed to verify code');
+    ApiClient.throwIfError(
+      response,
+      fallback:
+          "We couldn't check your verification code. Please try again before it expires.",
+    );
     final data = ApiClient.decodeMap(response);
     return OtpVerificationResult.fromJson(data);
   }
@@ -139,7 +153,8 @@ class ApiService {
     );
     ApiClient.throwIfError(
       response,
-      fallback: 'Could not send phone verification code',
+      fallback:
+          "We couldn't send the phone-change code. Please wait a moment and try again.",
     );
     return PhoneChangeFlow.fromJson(ApiClient.decodeMap(response));
   }
@@ -151,65 +166,61 @@ class ApiService {
       auth: false,
     );
 
-    ApiClient.throwIfError(response, fallback: 'Failed to check mobile number');
-
-    final data = ApiClient.decodeMap(response);
-    return data['exists'] as bool? ?? false;
-  }
-
-  static Future<bool> checkEmailExists(String email) async {
-    final response = await ApiClient.get(
-      '/auth/user/email-exists',
-      query: {'email': normalizeRecoveryEmail(email)},
-      auth: false,
+    ApiClient.throwIfError(
+      response,
+      fallback: "We couldn't check this mobile number. Please try again later.",
     );
-
-    ApiClient.throwIfError(response, fallback: 'Failed to check email address');
 
     final data = ApiClient.decodeMap(response);
     return data['exists'] as bool? ?? false;
   }
 
   static Future<OtpVerificationResult> verifyEmailOtp({
-    required String email,
+    required String phone,
+    required String flowId,
     required String purpose,
     required String otp,
   }) async {
     final response = await ApiClient.post(
       '/auth/email/otp/verify',
-      body: {
-        'email': normalizeRecoveryEmail(email),
-        'purpose': purpose,
-        'otp': otp,
-      },
+      body: {'phone': phone, 'flowId': flowId, 'purpose': purpose, 'otp': otp},
       auth: false,
     );
 
-    ApiClient.throwIfError(response, fallback: 'Failed to verify code');
+    ApiClient.throwIfError(
+      response,
+      fallback:
+          "We couldn't check your recovery code. Please try again before it expires.",
+    );
 
     final data = ApiClient.decodeMap(response);
     return OtpVerificationResult.fromJson(data);
   }
 
   static Future<bool> updatePassword({
-    String? phone,
-    String? email,
+    required String phone,
+    String recoveryMethod = 'sms',
+    String? flowId,
     required String newPassword,
     required String verificationToken,
   }) async {
     final response = await ApiClient.post(
       '/auth/reset-password',
       body: {
-        if (phone != null && phone.isNotEmpty) 'phone': phone,
-        if (email != null && email.isNotEmpty)
-          'email': normalizeRecoveryEmail(email),
+        'phone': phone,
+        'recoveryMethod': recoveryMethod,
+        if (flowId != null) 'flowId': flowId,
         'newPassword': newPassword,
         'verificationToken': verificationToken,
       },
       auth: false,
     );
 
-    ApiClient.throwIfError(response, fallback: 'Failed to update password');
+    ApiClient.throwIfError(
+      response,
+      fallback:
+          "We couldn't change your password. Please try again; request a new code if yours has expired.",
+    );
 
     return response.statusCode == 200;
   }
@@ -238,7 +249,10 @@ class ApiService {
       },
     );
 
-    ApiClient.throwIfError(response, fallback: 'Failed to update profile');
+    ApiClient.throwIfError(
+      response,
+      fallback: "We couldn't save your account changes. Please try again.",
+    );
     final data = ApiClient.decodeMap(response);
     await Session.saveCurrentUser(data);
     return data;
@@ -273,7 +287,11 @@ class ApiService {
     if (response.statusCode == 201) return true;
 
     try {
-      ApiClient.throwIfError(response, fallback: 'Failed to submit report');
+      ApiClient.throwIfError(
+        response,
+        fallback:
+            "We couldn't save your report. Check your report history before trying again.",
+      );
     } on ApiException {
       rethrow;
     }
@@ -368,7 +386,11 @@ class ApiService {
       auth: false,
     );
 
-    ApiClient.throwIfError(response, fallback: 'Failed to load insights data');
+    ApiClient.throwIfError(
+      response,
+      fallback:
+          "We couldn't load the health insights. Please refresh and try again.",
+    );
 
     return ApiClient.decodeMap(response);
   }
@@ -390,7 +412,10 @@ class ApiService {
       auth: false,
     );
 
-    ApiClient.throwIfError(response, fallback: 'Prediction request failed');
+    ApiClient.throwIfError(
+      response,
+      fallback: "We couldn't load the forecasts. Please refresh and try again.",
+    );
     return ApiClient.decodeMap(response);
   }
 

@@ -88,7 +88,7 @@ class PolicyService {
       ).timeout(const Duration(seconds: 5));
       ApiClient.throwIfError(
         response,
-        fallback: 'Policies could not be loaded.',
+        fallback: "We couldn't load the account policies. Please try again.",
       );
       return PolicyBundle.fromJson(ApiClient.decodeMap(response));
     } catch (error) {
@@ -102,7 +102,11 @@ class PolicyService {
     final response = await ApiClient.get(
       '/auth/mobile/policies/status',
     ).timeout(const Duration(seconds: 15));
-    ApiClient.throwIfError(response);
+    ApiClient.throwIfError(
+      response,
+      fallback:
+          "We couldn't check your policy acknowledgement. Please try again.",
+    );
     return ApiClient.decodeMap(response)['requiresAcknowledgement'] as bool;
   }
 
@@ -112,7 +116,11 @@ class PolicyService {
       body: {'policyAcceptance': bundle.accountChoices},
       timeout: const Duration(seconds: 30),
     );
-    ApiClient.throwIfError(response);
+    ApiClient.throwIfError(
+      response,
+      fallback:
+          "We couldn't save your policy acknowledgement. Please try again.",
+    );
     await Session.saveCurrentUser(ApiClient.decodeMap(response));
   }
 
@@ -122,7 +130,10 @@ class PolicyService {
     final response = await ApiClient.get(
       '/auth/mobile/policies/status',
     ).timeout(const Duration(seconds: 15));
-    ApiClient.throwIfError(response);
+    ApiClient.throwIfError(
+      response,
+      fallback: "We couldn't check your reporting consent. Please try again.",
+    );
     final data = ApiClient.decodeMap(response);
     final receipt = data['reportingAcceptance'];
     final current =
@@ -162,7 +173,7 @@ class PolicyService {
     );
     ApiClient.throwIfError(
       response,
-      fallback: 'Reporting consent could not be saved.',
+      fallback: "We couldn't save your reporting consent. Please try again.",
     );
   }
 }

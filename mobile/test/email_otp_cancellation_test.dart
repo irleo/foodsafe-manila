@@ -36,13 +36,14 @@ void main() {
         );
         await tester.tap(find.text('Open recovery'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Use recovery email'));
+        await tester.tap(find.text('Saved recovery email'));
         await tester.pumpAndSettle();
         await tester.enterText(
-          find.byKey(const ValueKey('email-field')),
-          'victim@example.com',
+          find.byKey(const ValueKey('phone-field')),
+          '9171234567',
         );
-        await tester.tap(find.text('Submit'));
+        await tester.ensureVisible(find.text('Continue'));
+        await tester.tap(find.text('Continue'));
         await tester.pumpAndSettle();
         final passwords = find.byType(TextFormField);
         await tester.enterText(passwords.at(0), 'ValidPass1!');
@@ -73,7 +74,10 @@ void main() {
       () => MockClient((request) async {
         requests.add(request.url.path);
         expect(request.url.path, '/api/auth/email/otp/send');
-        return http.Response('{"expiresInSeconds":300}', 202);
+        return http.Response(
+          '{"expiresInSeconds":300,"flowId":"${'a' * 64}"}',
+          202,
+        );
       }),
     );
   });

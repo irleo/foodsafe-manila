@@ -147,6 +147,80 @@ void main() {
     });
   }
 
+  for (final size in [const Size(320, 640), const Size(640, 320)]) {
+    testWidgets('recovery destination choice fits $size without extra steps', (
+      tester,
+    ) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      var requests = 0;
+      await http.runWithClient(
+        () async {
+          await tester.pumpWidget(
+            MaterialApp(
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: const TextScaler.linear(2)),
+                child: child!,
+              ),
+              home: const ChangePasswordScreen(isForgot: true),
+            ),
+          );
+          await tester.pumpAndSettle();
+          final phone = find.byKey(const ValueKey('phone-field'));
+          final sms = find.byKey(const ValueKey('recovery-sms'));
+          final email = find.byKey(const ValueKey('recovery-email'));
+          expect(find.text('Registered phone number'), findsOneWidget);
+          expect(find.text('Receive code via'), findsOneWidget);
+          expect(find.byType(TextFormField), findsOneWidget);
+          expect(tester.widget<ChoiceChip>(sms).selected, isTrue);
+          expect(tester.widget<ChoiceChip>(email).selected, isFalse);
+          await tester.enterText(phone, '9171234567');
+          final enteredPhone = tester
+              .widget<TextFormField>(phone)
+              .controller!
+              .text;
+          await tester.ensureVisible(email);
+          await tester.tap(email);
+          await tester.pumpAndSettle();
+          expect(tester.widget<ChoiceChip>(email).selected, isTrue);
+          expect(
+            tester.widget<TextFormField>(phone).controller!.text,
+            enteredPhone,
+          );
+          expect(
+            find.text(
+              'Only available if you previously added a recovery email.',
+            ),
+            findsOneWidget,
+          );
+          expect(find.text('Step 1 of 3 \u00b7 Account info'), findsOneWidget);
+          expect(requests, 0);
+          expect(tester.takeException(), isNull);
+          tester.view.viewInsets = const FakeViewPadding(bottom: 240);
+          await tester.pumpAndSettle();
+          final next = find.widgetWithText(ElevatedButton, 'Continue');
+          await tester.ensureVisible(next);
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+          await tester.tap(next);
+          await tester.pumpAndSettle();
+          expect(find.text('Step 2 of 3 \u00b7 New password'), findsOneWidget);
+          expect(requests, 0);
+          tester.view.resetViewInsets();
+          await tester.pumpWidget(const SizedBox.shrink());
+        },
+        () => MockClient((_) async {
+          requests++;
+          return http.Response('{}', 500);
+        }),
+      );
+    });
+  }
+
   for (final signup in [true, false]) {
     testWidgets(
       '${signup ? 'signup' : 'recovery'} uses server timing, blocks parallel actions and retains proof on failure',
@@ -192,17 +266,14 @@ void main() {
                 await tester.pumpAndSettle();
               }
             } else {
-              await tester.tap(find.text('Use recovery email'));
+              await tester.tap(find.text('Saved recovery email'));
               await tester.pumpAndSettle();
               await tester.enterText(
-                find.byKey(const ValueKey('email-field')),
-                'tester@example.com',
+                find.byKey(const ValueKey('phone-field')),
+                '9171234567',
               );
             }
-            final next = find.widgetWithText(
-              ElevatedButton,
-              signup ? 'Continue' : 'Submit',
-            );
+            final next = find.widgetWithText(ElevatedButton, 'Continue');
             await tester.ensureVisible(next);
             await tester.tap(next);
             await tester.pumpAndSettle();
@@ -289,7 +360,7 @@ void main() {
             }
             if (path.endsWith('/otp/send')) {
               return http.Response(
-                '{"expiresInSeconds":300,"retryAfterSeconds":37}',
+                '{"expiresInSeconds":300,"retryAfterSeconds":37,"flowId":"${'a' * 64}"}',
                 signup ? 200 : 202,
               );
             }

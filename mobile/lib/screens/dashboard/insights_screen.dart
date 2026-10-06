@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:foodsafe_manila/services/api_service.dart';
+import 'package:foodsafe_manila/services/api_client.dart';
 
 class InsightsScreen extends StatefulWidget {
   final VoidCallback onProfilePressed;
@@ -48,6 +49,7 @@ class InsightsScreenState extends State<InsightsScreen> {
   bool _isDiseaseLoading = true;
 
   String? _districtError;
+  String? _overviewError;
   String? _diseaseError;
 
   List<Map<String, dynamic>> _forecastRows = [];
@@ -417,12 +419,16 @@ class InsightsScreenState extends State<InsightsScreen> {
         _forecastRows = rows;
         _isForecastLoading = false;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
 
       setState(() {
         _forecastRows = [];
-        _forecastError = 'Unable to load forecast data.';
+        _forecastError = ApiClient.safeErrorMessage(
+          error,
+          fallback:
+              "We couldn't load the forecasts. Please refresh and try again.",
+        );
         _isForecastLoading = false;
       });
     }
@@ -431,6 +437,7 @@ class InsightsScreenState extends State<InsightsScreen> {
   Future<void> _loadOverviewData() async {
     setState(() {
       _isOverviewLoading = true;
+      _overviewError = null;
     });
 
     try {
@@ -450,13 +457,19 @@ class InsightsScreenState extends State<InsightsScreen> {
         _isOverviewLoading = false;
 
         if (_overview == null) {
+          _overviewError = 'No health overview is available yet.';
         }
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
 
       setState(() {
         _overview = null;
+        _overviewError = ApiClient.safeErrorMessage(
+          error,
+          fallback:
+              "We couldn't load the health overview. Please refresh and try again.",
+        );
         _isOverviewLoading = false;
       });
     }
@@ -489,12 +502,16 @@ class InsightsScreenState extends State<InsightsScreen> {
         districtData = parsed;
         _isDistrictLoading = false;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
 
       setState(() {
         districtData = [];
-        _districtError = 'Unable to load district data.';
+        _districtError = ApiClient.safeErrorMessage(
+          error,
+          fallback:
+              "We couldn't load district case totals. Please refresh and try again.",
+        );
         _isDistrictLoading = false;
       });
     }
@@ -540,12 +557,16 @@ class InsightsScreenState extends State<InsightsScreen> {
         diseaseData = parsed;
         _isDiseaseLoading = false;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
 
       setState(() {
         diseaseData = [];
-        _diseaseError = 'Unable to load disease data.';
+        _diseaseError = ApiClient.safeErrorMessage(
+          error,
+          fallback:
+              "We couldn't load disease case totals. Please refresh and try again.",
+        );
         _isDiseaseLoading = false;
       });
     }
@@ -659,6 +680,15 @@ class InsightsScreenState extends State<InsightsScreen> {
           style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 10),
+        if (_overviewError != null && !isLoading)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              _overviewError!,
+              semanticsLabel: _overviewError,
+              style: GoogleFonts.inter(fontSize: 14),
+            ),
+          ),
         Container(
           decoration: _cardDecoration(),
           child: Column(
@@ -671,7 +701,9 @@ class InsightsScreenState extends State<InsightsScreen> {
                       value: currentMonthCases == null
                           ? '—'
                           : '${_formatNumber(currentMonthCases)} cases',
-                      trailing: _formatSignedPercent(overview?['monthlyChange']),
+                      trailing: _formatSignedPercent(
+                        overview?['monthlyChange'],
+                      ),
                       trailingColor: const Color(0xFF9CA3AF),
                       trailingWidget: _buildChangeIndicator(
                         overview?['monthlyChange'],
@@ -1570,8 +1602,6 @@ class InsightsScreenState extends State<InsightsScreen> {
   // ------------------------------------------------------------
   // UNDERSTANDING DATA
   // ------------------------------------------------------------
-
-
 
   // ------------------------------------------------------------
   // HELPERS

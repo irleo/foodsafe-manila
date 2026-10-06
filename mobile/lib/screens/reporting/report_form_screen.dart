@@ -229,7 +229,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> with WidgetsBinding
         return true;
       } else {
         if (mounted) {
-          SnackbarWidgets.error(context, "Failed to submit report");
+          SnackbarWidgets.error(context, "We couldn't save your report. Check your report history before trying again.");
         }
         return false;
       }

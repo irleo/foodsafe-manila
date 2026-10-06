@@ -205,17 +205,34 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
         if (error is ApiException && error.code == 'OTP_FLOW_EXPIRED') {
           _flowExpired = true;
         }
-        if (!beginVerification) _otpError = ApiClient.safeErrorMessage(error);
+        if (!beginVerification) {
+          _otpError = ApiClient.safeErrorMessage(
+            error,
+            fallback:
+                "We couldn't send the phone-change code. Please try again.",
+          );
+        }
         if (beginVerification) {
           setState(() => _pendingPhoneNumber = null);
         }
         if (error is ApiException && error.statusCode == 409) {
           SnackbarWidgets.info(
             context,
-            "Please check your information and try again.",
+            ApiClient.safeErrorMessage(
+              error,
+              fallback:
+                  'This phone change could not start. Check the number or restart verification.',
+            ),
           );
         } else {
-          SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+          SnackbarWidgets.error(
+            context,
+            ApiClient.safeErrorMessage(
+              error,
+              fallback:
+                  "We couldn't send the phone-change code. Please try again.",
+            ),
+          );
         }
       }
     } finally {
@@ -252,7 +269,10 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
 
       if (!mounted) return;
       if (updatedUser == null) {
-        SnackbarWidgets.error(context, "Update failed");
+        SnackbarWidgets.error(
+          context,
+          "We couldn't save your phone change. Please reload your account and try again.",
+        );
         return;
       }
 
@@ -279,7 +299,11 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
     } catch (error) {
       if (mounted) {
         setState(() {
-          _otpError = ApiClient.safeErrorMessage(error);
+          _otpError = ApiClient.safeErrorMessage(
+            error,
+            fallback:
+                "We couldn't verify your phone change. Please try again before the code expires.",
+          );
           if (error is ApiException &&
               (error.code == 'OTP_FLOW_EXPIRED' ||
                   error.code == 'OTP_ATTEMPTS_EXCEEDED')) {
@@ -509,11 +533,21 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
 
         SnackbarWidgets.success(context, "Profile updated successfully");
       } else {
-        SnackbarWidgets.error(context, "Update failed");
+        SnackbarWidgets.error(
+          context,
+          "We couldn't save your account changes. Please try again.",
+        );
       }
     } catch (error) {
       if (mounted) {
-        SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+        SnackbarWidgets.error(
+          context,
+          ApiClient.safeErrorMessage(
+            error,
+            fallback:
+                "We couldn't save your account changes. Please try again.",
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -1037,7 +1071,15 @@ class _AccountInformationScreenState extends State<AccountInformationScreen> {
                                               context,
                                             ).colorScheme.outline,
                                           ),
-                                          hintText: 'juandelacruz@example.com',
+                                          hintText: _isEditing
+                                              ? 'juandelacruz@example.com'
+                                              : 'No recovery email saved',
+                                          helperText: _isEditing
+                                              ? 'Used when you choose email recovery.'
+                                              : _emailCtrl.text.trim().isEmpty
+                                              ? 'No recovery email saved. Use SMS to recover your account.'
+                                              : 'Recovery codes can be sent to this saved address.',
+                                          helperMaxLines: 3,
                                           hintStyle: GoogleFonts.inter(
                                             color: Color(0xFFD1D5DB),
                                           ),

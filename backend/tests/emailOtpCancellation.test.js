@@ -5,7 +5,7 @@ import authRouter from "../routes/auth.js";
 import MobileEmailOtp from "../models/MobileEmailOtp.js";
 import MobileUser from "../models/MobileUser.js";
 import { emailOtpDelivery, requestEmailOtp } from "../controllers/mobileEmailOtpController.js";
-import { RECOVERY_EMAIL_INDEX } from "../utils/recoveryEmail.js";
+import { EMAIL_RECOVERY_ACCOUNT_INDEX } from "../utils/recoveryEmail.js";
 
 /** @param {Record<string, unknown>} body */
 async function removedCancellation(body) {
@@ -69,15 +69,15 @@ test("closing recovery cannot reset lastSentAt or bypass resend cooldown", async
   t.mock.method(Date, "now", () => time += 10_000);
   const sentAt = new Date();
   let lastSentAt = sentAt;
-  t.mock.method(MobileUser.collection, "indexes", async () => [{
-    name: RECOVERY_EMAIL_INDEX, key: { email: 1 }, unique: true,
-    partialFilterExpression: { email: { $type: "string", $gt: "" } },
+  t.mock.method(MobileEmailOtp.collection, "indexes", async () => [{
+    name: EMAIL_RECOVERY_ACCOUNT_INDEX, key: { userId: 1, purpose: 1 }, unique: true,
+    partialFilterExpression: { flowIdHash: { $type: "string" } },
   }]);
   t.mock.method(MobileUser, "findOne", () => ({
-    select: () => ({ lean: async () => ({ _id: "citizen-owner", emailVersion: 1 }) }),
+    select: () => ({ lean: async () => ({ _id: "citizen-owner", phoneNumber: "09171234567", email: "victim@example.com", emailVersion: 1, tokenVersion: 0 }) }),
   }));
   const reserve = t.mock.method(MobileEmailOtp, "findOneAndUpdate", async (filter, update, options) => {
-    assert.equal(filter.email, "victim@example.com");
+    assert.equal(filter.userId, "citizen-owner");
     assert.equal(filter.purpose, "password_reset");
     assert.equal(options.upsert, true);
     const cutoff = filter.$or[0].lastSentAt.$lte;
@@ -94,7 +94,7 @@ test("closing recovery cannot reset lastSentAt or bypass resend cooldown", async
     assert.equal(lastSentAt, sentAt);
     const res = response();
     await requestEmailOtp(/** @type {import('express').Request} */ (/** @type {unknown} */ ({
-      body: { email: "victim@example.com" },
+      body: { phone: "09171234567" },
     })), /** @type {import('express').Response} */ (/** @type {unknown} */ (res)));
     assert.equal(res.statusCode, 202);
     assert.equal(res.body?.retryAfterSeconds, 60);
@@ -104,7 +104,7 @@ test("closing recovery cannot reset lastSentAt or bypass resend cooldown", async
   lastSentAt = new Date(sentAt.getTime() - 61_000);
   const res = response();
   await requestEmailOtp(/** @type {import('express').Request} */ (/** @type {unknown} */ ({
-    body: { email: "victim@example.com" },
+    body: { phone: "09171234567" },
   })), /** @type {import('express').Response} */ (/** @type {unknown} */ (res)));
   assert.equal(res.statusCode, 202);
   assert.equal(delivery.mock.callCount(), 1);

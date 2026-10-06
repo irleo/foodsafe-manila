@@ -1,5 +1,13 @@
 import jwt from "jsonwebtoken";
 
+/** @param {unknown} error @returns {boolean} */
+export function isDuplicateCitizenPhone(error) {
+  const value = /** @type {{code?: number, keyPattern?: Record<string, unknown>, keyValue?: Record<string, unknown>, message?: string}} */ (error);
+  return value?.code === 11000 && (value.keyPattern?.phoneNumber === 1
+    || Object.hasOwn(value.keyValue || {}, "phoneNumber")
+    || value.message?.includes("mobileUsersPhoneNumberUnique") === true);
+}
+
 export function normalizePhone(phone) {
   const digits = String(phone || "").replace(/\D/g, "");
 
