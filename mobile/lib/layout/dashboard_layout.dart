@@ -60,6 +60,8 @@ class _DashboardLayoutState extends State<DashboardLayout>
   }
 
   Future<void> _onAppResumed() async {
+    // Public location features must refresh even without a signed-in account.
+    if (_selectedIndex == 0) _refreshCurrentTab();
     if (Session.currentUser == null) {
       return;
     }
@@ -70,7 +72,7 @@ class _DashboardLayoutState extends State<DashboardLayout>
         if (Session.currentUser == null) Navigator.pushNamed(context, '/login');
         return;
       }
-      _refreshCurrentTab();
+      if (_selectedIndex != 0) _refreshCurrentTab();
     } catch (error) {
       if (mounted) {
         SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
@@ -192,7 +194,19 @@ class _DashboardLayoutState extends State<DashboardLayout>
               ],
               Spacer(),
               TextButton.icon(
-                onPressed: () => Navigator.pushNamed(context, '/policies'),
+                onPressed: () async {
+                  try {
+                    await Navigator.pushNamed(context, '/policies');
+                    if (mounted) await _homeKey.currentState?.refreshData();
+                  } catch (error) {
+                    if (context.mounted) {
+                      SnackbarWidgets.error(
+                        context,
+                        ApiClient.safeErrorMessage(error),
+                      );
+                    }
+                  }
+                },
                 icon: const Icon(Icons.privacy_tip_outlined),
                 label: const Text('Privacy and Terms'),
               ),

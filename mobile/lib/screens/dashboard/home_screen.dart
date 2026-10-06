@@ -428,6 +428,7 @@ class _ReportSheetData {
 class HomeScreenState extends State<HomeScreen> {
   late String locationText;
   bool isLocationLoading = true;
+  bool _refreshingLocation = false;
   int? expandedTip;
 
   String _normalizeDistrictLabel(String value) {
@@ -558,28 +559,37 @@ class HomeScreenState extends State<HomeScreen> {
     );
 
     isLocationLoading = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) refreshData();
+    });
   }
 
   Future<void> refreshData() async {
+    if (!mounted || _refreshingLocation) return;
+    _refreshingLocation = true;
     setState(() {
       isLocationLoading = true;
     });
 
     try {
-      final updated = await LocationService.getUserAddress(forceRefresh: true);
+      final updated = await LocationService.getUserAddress(
+        forceRefresh: true,
+      ).timeout(const Duration(seconds: 25));
 
       if (!mounted) return;
 
       setState(() {
         locationText = _composeHeaderLocation(updated);
-        isLocationLoading = false;
       });
     } catch (_) {
       if (!mounted) return;
 
       setState(() {
-        isLocationLoading = false;
+        locationText = 'Location unavailable';
       });
+    } finally {
+      _refreshingLocation = false;
+      if (mounted) setState(() => isLocationLoading = false);
     }
   }
 
