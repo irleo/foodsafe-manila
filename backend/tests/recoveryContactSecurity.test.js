@@ -7,7 +7,6 @@ import MobileEmailOtp from "../models/MobileEmailOtp.js";
 import { updateMobileProfile } from "../controllers/mobileUserController.js";
 import { emailOtpDelivery } from "../controllers/mobileEmailOtpController.js";
 import { mobileOtpDelivery } from "../services/mobileOtpService.js";
-import { RECOVERY_EMAIL_INDEX } from "../utils/recoveryEmail.js";
 
 /** @param {import('node:test').TestContext} t */
 function setup(t) {
@@ -16,10 +15,7 @@ function setup(t) {
     emailVerifiedAt: new Date(), save: async () => account };
   t.mock.method(MobileUser, "findById", async () => account);
   t.mock.method(MobileUser, "exists", async () => null);
-  t.mock.method(MobileUser.collection, "indexes", async () => [{
-    name: RECOVERY_EMAIL_INDEX, unique: true, key: { email: 1 },
-    partialFilterExpression: { email: { $type: "string", $gt: "" } },
-  }]);
+  t.mock.method(MobileUser.collection, "indexes", () => { throw new Error("Email saves must not require a unique email index"); });
   t.mock.method(MobileEmailOtp, "findOneAndUpdate", () => { throw new Error("Profile saves must not touch email OTPs"); });
   for (const delivery of [emailOtpDelivery, mobileOtpDelivery]) {
     t.mock.method(delivery, "send", () => { throw new Error("Profile saves must not send OTPs"); });

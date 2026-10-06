@@ -1,42 +1,28 @@
 // @ts-check
 import MobileUser from "../models/MobileUser.js";
-import { normalizeRecoveryEmail, RECOVERY_EMAIL_INDEX } from "../utils/recoveryEmail.js";
+import MobileEmailOtp from "../models/MobileEmailOtp.js";
+import { normalizePhone } from "../utils/citizenAuth.js";
+import { EMAIL_RECOVERY_ACCOUNT_INDEX } from "../utils/recoveryEmail.js";
 
 /** @returns {Promise<boolean>} */
-export async function recoveryEmailIndexReady() {
+export async function emailRecoveryIndexReady() {
   try {
-    const indexes = await MobileUser.collection.indexes();
-    return indexes.some((index) => index.name === RECOVERY_EMAIL_INDEX
-      && index.unique === true && index.key.email === 1
-      && Object.keys(index.key).length === 1
-      && index.partialFilterExpression?.email?.$type === "string"
-      && index.partialFilterExpression?.email?.$gt === "");
+    const indexes = await MobileEmailOtp.collection.indexes();
+    return indexes.some((index) => index.name === EMAIL_RECOVERY_ACCOUNT_INDEX
+      && index.unique === true && index.key.userId === 1 && index.key.purpose === 1
+      && Object.keys(index.key).length === 2
+      && index.partialFilterExpression?.flowIdHash?.$type === "string");
   } catch (error) {
     if (/** @type {{code?: number}} */ (error).code === 26) return false;
     throw error;
   }
 }
 
-export async function requireRecoveryEmailIndex() {
-  if (!await recoveryEmailIndexReady()) {
-    throw Object.assign(new Error("Recovery email setup is not complete. Use phone recovery for now."),
-      { status: 503, code: "RECOVERY_EMAIL_SETUP_REQUIRED" });
-  }
-}
-
-/** @param {string} email @param {string | import('mongoose').Types.ObjectId} [excludeUserId] */
-export async function recoveryEmailTaken(email, excludeUserId) {
-  return Boolean(await MobileUser.exists({
-    email: normalizeRecoveryEmail(email),
-    ...(excludeUserId ? { _id: { $ne: excludeUserId } } : {}),
-  }));
-}
-
-/** @param {string} email */
-export async function findRecoveryAccount(email) {
+/** @param {string} phone */
+export async function findRecoveryAccount(phone) {
   // Lookup alone never authorizes a reset; the recovery OTP proves ownership.
-  return MobileUser.findOne({ email: normalizeRecoveryEmail(email) })
-    .select("_id email tokenVersion emailVersion").lean();
+  return MobileUser.findOne({ phoneNumber: normalizePhone(phone) })
+    .select("_id phoneNumber email tokenVersion emailVersion").lean();
 }
 
 /** @param {{userId: string, originalEmail: string, emailVersion: number, passwordHash: string, username: string, email: string}} input */

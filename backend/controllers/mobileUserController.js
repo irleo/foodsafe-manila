@@ -1,9 +1,9 @@
 import MobileUser from "../models/MobileUser.js";
 import bcrypt from "bcryptjs";
-import { normalizePhone, sanitizeMobileUser } from "../utils/citizenAuth.js";
+import { normalizePhone, sanitizeMobileUser, isDuplicateCitizenPhone } from "../utils/citizenAuth.js";
 import { logRequestError } from "../utils/serverLogger.js";
-import { EMAIL_UNAVAILABLE, isDuplicateRecoveryEmail, isValidRecoveryEmail, normalizeRecoveryEmail } from "../utils/recoveryEmail.js";
-import { recoveryEmailTaken, requireRecoveryEmailIndex, updateRecoveryEmail } from "../services/recoveryEmailService.js";
+import { isValidRecoveryEmail, normalizeRecoveryEmail } from "../utils/recoveryEmail.js";
+import { updateRecoveryEmail } from "../services/recoveryEmailService.js";
 import { commitPhoneChange, PhoneChangeError } from "../services/phoneChangeOtpService.js";
 
 // PUT /api/users/:id (citizen profile — mobile app)
@@ -66,12 +66,6 @@ export const updateMobileProfile = async (req, res) => {
     if (typeof email !== "undefined") {
       const normalizedEmail = normalizeRecoveryEmail(email);
       if (normalizedEmail !== mobileUser.email) {
-        if (normalizedEmail) {
-          if (await recoveryEmailTaken(normalizedEmail, mobileUser._id)) {
-            return res.status(409).json(EMAIL_UNAVAILABLE);
-          }
-          await requireRecoveryEmailIndex();
-        }
         mobileUser.email = normalizedEmail;
         mobileUser.emailVerified = false;
         mobileUser.emailVerifiedAt = undefined;
@@ -103,11 +97,7 @@ export const updateMobileProfile = async (req, res) => {
     return res.status(200).json(sanitizeMobileUser(mobileUser));
   } catch (error) {
     if (error instanceof PhoneChangeError) return res.status(error.status).json({ code: error.code, message: error.message });
-    if (isDuplicateRecoveryEmail(error)) return res.status(409).json(EMAIL_UNAVAILABLE);
-    if (error?.code === "RECOVERY_EMAIL_SETUP_REQUIRED") {
-      return res.status(503).json({ code: error.code, message: error.message });
-    }
-    if (error?.code === 11000) return res.status(409).json({ message: "Phone number already in use" });
+    if (isDuplicateCitizenPhone(error)) return res.status(409).json({ message: "Phone number already in use" });
     logRequestError(error, req, "CITIZEN_PROFILE_ERROR");
     return res.status(500).json({ message: "Failed to update profile" });
   }

@@ -36,6 +36,21 @@ class OtpSendResult {
       );
 }
 
+class EmailRecoverySendResult extends OtpSendResult {
+  final String flowId;
+  EmailRecoverySendResult.fromJson(super.data)
+    : flowId = data['flowId'] is String ? data['flowId'] as String : '',
+      super.fromJson() {
+    if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(flowId)) {
+      throw ApiException(
+        502,
+        'Please restart email recovery and request a new code.',
+        code: 'INVALID_RESPONSE',
+      );
+    }
+  }
+}
+
 class OtpVerificationResult {
   final String token;
   final int expiresInSeconds;

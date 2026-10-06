@@ -28,8 +28,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _phoneCtrl = TextEditingController(); // NEW
-  final _emailCtrl = TextEditingController();
   bool _useEmail = false;
+  String? _emailFlowId;
+  String? _emailFlowPhone;
   final _otpCtrl = TextEditingController();
   late List<TextEditingController> otpControllers;
   late List<FocusNode> otpFocusNodes;
@@ -71,7 +72,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   @override
   void dispose() {
     _phoneCtrl.dispose();
-    _emailCtrl.dispose();
     _otpCtrl.dispose();
     _newPassCtrl.dispose();
     _confirmPassCtrl.dispose();
@@ -106,6 +106,23 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     _otpCtrl.text = otpControllers.map((c) => c.text).join();
   }
 
+  void _selectRecoveryMethod(Set<bool> selection) {
+    final useEmail = selection.single;
+    if (_loading || useEmail == _useEmail) return;
+    setState(() {
+      _useEmail = useEmail;
+      _emailFlowId = null;
+      _emailFlowPhone = null;
+      _otpSent = false;
+      _otpError = null;
+      _otpFlow.clear();
+      for (final controller in otpControllers) {
+        controller.clear();
+      }
+      _otpCtrl.clear();
+    });
+  }
+
   Future<bool> _isIdentifierLinkedToAccount() async {
     if (widget.isForgot) {
       return _useEmail
@@ -117,17 +134,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
     final currentUser = user;
     if (currentUser == null) return false;
-
-    if (_useEmail) {
-      final enteredEmail = _emailCtrl.text.trim().toLowerCase();
-      final accountEmail = currentUser['email']
-          ?.toString()
-          .trim()
-          .toLowerCase();
-      return accountEmail != null &&
-          accountEmail.isNotEmpty &&
-          enteredEmail == accountEmail;
-    }
 
     final accountPhone = currentUser['phoneNumber']?.toString();
     if (accountPhone == null || accountPhone.isEmpty) return false;
@@ -152,10 +158,18 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     if (!await _guardAccountIdentifier() || !mounted) return null;
 
     if (_useEmail) {
-      return ApiService.sendEmailOtp(
-        email: _emailCtrl.text.trim(),
+      final phone = toLocalPhilippineMobileNumber(_phoneCtrl.text);
+      final result = await ApiService.sendEmailOtp(
+        phone: phone,
         purpose: 'password_reset',
+        flowId: !_otpFlow.expired && _emailFlowPhone == phone
+            ? _emailFlowId
+            : null,
       );
+      if (!mounted) return null;
+      _emailFlowId = result.flowId;
+      _emailFlowPhone = phone;
+      return result;
     } else {
       return ApiService.sendMobileOtp(
         phone: toLocalPhilippineMobileNumber(_phoneCtrl.text),
@@ -193,7 +207,13 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         if (error is ApiException && error.retryAfterSeconds != null) {
           _otpFlow.cooldown(error.retryAfterSeconds!);
         }
-        SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+        SnackbarWidgets.error(
+          context,
+          ApiClient.safeErrorMessage(
+            error,
+            fallback: "We couldn't send your recovery code. Please try again.",
+          ),
+        );
       }
 
       return false;
@@ -297,7 +317,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     if (_loading) return;
     FocusScope.of(context).unfocus();
 
-    // STEP 0: Phone / Email
+    // STEP 0: Account and recovery destination
     if (_currentStep == 0) {
       if (!_formKey.currentState!.validate()) return;
 
@@ -312,7 +332,14 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         });
       } catch (error) {
         if (mounted) {
-          SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+          SnackbarWidgets.error(
+            context,
+            ApiClient.safeErrorMessage(
+              error,
+              fallback:
+                  "We couldn't check your recovery details. Please try again.",
+            ),
+          );
         }
       } finally {
         if (mounted) setState(() => _loading = false);
@@ -342,7 +369,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           SnackbarWidgets.info(
             context,
             _useEmail
-                ? 'If this address is eligible, a recovery code will be sent.'
+                ? 'If this account has a recovery email, a code will be sent there.'
                 : "We've sent a verification code to your phone number",
           );
         }
@@ -361,7 +388,14 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           if (error is ApiException && error.retryAfterSeconds != null) {
             _otpFlow.cooldown(error.retryAfterSeconds!);
           }
-          SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+          SnackbarWidgets.error(
+            context,
+            ApiClient.safeErrorMessage(
+              error,
+              fallback:
+                  "We couldn't send your recovery code. Please try again.",
+            ),
+          );
         }
       } finally {
         if (mounted) {
@@ -390,7 +424,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         if (_otpFlow.verificationToken == null) {
           final proof = _useEmail
               ? await ApiService.verifyEmailOtp(
-                  email: _emailCtrl.text.trim(),
+                  phone: toLocalPhilippineMobileNumber(_phoneCtrl.text),
+                  flowId: _emailFlowId!,
                   purpose: 'password_reset',
                   otp: _otpCtrl.text,
                 )
@@ -407,10 +442,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
         // OTP was valid, now update password.
         final success = await ApiService.updatePassword(
-          email: _useEmail ? _emailCtrl.text.trim() : null,
-          phone: _useEmail
-              ? null
-              : toLocalPhilippineMobileNumber(_phoneCtrl.text),
+          phone: toLocalPhilippineMobileNumber(_phoneCtrl.text),
+          recoveryMethod: _useEmail ? 'email' : 'sms',
+          flowId: _useEmail ? _emailFlowId : null,
           newPassword: _newPassCtrl.text,
           verificationToken: _otpFlow.verificationToken!,
         );
@@ -435,8 +469,13 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   error.code == 'OTP_ATTEMPTS_EXCEEDED')) {
             _otpFlow.invalidate();
           }
-          setState(() => _otpError = ApiClient.safeErrorMessage(error));
-          SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+          final message = ApiClient.safeErrorMessage(
+            error,
+            fallback:
+                "We couldn't finish changing your password. Please try again before the code expires.",
+          );
+          setState(() => _otpError = message);
+          SnackbarWidgets.error(context, message);
         }
       } finally {
         if (mounted) {
@@ -514,9 +553,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         const SizedBox(height: 4),
 
         Text(
-          _useEmail
-              ? "Enter your recovery email and we'll send you a one-time reset code."
-              : "Enter your registered phone number and we'll send you a one-time reset code.",
+          'Use your registered phone number to find your account.',
           style: GoogleFonts.inter(
             fontSize: 13,
             color: const Color(0xFF4B5563),
@@ -525,93 +562,79 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
         const SizedBox(height: 14),
 
-        if (_useEmail)
-          AuthFormField(
-            label: "Email Address",
-            child: TextFormField(
-              key: const ValueKey('email-field'),
-              controller: _emailCtrl,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.done,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return "Email is required";
-                }
-
-                final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-
-                if (!emailRegex.hasMatch(value.trim())) {
-                  return "Enter a valid email address";
-                }
-
-                return null;
-              },
-              style: GoogleFonts.inter(),
-              decoration: InputDecoration(
-                hintText: "juandelacruz@example.com",
-                hintStyle: GoogleFonts.inter(color: const Color(0xFFD1D5DB)),
-                prefixIcon: const Icon(
-                  LucideIcons.mail,
-                  color: Color(0xFF6B7280),
-                ),
+        AuthFormField(
+          label: 'Registered phone number',
+          child: TextFormField(
+            key: const ValueKey('phone-field'),
+            controller: _phoneCtrl,
+            keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.done,
+            inputFormatters: const [PhilippineMobileInputFormatter()],
+            validator: validatePhilippineMobileInput,
+            style: GoogleFonts.inter(),
+            decoration: InputDecoration(
+              hintText: philippineMobileHint,
+              hintStyle: GoogleFonts.inter(color: const Color(0xFFD1D5DB)),
+              prefixIcon: PhilippineMobilePrefix(
+                color: Theme.of(context).colorScheme.outline,
               ),
-            ),
-          )
-        else
-          AuthFormField(
-            label: "Phone Number",
-            child: TextFormField(
-              key: const ValueKey('phone-field'),
-              controller: _phoneCtrl,
-              keyboardType: TextInputType.phone,
-              textInputAction: TextInputAction.done,
-              inputFormatters: const [PhilippineMobileInputFormatter()],
-              validator: validatePhilippineMobileInput,
-              style: GoogleFonts.inter(),
-              decoration: InputDecoration(
-                hintText: philippineMobileHint,
-                hintStyle: GoogleFonts.inter(color: const Color(0xFFD1D5DB)),
-                prefixIcon: PhilippineMobilePrefix(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-                prefixIconConstraints: const BoxConstraints(minWidth: 88),
-              ),
+              prefixIconConstraints: const BoxConstraints(minWidth: 88),
             ),
           ),
+        ),
 
-        const SizedBox(height: 6),
+        const SizedBox(height: 16),
 
-        TextButton(
-          onPressed: _loading
-              ? null
-              : () {
-                  setState(() {
-                    _useEmail = !_useEmail;
-
-                    // The verification target changed,
-                    // so a new OTP flow is required.
-                    _otpSent = false;
-                    _otpFlow.clear();
-
-                    for (final controller in otpControllers) {
-                      controller.clear();
-                    }
-
-                    _otpCtrl.clear();
-                  });
-                },
-          style: TextButton.styleFrom(
-            padding: EdgeInsets.zero,
-            minimumSize: Size.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        AuthFormField(
+          label: 'Receive code via',
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final useEmail in [false, true])
+                ChoiceChip(
+                  key: ValueKey(useEmail ? 'recovery-email' : 'recovery-sms'),
+                  label: Text(useEmail ? 'Saved recovery email' : 'SMS'),
+                  avatar: Icon(
+                    useEmail ? LucideIcons.mail : LucideIcons.messageSquare,
+                    size: 18,
+                    color: _useEmail == useEmail
+                        ? Colors.white
+                        : const Color(0xFF134c8c),
+                  ),
+                  selected: _useEmail == useEmail,
+                  onSelected: _loading
+                      ? null
+                      : (_) => _selectRecoveryMethod({useEmail}),
+                  selectedColor: const Color(0xFF134c8c),
+                  checkmarkColor: Colors.white,
+                  labelStyle: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: _useEmail == useEmail
+                        ? Colors.white
+                        : const Color(0xFF134c8c),
+                  ),
+                  labelPadding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 10,
+                  ),
+                  materialTapTargetSize: MaterialTapTargetSize.padded,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+            ],
           ),
-          child: Text(
-            _useEmail ? "Use phone number" : "Use recovery email",
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF134c8c),
-            ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _useEmail
+              ? 'Only available if you previously added a recovery email.'
+              : 'Code goes to your registered phone number.',
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            color: const Color(0xFF4B5563),
           ),
         ),
 
@@ -640,7 +663,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     ),
                   )
                 : Text(
-                    "Submit",
+                    'Continue',
                     style: GoogleFonts.inter(fontWeight: FontWeight.w800),
                   ),
           ),
@@ -662,7 +685,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
         Text(
           _useEmail
-              ? "Enter the 6-digit OTP sent to your email."
+              ? 'If you saved a recovery email, check it for the 6-digit code.'
               : "Enter the 6-digit OTP sent to your phone.",
           style: GoogleFonts.inter(
             fontSize: 13,

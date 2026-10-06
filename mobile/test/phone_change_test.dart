@@ -131,6 +131,12 @@ void main() {
           const MaterialApp(home: AccountInformationScreen()),
         );
         await tester.pumpAndSettle();
+        expect(
+          find.text(
+            'No recovery email saved. Use SMS to recover your account.',
+          ),
+          findsOneWidget,
+        );
         await tester.ensureVisible(find.text('Edit profile'));
         await tester.tap(find.text('Edit profile'));
         await tester.pumpAndSettle();
@@ -161,6 +167,10 @@ void main() {
         expect(Session.currentUser!['emailVerified'], false);
         expect(find.text('Verification code'), findsNothing);
         expect(find.text('Edit profile'), findsOneWidget);
+        expect(
+          find.text('Recovery codes can be sent to this saved address.'),
+          findsOneWidget,
+        );
         expect(tester.takeException(), isNull);
         tester
             .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
@@ -168,9 +178,9 @@ void main() {
         await tester.pumpWidget(const SizedBox());
       },
       () => MockClient((request) async {
-          if (request.url.path.endsWith('/policies/status')) {
+        if (request.url.path.endsWith('/policies/status')) {
           return json({'requiresAcknowledgement': false});
-          }
+        }
         requests.add(request.url.path);
         expect(request.method, 'PUT');
         final body = jsonDecode(request.body) as Map<String, dynamic>;

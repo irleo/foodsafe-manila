@@ -16,6 +16,165 @@ class ClosingClient extends MockClient {
 }
 
 void main() {
+  test('specific API messages survive module-code mapping', () {
+    for (final entry in <String, String>{
+      'USER_SERVICE_ERROR':
+          "We couldn't save your account changes. Please try again.",
+      'AUTHENTICATION_ERROR': 'Your current password is incorrect.',
+      'REPORT_SERVICE_ERROR':
+          "We couldn't save your report. Check your report history before trying again.",
+      'RECOVERY_EMAIL_SETUP_REQUIRED':
+          'Recovery email changes are temporarily unavailable. Please try again later.',
+    }.entries) {
+      final response = http.Response(
+        '{"code":"${entry.key}","message":"${entry.value}","errorId":"ERR-2C3B248C"}',
+        503,
+      );
+      try {
+        ApiClient.throwIfError(response);
+        fail('Expected an API failure');
+      } on ApiException catch (error) {
+        expect(error.message, entry.value);
+        expect(
+          ApiClient.safeErrorMessage(error),
+          '${entry.value} Reference: ERR-2C3B248C',
+        );
+      }
+    }
+  });
+
+  test('OTP and password validation messages retain their next steps', () {
+    for (final message in [
+      'Your current password is incorrect.',
+      'This code is incorrect or has expired. Check the code or request a new one.',
+      'Wait 37 seconds before requesting another code.',
+    ]) {
+      expect(
+        () => ApiClient.throwIfError(
+          http.Response('{"message":"$message"}', 400),
+        ),
+        throwsA(
+          isA<ApiException>().having((e) => e.message, 'message', message),
+        ),
+      );
+    }
+  });
+
+  test(
+    'HTML outages and technical errors use action-specific mobile fallbacks',
+    () async {
+      await http.runWithClient(
+        () async {
+          for (final entry in <String, Future<Object?> Function()>{
+            'save your account changes': () => ApiService.updateUser(
+              id: 'citizen',
+              username: 'Juan',
+              phone: '09123456789',
+            ),
+            'create your account': () => ApiService.registerUser(
+              username: 'Juan',
+              phone: '09123456789',
+              password: 'test',
+              verificationToken: 'test',
+              policyAcceptance: {},
+            ),
+            'send a verification code': () => ApiService.sendMobileOtp(
+              phone: '09123456789',
+              purpose: 'registration',
+            ),
+            'check your verification code': () => ApiService.verifyMobileOtp(
+              phone: '09123456789',
+              purpose: 'registration',
+              otp: '123456',
+            ),
+            'change your password': () => ApiService.updatePassword(
+              phone: '09123456789',
+              newPassword: 'test',
+              verificationToken: 'test',
+            ),
+          }.entries) {
+            await expectLater(
+              entry.value(),
+              throwsA(
+                isA<ApiException>()
+                    .having((e) => e.message, 'action', contains(entry.key))
+                    .having(
+                      (e) => e.message,
+                      'no technical details',
+                      isNot(contains('mongoose')),
+                    ),
+              ),
+            );
+          }
+        },
+        () =>
+            MockClient((_) async => http.Response('<html>outage</html>', 503)),
+      );
+    },
+  );
+
+  test('rate limits and invalid references do not become generic failures', () {
+    expect(
+      () => ApiClient.throwIfError(
+        http.Response('<html>busy</html>', 429, headers: {'retry-after': '37'}),
+      ),
+      throwsA(
+        isA<ApiException>()
+            .having(
+              (e) => e.message,
+              'guidance',
+              contains('wait before trying'),
+            )
+            .having((e) => e.retryAfterSeconds, 'retry timing', 37),
+      ),
+    );
+    expect(
+      ApiClient.safeErrorMessage(
+        ApiException(
+          500,
+          'Please try again.',
+          errorId: 'private/internal/path',
+        ),
+      ),
+      'Please try again.',
+    );
+  });
+
+  test('legacy generic API messages defer to the action-specific fallback', () {
+    expect(
+      () => ApiClient.throwIfError(
+        http.Response(
+          '{"code":"USER_SERVICE_ERROR","message":"User data could not be loaded."}',
+          500,
+        ),
+        fallback: "We couldn't save your account changes. Please try again.",
+      ),
+      throwsA(
+        isA<ApiException>().having(
+          (e) => e.message,
+          'save guidance',
+          "We couldn't save your account changes. Please try again.",
+        ),
+      ),
+    );
+  });
+
+  test('non-text API messages cannot become user-visible object dumps', () {
+    expect(
+      () => ApiClient.throwIfError(
+        http.Response('{"message":{"internal":"detail"},"code":42}', 500),
+        fallback: 'Please retry saving your profile.',
+      ),
+      throwsA(
+        isA<ApiException>().having(
+          (e) => e.message,
+          'safe fallback',
+          'Please retry saving your profile.',
+        ),
+      ),
+    );
+  });
+
   test(
     'API failures preserve status, code and retry header instead of empty data',
     () async {

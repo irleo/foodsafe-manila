@@ -244,7 +244,11 @@ class _PolicyScreenState extends State<PolicyScreen> {
     } catch (error) {
       if (mounted) {
         setState(() {
-          _error = ApiClient.safeErrorMessage(error);
+          _error = ApiClient.safeErrorMessage(
+            error,
+            fallback:
+                "We couldn't save your policy acknowledgement. Please try again.",
+          );
           if (error is ApiException &&
               error.code == 'POLICY_ACCEPTANCE_REQUIRED') {
             _terms = false;
@@ -613,7 +617,11 @@ class _ReportingDisclosureScreenState extends State<ReportingDisclosureScreen> {
     } catch (error) {
       if (mounted) {
         setState(() {
-          _error = ApiClient.safeErrorMessage(error);
+          _error = ApiClient.safeErrorMessage(
+            error,
+            fallback:
+                "We couldn't save your reporting consent. Please try again.",
+          );
           if (error is ApiException &&
               (error.code == 'POLICY_ACCEPTANCE_REQUIRED' ||
                   error.code == 'POLICY_REACCEPTANCE_REQUIRED' ||

@@ -86,7 +86,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _policyError = ApiClient.safeErrorMessage(error));
+        setState(
+          () => _policyError = ApiClient.safeErrorMessage(
+            error,
+            fallback:
+                "We couldn't load the account policies. Please try again.",
+          ),
+        );
       }
     }
   }
@@ -167,7 +173,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
         if (error is ApiException && error.retryAfterSeconds != null) {
           _otpFlow.cooldown(error.retryAfterSeconds!);
         }
-        SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+        SnackbarWidgets.error(
+          context,
+          ApiClient.safeErrorMessage(
+            error,
+            fallback:
+                "We couldn't send your registration code. Please try again.",
+          ),
+        );
       }
       return false;
     } finally {
@@ -299,8 +312,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 error.code == 'OTP_ATTEMPTS_EXCEEDED')) {
           _otpFlow.invalidate();
         }
-        setState(() => _otpError = ApiClient.safeErrorMessage(error));
-        SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+        final message = ApiClient.safeErrorMessage(
+          error,
+          fallback:
+              "We couldn't finish registration. Please try again before the code expires.",
+        );
+        setState(() => _otpError = message);
+        SnackbarWidgets.error(context, message);
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -329,7 +347,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         if (exists) {
           SnackbarWidgets.info(
             context,
-            "Please check your information and try again.",
+            'This mobile number already has an account. Please sign in or use Forgot Password.',
           );
           return;
         }
@@ -337,7 +355,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
         setState(() => _currentStep = 1);
       } catch (error) {
         if (mounted) {
-          SnackbarWidgets.error(context, ApiClient.safeErrorMessage(error));
+          SnackbarWidgets.error(
+            context,
+            ApiClient.safeErrorMessage(
+              error,
+              fallback:
+                  "We couldn't check this mobile number. Please try again.",
+            ),
+          );
         }
       } finally {
         if (mounted) setState(() => _loading = false);
