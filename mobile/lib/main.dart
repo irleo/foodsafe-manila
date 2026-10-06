@@ -60,13 +60,10 @@ class _StartupAppState extends State<_StartupApp> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
-                      'FoodSafe Manila',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    Image.asset(
+                      'assets/foodsafe_logo.png',
+                      width: 180,
+                      fit: BoxFit.contain,
                     ),
                     const SizedBox(height: 24),
                     if (snapshot.hasError) ...[

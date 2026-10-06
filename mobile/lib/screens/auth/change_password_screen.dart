@@ -607,6 +607,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                       ? null
                       : (_) => _selectRecoveryMethod({useEmail}),
                   selectedColor: const Color(0xFF134c8c),
+                  backgroundColor: Colors.white,
                   checkmarkColor: Colors.white,
                   labelStyle: GoogleFonts.inter(
                     fontSize: 13,
@@ -622,6 +623,11 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   materialTapTargetSize: MaterialTapTargetSize.padded,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(
+                      color: _useEmail == useEmail
+                          ? Colors.transparent
+                          : const Color(0xFF134c8c),
+                    ),
                   ),
                 ),
             ],
