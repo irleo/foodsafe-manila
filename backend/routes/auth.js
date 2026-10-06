@@ -1,5 +1,9 @@
 import express from 'express';
+import { verifyToken, requireCitizenAccount } from "../middleware/authMiddleware.js";
+import { getMobilePolicies, getMobilePolicyStatus, acceptMobilePolicies, acceptReportingPolicies } from "../controllers/mobilePolicyController.js";
 import rateLimit from "express-rate-limit";
+import { requestPhoneChangeOtp } from "../controllers/phoneChangeOtpController.js";
+import { requireCurrentMobilePolicies } from "../controllers/mobilePolicyController.js";
 import {
   login,
   logout,
@@ -24,7 +28,6 @@ import {
 import {
   requestEmailOtp,
   confirmEmailOtp,
-  cancelEmailOtp,
 } from "../controllers/mobileEmailOtpController.js";
 
 const requestAccessLimiter = rateLimit({
@@ -39,6 +42,8 @@ const mobileOtpSendLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req, res) => res.status(429).json({ message: "Too many code requests. Please try again later.",
+    retryAfterSeconds: Math.max(1, Math.ceil((req.rateLimit.resetTime.getTime() - Date.now()) / 1000)) }),
 });
 
 const mobileOtpVerifyLimiter = rateLimit({
@@ -71,6 +76,10 @@ const emailOtpVerifyLimiter = rateLimit({
 });
 
 const router = express.Router();
+router.get('/mobile/policies', getMobilePolicies);
+router.get('/mobile/policies/status', verifyToken, requireCitizenAccount, getMobilePolicyStatus);
+router.post('/mobile/policies/accept', verifyToken, requireCitizenAccount, acceptMobilePolicies);
+router.post('/mobile/policies/reporting/accept', verifyToken, requireCitizenAccount, requireCurrentMobilePolicies, acceptReportingPolicies);
 
 router.post('/login', login);
 router.post('/logout', logout);
@@ -84,9 +93,9 @@ router.post("/reset-password/complete", completePasswordReset);
 // Citizen mobile auth (same /api/auth prefix as web)
 router.post('/mobile/otp/send', mobileOtpSendLimiter, requestMobileOtp);
 router.post('/mobile/otp/verify', mobileOtpVerifyLimiter, confirmMobileOtp);
+router.post('/mobile/phone-change/otp/send', verifyToken, requireCitizenAccount, requireCurrentMobilePolicies, mobileOtpSendLimiter, requestPhoneChangeOtp);
 router.post('/email/otp/send', emailOtpSendLimiter, requestEmailOtp);
 router.post('/email/otp/verify', emailOtpVerifyLimiter, confirmEmailOtp);
-router.post('/email/otp/cancel', cancelEmailOtp);
 router.post('/register', registerCitizen);
 router.get('/user/exists', checkPhoneExists);
 router.get('/user/email-exists', checkEmailExists);

@@ -1,7 +1,11 @@
+import { isValidName, normalizeName, NAME_MESSAGE } from "../utils/nameValidation.js";
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
   {
+    // Optional for existing accounts; new access requests require both components.
+    firstName: { type: String, set: normalizeName, validate: { validator: isValidName, message: NAME_MESSAGE } },
+    lastName: { type: String, set: normalizeName, validate: { validator: isValidName, message: NAME_MESSAGE } },
     username: { type: String, required: true, trim: true },
     email: { type: String, required: true, lowercase: true, trim: true },
     password: { type: String, required: true },
@@ -41,6 +45,19 @@ const userSchema = new mongoose.Schema(
     collection: "webUsers",
   }
 );
+
+// Validate new/edited identities without forcing a migration of legacy accounts.
+userSchema.pre("validate", function () {
+  if (this.isNew || this.isModified("firstName") || this.isModified("lastName")) {
+    if (!isValidName(this.firstName)) this.invalidate("firstName", NAME_MESSAGE);
+    if (!isValidName(this.lastName)) this.invalidate("lastName", NAME_MESSAGE);
+    if (isValidName(this.firstName) && isValidName(this.lastName)) {
+      this.username = `${this.firstName} ${this.lastName}`;
+    }
+  } else if (this.isModified("username")) {
+    this.invalidate("username", "Update firstName and lastName instead of the display name.");
+  }
+});
 
 userSchema.index(
   { email: 1 },

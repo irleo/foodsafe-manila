@@ -61,6 +61,14 @@ services:
     sync: false
   - key: BREVO_API_KEY
     sync: false
+  - key: SEMAPHORE_API_KEY
+    sync: false
+  - key: SEMAPHORE_SENDER_NAME
+    value: FOODSAFEMNL
+  - key: SEMAPHORE_SMS_API_URL
+    value: https://api.semaphore.co/api/v4/messages
+  - key: OTP_HASH_SECRET
+    sync: false
   - key: ALLOWED_ORIGINS
     sync: false
   - key: PYTHON_BIN

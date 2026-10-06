@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 
 const philippineMobilePrefix = '+63';
-const philippineMobileHint = '917 123 4567';
+const philippineMobileHint = '912 345 6789';
 const philippineMobileHelper =
     'Enter the 10 digits after +63, starting with 9.';
 

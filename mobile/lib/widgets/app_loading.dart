@@ -14,7 +14,7 @@ class AppLoadingIndicator extends StatelessWidget {
     this.color,
   });
 
-  static const Color primaryColor = Color(0xFF2563EB);
+  static const Color primaryColor = Color(0xFF134c8c);
 
   @override
   Widget build(BuildContext context) {

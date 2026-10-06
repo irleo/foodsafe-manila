@@ -1,6 +1,7 @@
 import { modelLabel } from "../utils/predictionModelView";
 
 function displayMetric(value, suffix = "") {
+  if (value == null || value === "") return "—";
   const number = Number(value);
   return Number.isFinite(number) ? `${number.toFixed(2)}${suffix}` : "—";
 }
@@ -24,7 +25,7 @@ export default function EvaluationTable({ evaluation }) {
     { label: "Difference when larger errors matter more", key: "rmse" },
     { label: "Overall error rate", key: "wape", suffix: "%" },
     {
-      label: "Historical months checked",
+      label: "Matched district-month observations",
       key: "observationCount",
       integer: true,
     },
@@ -86,17 +87,19 @@ export default function EvaluationTable({ evaluation }) {
         </table>
       </div>
       <div className="border-t border-gray-100 px-4 py-3 text-sm text-gray-600">
-        {evaluation.sufficient ? (
+        {evaluation.sufficient && evaluation.bestHistoricalModel === "tie" ? (
+          "Both methods had equal unrounded mean absolute error."
+        ) : evaluation.sufficient ? (
           <>
             Best historical performance:{" "}
             <strong>{modelLabel(evaluation.bestHistoricalModel)}</strong>, based
-            on the smaller average error.
+            on the smaller unrounded mean absolute error.
           </>
         ) : (
           "There is not enough shared history to compare both methods fairly."
         )}
         <span className="ml-2 text-xs text-gray-500">
-          Prophet remains the operational method regardless of the benchmark result. Error rates omit months where the actual count is zero.
+          Prophet remains the operational method regardless of the benchmark result. Values are rounded for display. WAPE includes zero-count months and is unavailable when total actual cases are zero.
         </span>
       </div>
     </div>

@@ -68,14 +68,14 @@ export default function YearlyLineChart({
   );
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+    <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       <div className="flex flex-col gap-3 border-b border-gray-100 bg-gradient-to-r from-blue-50/80 to-white p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
-        <div>
+        <div className="min-w-0">
           <h2 className="font-semibold text-gray-900">{title}</h2>
           <p className="mt-1 text-xs text-gray-500">Annual confirmed-case totals across the available five-year view</p>
         </div>
         {chartData.length > 0 && (
-          <div className="flex gap-2 text-xs">
+          <div className="flex min-w-0 flex-wrap gap-2 text-xs">
             <div className="rounded-lg border border-blue-100 bg-white px-3 py-2 shadow-sm">
               <p className="text-gray-500">Latest year</p>
               <p className="mt-0.5 font-semibold text-blue-800">{formatYearLabel(latest.date)} · {numberFormatter.format(latest.officialCases)}</p>
@@ -91,7 +91,7 @@ export default function YearlyLineChart({
       {chartData.length === 0 ? (
         <div className="p-6 text-sm text-gray-500">No yearly data available.</div>
       ) : (
-        <div style={{ height }} className="w-full p-4 sm:p-5">
+        <div style={{ height }} className="min-w-0 w-full p-4 sm:p-5">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 12, right: 12, bottom: 4, left: 0 }}>
               <defs>

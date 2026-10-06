@@ -1,5 +1,14 @@
+import ValidationPreview from "./ValidationPreview.jsx";
 import { useMemo, useRef, useState } from "react";
-import { Download } from "lucide-react";
+import {
+  Download,
+  FileSpreadsheet,
+  CalendarRange,
+  Info,
+  Lock,
+  CheckCircle2,
+  XCircle,
+} from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 import { useDatasets } from "../hooks/useDatasets.js";
 import UploadDropzone from "./UploadDropzone";
@@ -8,6 +17,26 @@ import Spinner from "../../../components/common/Spinner.jsx";
 import { delay } from "../utils/delay.js";
 import { notify } from "../../../utils/toast.js";
 import { getErrorMessage } from "../../../utils/errors.js";
+
+/**
+ * Brand tokens — shared with ValidationPreview.jsx so the tab and the modal
+ * it opens read as one system. Arbitrary-value inline styles, so this drops
+ * in without touching tailwind.config.js.
+ */
+const BLUE = "#134C8C";
+const BLUE_DEEP = "#0C3A6B";
+const BLUE_TINT = "#E1EBF7";
+const AMBER = "#C97A2B";
+const AMBER_DEEP = "#9C5C1E";
+const AMBER_TINT = "#F7E7D2";
+const RED = "#B23A2E";
+const RED_TINT = "#F8E2DF";
+const GREEN = "#157F3D";
+const GREEN_TINT = "#DFF3E6";
+const BORDER = "#D7E1EC";
+const INK = "#0E1B2A";
+const MUTED = "#516075";
+const SURFACE_MUTED = "#F7F9FC";
 
 export default function OfficialDatasetsTab() {
   const fileInputRef = useRef(null);
@@ -20,11 +49,12 @@ export default function OfficialDatasetsTab() {
   const [file, setFile] = useState(null);
 
   const [datasetName, setDatasetName] = useState("");
-  const [reportingFrequency, setReportingFrequency] = useState("weekly");
   const [coverageStart, setCoverageStart] = useState("");
   const [coverageEnd, setCoverageEnd] = useState("");
   const [coverageVerified, setCoverageVerified] = useState(false);
 
+  const [preview, setPreview] = useState(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [validating, setValidating] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [downloadingId, setDownloadingId] = useState("");
@@ -49,10 +79,45 @@ export default function OfficialDatasetsTab() {
   const canValidate = useMemo(() => {
     if (!file) return false;
     if (!datasetName.trim()) return false;
-    if (!coverageStart || !coverageEnd || coverageStart > coverageEnd) return false;
+    if (!coverageStart || !coverageEnd || coverageStart > coverageEnd)
+      return false;
     if (!coverageVerified) return false;
     return true;
   }, [file, datasetName, coverageEnd, coverageStart, coverageVerified]);
+
+  const inputKey = JSON.stringify([
+    datasetName.trim(),
+    coverageStart,
+    coverageEnd,
+    coverageVerified,
+  ]);
+  const currentPreview =
+    preview?.file === file && preview?.inputKey === inputKey
+      ? preview.result
+      : null;
+  const validateDataset = async () => {
+    if (!canValidate || validating || uploading) return;
+    setValidating(true);
+    setPreview(null);
+    setErrorMsg("");
+    setStatusMsg("");
+    try {
+      const result = await upload({
+        file,
+        name: datasetName.trim(),
+            coverageStart,
+        coverageEnd,
+        coverageVerified,
+        preview: true,
+      });
+      setPreview({ file, inputKey, result });
+      setPreviewOpen(true);
+    } catch (error) {
+      setErrorMsg(getErrorMessage(error, "Validation could not be completed."));
+    } finally {
+      setValidating(false);
+    }
+  };
 
   const resetMessages = () => {
     setErrorMsg("");
@@ -65,7 +130,7 @@ export default function OfficialDatasetsTab() {
   };
 
   const onFileSelected = (f) => {
-    if (!f) return;
+    if (!f || validating || uploadInFlightRef.current) return;
 
     const ok =
       f.name.toLowerCase().endsWith(".xlsx") ||
@@ -79,6 +144,11 @@ export default function OfficialDatasetsTab() {
       return;
     }
 
+    if (f.size > 25 * 1024 * 1024) {
+      setFile(null);
+      setErrorMsg("The Excel workbook must not exceed 25 MB.");
+      return;
+    }
     setFile(f);
 
     if (!datasetName.trim()) {
@@ -97,28 +167,36 @@ export default function OfficialDatasetsTab() {
     if (dropped) onFileSelected(dropped);
   };
 
-  const validateAndUpload = async () => {
-    if (uploadInFlightRef.current) return;
+  const validateAndUpload = async (confirmSkipMissing = false) => {
+    if (
+      uploadInFlightRef.current ||
+      validating ||
+      !currentPreview?.canUpload ||
+      !canValidate
+    )
+      return;
     uploadInFlightRef.current = true;
     resetMessages();
     setUploading(true);
-    setValidating(true);
 
     try {
       const result = await notify.promise(
         upload({
           file,
           name: datasetName.trim(),
-          reportingFrequency,
-          coverageStart,
+                coverageStart,
           coverageEnd,
+          coverageVerified,
+          validationToken: currentPreview.validationToken,
+          confirmSkipMissing,
         }),
         {
           success: (res) =>
             res?.formatType
               ? `Imported (${res.formatType}): ${datasetName}`
               : `Uploaded: ${res?.dataset?.name || datasetName}`,
-          error: (error) => getErrorMessage(error, "The file could not be processed."),
+          error: (error) =>
+            getErrorMessage(error, "The file could not be processed."),
         },
       );
 
@@ -127,15 +205,24 @@ export default function OfficialDatasetsTab() {
         !result?.datasetId ||
         !Number.isFinite(result?.insertedRows)
       ) {
-        throw new Error("The server did not confirm a successful dataset import.");
+        throw new Error(
+          "The server did not confirm a successful dataset import.",
+        );
       }
 
-      setStatusMsg(`Imported: ${result.formatType} (${result.insertedRows} records)`);
+      setPreviewOpen(false);
+      setStatusMsg(
+        `Imported: ${result.formatType} (${result.insertedRows} records)`,
+      );
       setFile(null);
       setCoverageStart("");
       setCoverageEnd("");
       setCoverageVerified(false);
-      await fetchRecent();
+      try {
+        await fetchRecent();
+      } catch (refreshError) {
+        notify.error(getErrorMessage(refreshError, "Dataset saved, but the recent uploads list could not refresh. Refresh the list to see it."));
+      }
     } catch (err) {
       setErrorMsg(getErrorMessage(err, "The file could not be processed."));
     } finally {
@@ -166,7 +253,7 @@ export default function OfficialDatasetsTab() {
       notify.error("Dataset is not available.");
     } finally {
       downloadInFlightRef.current.delete(datasetId);
-      setDownloadingId((current) => current === datasetId ? "" : current);
+      setDownloadingId((current) => (current === datasetId ? "" : current));
     }
   };
 
@@ -194,32 +281,67 @@ export default function OfficialDatasetsTab() {
     }
   };
 
+  const dateInputStyle = {
+    borderColor: BORDER,
+    colorScheme: "light",
+  };
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className="space-y-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="font-semibold text-xl">Upload official dataset</h2>
+    <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="min-w-0 space-y-6">
+        <div
+          className="min-w-0 rounded-2xl border bg-white p-4 shadow-sm sm:p-6"
+          style={{ borderColor: BORDER }}
+        >
+          <div className="mb-5 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-xl font-bold" style={{ color: INK }}>
+                Upload official dataset
+              </h2>
+              <p className="mt-0.5 text-xs" style={{ color: MUTED }}>
+                Add a new CESU case workbook to FoodSafe.
+              </p>
+            </div>
 
             <button
               type="button"
               onClick={handleDownloadTemplate}
               disabled={templateDownloading}
-              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 sm:w-auto"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50 sm:w-auto"
+              style={{ borderColor: BORDER, color: INK }}
             >
               <Download size={16} />
-              {templateDownloading ? "Preparing template…" : "Download template"}
+              {templateDownloading
+                ? "Preparing template\u2026"
+                : "Download template"}
             </button>
           </div>
 
-          <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
-            <div className="font-medium mb-1">Accepted uploads</div>
-            <ul className="list-disc pl-5 space-y-1">
+          <div
+            className="mb-5 rounded-lg p-3 text-sm"
+            style={{ background: SURFACE_MUTED, border: `1px solid ${BORDER}` }}
+          >
+            <div
+              className="mb-1.5 flex items-center gap-1.5 font-semibold"
+              style={{ color: BLUE_DEEP }}
+            >
+              <FileSpreadsheet size={14} /> Accepted uploads
+            </div>
+            <ul className="list-disc space-y-1 pl-5 text-xs" style={{ color: MUTED }}>
               <li>
-                <span className="font-medium">Raw health office XLSX</span>: multi-sheet, each sheet = disease. Needs “Report date”, “District”, “Case Classification”.
+                <span className="font-medium" style={{ color: INK }}>
+                  Raw health office XLSX
+                </span>
+                : multi-sheet, each sheet = disease. Needs "Report date",
+                "District", "Case Classification".
               </li>
               <li>
-                <span className="font-medium">FoodSafe template XLSX</span>: enter district, barangay, disease, report date, classification, and cases. FoodSafe calculates calendar and morbidity fields from the CESU report date.
+                <span className="font-medium" style={{ color: INK }}>
+                  FoodSafe template XLSX
+                </span>
+                : enter district, barangay, disease, report date,
+                classification, and cases. FoodSafe calculates calendar and
+                morbidity fields from the CESU report date.
               </li>
             </ul>
           </div>
@@ -232,32 +354,53 @@ export default function OfficialDatasetsTab() {
             pickFile={pickFile}
             onFileSelected={onFileSelected}
             onDrop={handleDrop}
-            onRemoveFile={() => setFile(null)}
+            onRemoveFile={() => {
+              if (!uploading && !validating) setFile(null);
+            }}
           />
 
-          <div className="mt-6 space-y-4">
+          <fieldset
+            disabled={uploading || validating}
+            className="mt-6 min-w-0 space-y-4"
+          >
+            {/* Dataset name */}
             <div>
-              <label className="block text-sm mb-2">Dataset name</label>
+              <label
+                className="mb-1.5 flex items-center gap-1 text-sm font-medium"
+                style={{ color: INK }}
+              >
+                Dataset name <span style={{ color: RED }}>*</span>
+              </label>
               <input
                 required
                 type="text"
                 value={datasetName}
                 onChange={(e) => setDatasetName(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full rounded-lg border px-4 py-2.5 text-sm outline-none focus:ring-2"
+                style={{ borderColor: BORDER, "--tw-ring-color": BLUE_TINT }}
                 placeholder="Q1 2025 Foodborne Disease Data"
               />
             </div>
 
-            <fieldset className="rounded-lg border border-blue-200 bg-blue-50/60 p-4">
-              <legend className="px-1 text-sm font-semibold text-blue-950">
+            {/* Official reporting coverage — interactive input group */}
+            <fieldset
+              className="min-w-0 rounded-xl border p-4"
+              style={{ borderColor: BORDER, borderLeftWidth: 3, borderLeftColor: BLUE }}
+            >
+              <legend
+                className="flex items-center gap-1.5 px-1 text-sm font-semibold"
+                style={{ color: INK }}
+              >
+                <CalendarRange size={15} style={{ color: BLUE }} />
                 Official reporting coverage
               </legend>
-              <p className="text-xs text-blue-700">
-                Enter the complete period represented by CESU. These dates establish coverage independently of the earliest and latest valid case rows in the workbook.
+              <p className="text-xs" style={{ color: MUTED }}>
+                The exact period CESU reported for — independent of the
+                case rows in the file.
               </p>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className="text-sm text-gray-700">
-                  Coverage start
+                <label className="min-w-0 text-sm" style={{ color: INK }}>
+                  Coverage start <span style={{ color: RED }}>*</span>
                   <input
                     required
                     type="date"
@@ -267,11 +410,12 @@ export default function OfficialDatasetsTab() {
                       setCoverageStart(event.target.value);
                       setCoverageVerified(false);
                     }}
-                    className="mt-1 min-h-11 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm"
+                    className="mt-1 min-h-11 min-w-0 w-full rounded-lg border bg-white px-3 py-2.5 text-sm"
+                    style={dateInputStyle}
                   />
                 </label>
-                <label className="text-sm text-gray-700">
-                  Coverage end
+                <label className="min-w-0 text-sm" style={{ color: INK }}>
+                  Coverage end <span style={{ color: RED }}>*</span>
                   <input
                     required
                     type="date"
@@ -282,51 +426,70 @@ export default function OfficialDatasetsTab() {
                       setCoverageEnd(event.target.value);
                       setCoverageVerified(false);
                     }}
-                    className="mt-1 min-h-11 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm"
+                    className="mt-1 min-h-11 min-w-0 w-full rounded-lg border bg-white px-3 py-2.5 text-sm"
+                    style={dateInputStyle}
                   />
                 </label>
               </div>
               {coverageStart && coverageEnd && coverageStart > coverageEnd ? (
-                <p className="mt-2 text-xs font-medium text-red-700">
+                <p className="mt-2 text-xs font-medium" style={{ color: RED }}>
                   Coverage end must be on or after coverage start.
                 </p>
               ) : null}
+
+              <details className="mt-2.5 group">
+                <summary
+                  className="flex w-fit cursor-pointer list-none items-center gap-1 text-xs font-medium"
+                  style={{ color: BLUE_DEEP }}
+                >
+                  <Info size={12} /> How coverage dates affect validation
+                </summary>
+                <p className="mt-1.5 text-xs leading-relaxed" style={{ color: MUTED }}>
+                  Rows outside the selected coverage dates will cause
+                  validation to fail. Missing periods inside confirmed
+                  coverage are treated as zero; periods outside it remain
+                  missing.
+                </p>
+              </details>
             </fieldset>
 
-            <label className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
-              <input type="checkbox" className="mt-0.5 h-4 w-4" checked={coverageVerified} onChange={(event) => setCoverageVerified(event.target.checked)} />
-              <span>I confirm that CESU reporting was complete for all six Manila districts throughout the selected coverage dates. Covered periods without a case row may therefore be encoded as zero.</span>
-            </label>
-            <p className="text-xs text-gray-500">
-              Rows outside the selected coverage dates will cause validation to fail. Missing periods inside confirmed coverage are treated as zero; periods outside it remain missing.
-            </p>
-
-            <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-4">
-              <p className="text-sm font-semibold text-blue-950">Source and reporting details</p>
-              <p className="mt-1 text-xs text-blue-700">CESU is the authoritative source for every official dataset uploaded to FoodSafe.</p>
-              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div className="text-sm text-gray-700">
-                  Official source
-                  <div className="mt-1 w-max flex min-h-11 items-center rounded-md border border-blue-200 bg-white px-3 py-2.5 font-medium text-blue-950">
-                    City Epidemiology and Surveillance Unit (CESU)
-                  </div>
-                </div>
-                <label className="text-sm text-gray-700 md:col-span-2">
-                  Reporting frequency
-                  <select value={reportingFrequency} onChange={(event) => setReportingFrequency(event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm">
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly historical aggregate</option>
-                  </select>
-                </label>
-              </div>
+            {/* Completeness attestation */}
+            <div
+              className="rounded-xl p-3.5"
+              style={{ background: AMBER_TINT, border: `1px solid ${AMBER}66` }}
+            >
+              <label
+                className="flex items-start gap-3 text-sm"
+                style={{ color: AMBER_DEEP }}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                  checked={coverageVerified}
+                  onChange={(event) => setCoverageVerified(event.target.checked)}
+                />
+                <span className="font-medium">
+                  I confirm CESU reporting was complete for all six districts
+                  during this period.
+                </span>
+              </label>
+              <p className="mt-1.5 pl-7 text-xs" style={{ color: AMBER_DEEP, opacity: 0.85 }}>
+                Covered periods without a case row will be encoded as zero,
+                not treated as missing.
+              </p>
             </div>
-          </div>
+          </fieldset>
 
-          <div className="mt-6 flex gap-3">
+          <div className="mt-6">
             <button
-              onClick={validateAndUpload}
-              disabled={!canValidate || uploading}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              onClick={validateDataset}
+              disabled={!canValidate || uploading || validating}
+              className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition-colors disabled:cursor-not-allowed"
+              style={
+                !canValidate || uploading || validating
+                  ? { background: "#E7EAEE", color: "#9AA5B1" }
+                  : { background: BLUE, color: "#fff" }
+              }
             >
               {(uploading || validating) && (
                 <span className="inline-flex h-4 w-4">
@@ -334,28 +497,61 @@ export default function OfficialDatasetsTab() {
                 </span>
               )}
               {uploading
-                ? "Uploading..."
+                ? "Uploading\u2026"
                 : validating
-                  ? "Validating..."
-                  : "Validate dataset"}
+                  ? "Validating\u2026"
+                  : "Validate Dataset"}
             </button>
           </div>
 
+          {file && !canValidate && (
+            <p className="mt-3 text-sm" style={{ color: MUTED }}>
+              Enter the dataset name and confirm coverage dates, then click
+              Validate Dataset. Selecting a file does not save it.
+            </p>
+          )}
+          {previewOpen && currentPreview && (
+            <ValidationPreview
+              result={currentPreview}
+              fileName={file?.name}
+              uploading={uploading}
+              uploadError={errorMsg}
+              onConfirm={validateAndUpload}
+              onClose={() => {
+                if (!uploading) setPreviewOpen(false);
+              }}
+              onCancel={() => {
+                if (!uploading) {
+                  setPreviewOpen(false);
+                  setPreview(null);
+                  setFile(null);
+                  resetMessages();
+                }
+              }}
+            />
+          )}
+
           {(errorMsg || statusMsg) && (
             <div
-              className={`mt-4 rounded-lg border p-3 text-sm ${
+              className="mt-4 flex items-start gap-2 rounded-lg p-3 text-sm"
+              style={
                 errorMsg
-                  ? "border-red-200 bg-red-50 text-red-700"
-                  : "border-green-200 bg-green-50 text-green-700"
-              }`}
+                  ? { background: RED_TINT, color: RED }
+                  : { background: GREEN_TINT, color: GREEN }
+              }
             >
-              {errorMsg || statusMsg}
+              {errorMsg ? (
+                <XCircle size={16} className="mt-0.5 shrink-0" />
+              ) : (
+                <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+              )}
+              <span>{errorMsg || statusMsg}</span>
             </div>
           )}
         </div>
       </div>
 
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6">
         <RecentDatasetsList
           recent={recent}
           pagination={pagination}

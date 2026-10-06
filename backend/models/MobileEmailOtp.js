@@ -6,8 +6,10 @@ const mobileEmailOtpSchema = new mongoose.Schema(
     purpose: {
       type: String,
       required: true,
-      enum: ["password_reset"],
+      enum: ["password_reset", "recovery_email"],
     },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "MobileUser" },
+    emailVersion: { type: Number, min: 0 },
     otpHash: { type: String, select: false },
     verificationTokenHash: { type: String, select: false },
     verifiedAt: Date,

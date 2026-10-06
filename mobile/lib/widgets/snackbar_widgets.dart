@@ -76,7 +76,7 @@ class SnackbarWidgets {
       context,
       message: msg,
       icon: Icons.info_outline,
-      bgColor: const Color(0xFF2563EB),
+      bgColor: const Color(0xFF134c8c),
     );
   }
 }

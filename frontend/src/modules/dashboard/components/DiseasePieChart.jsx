@@ -67,7 +67,7 @@ export default function DiseaseDistributionChart({ data = [], title = "Disease D
   const previousYear = chartData[0]?.previousYear;
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+    <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
       <div className="mb-4">
         <h2 className="font-semibold text-gray-900">{title}</h2>
         <p className="mt-1 text-xs text-gray-500">
@@ -81,7 +81,7 @@ export default function DiseaseDistributionChart({ data = [], title = "Disease D
         <p className="text-sm text-gray-500">No disease distribution data available.</p>
       ) : (
         <div className="grid grid-cols-1 items-center gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(220px,0.9fr)]">
-          <div className="relative h-[320px] w-full">
+          <div className="relative h-[320px] min-w-0 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie

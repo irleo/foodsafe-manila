@@ -58,6 +58,10 @@ function getTrustSummary(evaluation) {
     return `Prophet had the smaller historical average error${checkedMonths}.`;
   }
 
+  if (evaluation.bestHistoricalModel === "tie") {
+    return `Both methods had equal historical mean absolute error${checkedMonths}; Prophet remains the operational model.`;
+  }
+
   return `The benchmark had the smaller historical average error${checkedMonths}; Prophet remains the operational model.`;
 }
 

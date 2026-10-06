@@ -1,5 +1,9 @@
-import 'api_client.dart';
-import 'session.dart';
+import 'package:foodsafe_manila/services/api_client.dart';
+import 'package:foodsafe_manila/services/session.dart';
+import 'package:foodsafe_manila/services/credential_store.dart';
+import 'package:foodsafe_manila/services/phone_change_flow.dart';
+import 'package:foodsafe_manila/services/otp_flow.dart';
+import 'package:foodsafe_manila/utils/recovery_email.dart';
 
 class ApiService {
   static Future<Map<String, dynamic>?> login(
@@ -10,21 +14,39 @@ class ApiService {
       '/auth/login',
       body: {'phone': phone, 'password': password},
       auth: false,
+      timeout: const Duration(seconds: 30),
     );
 
-    if (response.statusCode != 200) return null;
+    if (response.statusCode == 401) return null;
+    ApiClient.throwIfError(
+      response,
+      fallback: response.statusCode == 429
+          ? 'Too many sign-in attempts. Please wait before trying again.'
+          : 'Sign-in is currently unavailable. Please try again later.',
+    );
 
     final data = ApiClient.decodeMap(response);
     final accessToken = data['accessToken'] as String?;
     final refreshToken = data['refreshToken'] as String?;
 
-    if (accessToken == null) return null;
+    if (accessToken == null ||
+        accessToken.isEmpty ||
+        refreshToken == null ||
+        refreshToken.isEmpty) {
+      throw ApiException(
+        502,
+        'The server returned an invalid sign-in response. Please try again.',
+      );
+    }
 
-    await Session.saveTokens(
+    final saved = await Session.saveTokens(
       accessToken: accessToken,
       refreshToken: refreshToken,
       user: data,
     );
+    if (!saved || Session.currentUser == null) {
+      throw const SessionStorageException();
+    }
 
     return Session.currentUser;
   }
@@ -34,6 +56,7 @@ class ApiService {
     required String phone,
     required String password,
     required String verificationToken,
+    required Map<String, Object> policyAcceptance,
     String? email,
   }) async {
     final response = await ApiClient.post(
@@ -43,7 +66,8 @@ class ApiService {
         'phone': phone,
         'password': password,
         'verificationToken': verificationToken,
-        'email': email ?? '',
+        'email': normalizeRecoveryEmail(email),
+        'policyAcceptance': policyAcceptance,
       },
       auth: false,
     );
@@ -52,7 +76,7 @@ class ApiService {
     return response.statusCode == 201;
   }
 
-  static Future<int> sendMobileOtp({
+  static Future<OtpSendResult> sendMobileOtp({
     required String phone,
     required String purpose,
   }) async {
@@ -67,16 +91,16 @@ class ApiService {
       fallback: 'Failed to send verification code',
     );
     final data = ApiClient.decodeMap(response);
-    return data['expiresInSeconds'] as int? ?? 300;
+    return OtpSendResult.fromJson(data);
   }
 
-  static Future<int> sendEmailOtp({
+  static Future<OtpSendResult> sendEmailOtp({
     required String email,
     required String purpose,
   }) async {
     final response = await ApiClient.post(
       '/auth/email/otp/send',
-      body: {'email': email, 'purpose': purpose},
+      body: {'email': normalizeRecoveryEmail(email), 'purpose': purpose},
       auth: false,
     );
 
@@ -86,10 +110,10 @@ class ApiService {
     );
 
     final data = ApiClient.decodeMap(response);
-    return data['expiresInSeconds'] as int? ?? 300;
+    return OtpSendResult.fromJson(data);
   }
 
-  static Future<String> verifyMobileOtp({
+  static Future<OtpVerificationResult> verifyMobileOtp({
     required String phone,
     required String purpose,
     required String otp,
@@ -102,11 +126,22 @@ class ApiService {
 
     ApiClient.throwIfError(response, fallback: 'Failed to verify code');
     final data = ApiClient.decodeMap(response);
-    final token = data['verificationToken'] as String?;
-    if (token == null || token.isEmpty) {
-      throw ApiException(response.statusCode, 'Verification token is missing');
-    }
-    return token;
+    return OtpVerificationResult.fromJson(data);
+  }
+
+  static Future<PhoneChangeFlow> sendPhoneChangeOtp({
+    required String phone,
+    String? flowId,
+  }) async {
+    final response = await ApiClient.post(
+      '/auth/mobile/phone-change/otp/send',
+      body: {'phone': phone, if (flowId != null) 'flowId': flowId},
+    );
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Could not send phone verification code',
+    );
+    return PhoneChangeFlow.fromJson(ApiClient.decodeMap(response));
   }
 
   static Future<bool> checkPhoneExists(String phone) async {
@@ -125,7 +160,7 @@ class ApiService {
   static Future<bool> checkEmailExists(String email) async {
     final response = await ApiClient.get(
       '/auth/user/email-exists',
-      query: {'email': email},
+      query: {'email': normalizeRecoveryEmail(email)},
       auth: false,
     );
 
@@ -135,43 +170,25 @@ class ApiService {
     return data['exists'] as bool? ?? false;
   }
 
-  static Future<String> verifyEmailOtp({
+  static Future<OtpVerificationResult> verifyEmailOtp({
     required String email,
     required String purpose,
     required String otp,
   }) async {
     final response = await ApiClient.post(
       '/auth/email/otp/verify',
-      body: {'email': email, 'purpose': purpose, 'otp': otp},
+      body: {
+        'email': normalizeRecoveryEmail(email),
+        'purpose': purpose,
+        'otp': otp,
+      },
       auth: false,
     );
 
     ApiClient.throwIfError(response, fallback: 'Failed to verify code');
 
     final data = ApiClient.decodeMap(response);
-    final token = data['verificationToken'] as String?;
-
-    if (token == null || token.isEmpty) {
-      throw ApiException(response.statusCode, 'Verification token is missing');
-    }
-
-    return token;
-  }
-
-  static Future<void> cancelEmailOtp({
-    required String email,
-    required String purpose,
-  }) async {
-    final response = await ApiClient.post(
-      '/auth/email/otp/cancel',
-      body: {'email': email, 'purpose': purpose},
-      auth: false,
-    );
-
-    ApiClient.throwIfError(
-      response,
-      fallback: 'Failed to cancel verification code',
-    );
+    return OtpVerificationResult.fromJson(data);
   }
 
   static Future<bool> updatePassword({
@@ -184,7 +201,8 @@ class ApiService {
       '/auth/reset-password',
       body: {
         if (phone != null && phone.isNotEmpty) 'phone': phone,
-        if (email != null && email.isNotEmpty) 'email': email,
+        if (email != null && email.isNotEmpty)
+          'email': normalizeRecoveryEmail(email),
         'newPassword': newPassword,
         'verificationToken': verificationToken,
       },
@@ -201,20 +219,33 @@ class ApiService {
     required String username,
     required String phone,
     String? email,
+    String? verificationToken,
+    String? flowId,
+    String? otp,
+    String? currentPassword,
   }) async {
     final response = await ApiClient.put(
       '/users/$id',
-      body: {'username': username, 'phone': phone, 'email': email ?? ''},
+      body: {
+        'username': username,
+        'phone': phone,
+        'email': normalizeRecoveryEmail(email),
+        if (verificationToken != null) 'verificationToken': verificationToken,
+        if (flowId != null) 'flowId': flowId,
+        if (otp != null) 'otp': otp,
+        if (currentPassword != null && currentPassword.isNotEmpty)
+          'currentPassword': currentPassword,
+      },
     );
 
-    if (response.statusCode != 200) return null;
-
+    ApiClient.throwIfError(response, fallback: 'Failed to update profile');
     final data = ApiClient.decodeMap(response);
     await Session.saveCurrentUser(data);
     return data;
   }
 
   static Future<bool> submitReport({
+    required Map<String, Object?> reportDisclosure,
     required String reportLocation,
     required List<String> symptoms,
     required String foodSource,
@@ -228,6 +259,7 @@ class ApiService {
       '/reports',
       body: {
         'reportLocation': reportLocation,
+        'reportDisclosure': reportDisclosure,
         'symptoms': symptoms,
         'foodSource': foodSource,
         'exposureDistrict': exposureDistrict,
@@ -259,21 +291,42 @@ class ApiService {
       query: {'page': '$page', 'limit': '$limit'},
     );
 
-    if (response.statusCode != 200) {
-      return {'items': <Map<String, dynamic>>[], 'pagination': null};
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Reports could not be loaded. Please retry.',
+    );
+    final data = ApiClient.decodeMap(response);
+    final items = data['items'];
+    if (items is! List ||
+        !items.every((item) => item is Map<String, dynamic>)) {
+      throw ApiException(
+        502,
+        'Invalid reports response. Please retry.',
+        code: 'INVALID_RESPONSE',
+      );
     }
-
-    return ApiClient.decodeMap(response);
+    return data;
   }
 
   static Future<DateTime?> getLastReportTime(String userId) async {
     final response = await ApiClient.get('/reports/user/$userId/last');
 
-    if (response.statusCode != 200) return null;
-
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Could not check report cooldown. Please retry.',
+    );
     final data = ApiClient.decodeMap(response);
-    final raw = data['lastReportAt'] as String?;
-    return raw == null ? null : DateTime.tryParse(raw);
+    final raw = data['lastReportAt'];
+    if (data.containsKey('lastReportAt') && raw == null) return null;
+    final parsed = raw is String ? DateTime.tryParse(raw) : null;
+    if (parsed == null) {
+      throw ApiException(
+        502,
+        'Invalid report cooldown response. Please retry.',
+        code: 'INVALID_RESPONSE',
+      );
+    }
+    return parsed;
   }
 
   static Future<Map<String, dynamic>?> getOfficialAnalytics({
@@ -293,7 +346,10 @@ class ApiService {
       query: query,
     );
 
-    if (response.statusCode != 200) return null;
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Analytics could not be loaded. Please retry.',
+    );
     return ApiClient.decodeMap(response);
   }
 
@@ -340,7 +396,10 @@ class ApiService {
 
   static Future<Map<String, dynamic>?> getDashboard() async {
     final response = await ApiClient.get('/dashboard');
-    if (response.statusCode != 200) return null;
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Dashboard could not be loaded. Please retry.',
+    );
     return ApiClient.decodeMap(response);
   }
 
@@ -351,7 +410,10 @@ class ApiService {
       '/risk/heatmap',
       query: {'months': months},
     );
-    if (response.statusCode != 200) return null;
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Risk data could not be loaded. Please retry.',
+    );
     return ApiClient.decodeMap(response);
   }
 
@@ -367,16 +429,22 @@ class ApiService {
       '/datasets',
       query: {'status': 'validated', 'page': '1', 'limit': '1'},
     );
-    if (response.statusCode != 200) return null;
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Dataset could not be loaded. Please retry.',
+    );
 
     final data = ApiClient.decodeMap(response);
     final rawItems = data['items'];
-    final rows = rawItems is List
-        ? rawItems
-              .whereType<Map>()
-              .map((row) => Map<String, dynamic>.from(row))
-              .toList()
-        : <Map<String, dynamic>>[];
+    if (rawItems is! List ||
+        !rawItems.every((item) => item is Map<String, dynamic>)) {
+      throw ApiException(
+        502,
+        'Invalid dataset response. Please retry.',
+        code: 'INVALID_RESPONSE',
+      );
+    }
+    final rows = rawItems.cast<Map<String, dynamic>>();
     if (rows.isEmpty) return null;
 
     final row = rows.first;
@@ -403,15 +471,22 @@ class ApiService {
         '/cases/$datasetId',
         query: {'page': '$page', 'limit': '$pageSize'},
       );
-      if (response.statusCode != 200) return rows;
+      ApiClient.throwIfError(
+        response,
+        fallback: 'Cases could not be loaded. Please retry.',
+      );
 
       final data = ApiClient.decodeMap(response);
       final items = data['items'];
-      if (items is List) {
-        rows.addAll(
-          items.whereType<Map>().map((row) => Map<String, dynamic>.from(row)),
+      if (items is! List ||
+          !items.every((item) => item is Map<String, dynamic>)) {
+        throw ApiException(
+          502,
+          'Invalid cases response. Please retry.',
+          code: 'INVALID_RESPONSE',
         );
       }
+      rows.addAll(items.cast<Map<String, dynamic>>());
       final pagination = data['pagination'];
       totalPages = pagination is Map
           ? (pagination['totalPages'] as num?)?.toInt() ?? 1
@@ -439,7 +514,10 @@ class ApiService {
     }
 
     final response = await ApiClient.get('/heatmap/districts', query: query);
-    if (response.statusCode != 200) return null;
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Heatmap could not be loaded. Please retry.',
+    );
     return ApiClient.decodeMap(response);
   }
 
@@ -455,7 +533,10 @@ class ApiService {
     };
 
     final response = await ApiClient.get('/risk/nearby', query: query);
-    if (response.statusCode != 200) return null;
+    ApiClient.throwIfError(
+      response,
+      fallback: 'Nearby risk could not be loaded. Please retry.',
+    );
     return ApiClient.decodeMap(response);
   }
 }

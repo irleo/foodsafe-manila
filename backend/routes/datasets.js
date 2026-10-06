@@ -23,6 +23,15 @@ router.get(
 );
 
 router.post(
+  "/validate",
+  verifyToken,
+  requireInternalRole("admin", "cesu"),
+  datasetUpload.single("file"),
+  handleDatasetUploadError,
+  uploadDataset,
+);
+
+router.post(
   "/upload",
   verifyToken,
   requireInternalRole("admin", "cesu"),

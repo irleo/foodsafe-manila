@@ -28,7 +28,7 @@ export default function UploadDropzone({
       }}
       onDrop={onDrop}
       className={[
-        "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
+        "min-w-0 border-2 border-dashed rounded-lg p-4 sm:p-8 text-center transition-colors",
         dragActive ? "border-blue-400 bg-blue-50/40" : "border-gray-300",
       ].join(" ")}
     >
@@ -59,18 +59,18 @@ export default function UploadDropzone({
           </p>
         </>
       ) : (
-        <div className="flex items-center justify-between gap-3 border border-gray-200 rounded-lg p-4 bg-gray-50">
-          <div className="flex items-center gap-3 text-left">
-            <DocumentIcon className="w-6 h-6 text-gray-600" />
-            <div>
-              <p className="font-medium">{file.name}</p>
+        <div className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
+          <div className="flex min-w-0 items-center gap-3 text-left">
+            <DocumentIcon className="h-6 w-6 shrink-0 text-gray-600" />
+            <div className="min-w-0">
+              <p className="break-all font-medium">{file.name}</p>
               <p className="text-xs text-gray-500">
                 {(file.size / 1024 / 1024).toFixed(2)} MB
               </p>
             </div>
           </div>
           <button
-            className="text-sm px-3 py-1 rounded-lg border border-gray-300 hover:bg-white"
+            className="shrink-0 rounded-lg border border-gray-300 px-3 py-2.5 text-sm hover:bg-white"
             onClick={onRemoveFile}
           >
             Remove

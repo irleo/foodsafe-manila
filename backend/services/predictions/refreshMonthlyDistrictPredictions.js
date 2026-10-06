@@ -16,13 +16,15 @@ import {
 } from "./forecastExecution.js";
 import { logServerError } from "../../utils/serverLogger.js";
 import { boundedForecastMap } from "./boundedForecastMap.js";
+import { historicalModelWinner } from "./historicalModelComparison.js";
 
 const MIN_TRAINING_MONTHS = 24;
 const MIN_COMPARABLE_OBSERVATIONS = 3;
 const BACKTEST_MONTHS = 19;
 const AGGREGATE_INTERVAL_COVERAGE = 0.95;
 const MIN_AGGREGATE_INTERVAL_OBSERVATIONS = 19;
-export const FORECAST_SCHEMA_VERSION = 10;
+// Invalidates cached backtests generated before calendar-gap and MAE fixes.
+export const FORECAST_SCHEMA_VERSION = 11;
 const GRANULARITY = "monthly_disease_district_cases";
 const DISTRICTS = Object.freeze(Array.from({ length: 6 }, (_, index) => `District ${index + 1}`));
 
@@ -172,7 +174,8 @@ function metrics(rows = []) {
   const squared = usable.reduce((sum, row) => sum + (row.signedError ** 2), 0);
   const actual = usable.reduce((sum, row) => sum + Math.max(0, row.actualCases), 0);
   const percentageRows = usable.filter((row) => row.actualCases > 0);
-  return { mae: Number((absolute / usable.length).toFixed(2)), rmse: Number(Math.sqrt(squared / usable.length).toFixed(2)), wape: actual > 0 ? Number(((absolute / actual) * 100).toFixed(2)) : null, mape: percentageRows.length ? Number((percentageRows.reduce((sum, row) => sum + (row.absoluteError / row.actualCases), 0) * 100 / percentageRows.length).toFixed(2)) : null, observationCount: usable.length };
+  // Keep MAE unrounded for comparisons; presentation layers round for display.
+  return { mae: absolute / usable.length, rmse: Number(Math.sqrt(squared / usable.length).toFixed(2)), wape: actual > 0 ? Number(((absolute / actual) * 100).toFixed(2)) : null, mape: percentageRows.length ? Number((percentageRows.reduce((sum, row) => sum + (row.absoluteError / row.actualCases), 0) * 100 / percentageRows.length).toFixed(2)) : null, observationCount: usable.length };
 }
 function seasonalNaiveModel(series, horizonMonths) {
   const byPeriod = new Map(series.map((point) => [periodKey(point.year, point.month), Number(point.y)]));
@@ -331,7 +334,7 @@ function compareModels(prophet, seasonalNaive) {
   const seasonalNaiveMetrics = metrics(keys.map((key) => naiveBy.get(key)));
   const sufficient = keys.length >= MIN_COMPARABLE_OBSERVATIONS;
   const bestHistoricalModel = sufficient
-    ? Number(prophetMetrics?.mae) < Number(seasonalNaiveMetrics?.mae) ? "prophet" : "seasonal_naive"
+    ? historicalModelWinner(prophetMetrics?.mae, seasonalNaiveMetrics?.mae)
     : null;
   const operationalModel = prophet.status === "success" && primaryForecast(prophet)
     ? "prophet"
@@ -346,7 +349,9 @@ function compareModels(prophet, seasonalNaive) {
     prophetMetrics,
     seasonalNaiveMetrics,
     selectedModelReason: sufficient
-      ? `${bestHistoricalModel === "prophet" ? "Prophet" : "Seasonal Naive"} had the smaller average error in recent checks.`
+      ? bestHistoricalModel === "tie"
+        ? "Both methods had equal unrounded mean absolute error in recent checks."
+        : `${bestHistoricalModel === "prophet" ? "Prophet" : "Seasonal Naive"} had the smaller average error in recent checks.`
       : "There is not enough shared history for a stable benchmark comparison.",
     operationalModelReason: operationalModel
       ? "Prophet is the sole operational forecasting method; Seasonal Naive is retained only as a benchmark."
@@ -480,7 +485,7 @@ function pooledEvaluation(districts) {
     for (const [key, row] of prophetBy) if (naiveBy.has(key)) { prophetRows.push(row); naiveRows.push(naiveBy.get(key)); }
   }
   const prophet = metrics(prophetRows); const seasonalNaive = metrics(naiveRows);
-  return { sufficient: prophetRows.length >= MIN_COMPARABLE_OBSERVATIONS, comparableObservationCount: prophetRows.length, minimumRequiredObservations: MIN_COMPARABLE_OBSERVATIONS, prophet, seasonalNaive, bestHistoricalModel: prophetRows.length >= MIN_COMPARABLE_OBSERVATIONS ? Number(prophet?.mae) < Number(seasonalNaive?.mae) ? "prophet" : "seasonal_naive" : null, selectionMetric: "mae" };
+  return { sufficient: prophetRows.length >= MIN_COMPARABLE_OBSERVATIONS, comparableObservationCount: prophetRows.length, minimumRequiredObservations: MIN_COMPARABLE_OBSERVATIONS, prophet, seasonalNaive, bestHistoricalModel: prophetRows.length >= MIN_COMPARABLE_OBSERVATIONS ? historicalModelWinner(prophet?.mae, seasonalNaive?.mae) : null, selectionMetric: "mae" };
 }
 function fingerprint(value) { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
 

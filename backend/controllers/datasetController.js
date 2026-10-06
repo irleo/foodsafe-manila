@@ -1,3 +1,6 @@
+import { afterDatasetSave } from "../services/afterDatasetSave.js";
+import { validateWorkbookIsolated } from "../services/validateWorkbookIsolated.js";
+import { previewFingerprint, issuePreviewToken, verifyPreviewToken } from "../services/datasetPreviewToken.js";
 import fs from "fs";
 import path from "path";
 import { createHash } from "crypto";
@@ -16,7 +19,7 @@ import {
   isSafePublicMessage,
   sanitizeValidationErrors,
 } from "../middleware/errorHandler.js";
-import { logServerError } from "../utils/serverLogger.js";
+import { logServerError, logRequestError } from "../utils/serverLogger.js";
 import {
   deleteDatasetObject,
   getDatasetObject,
@@ -30,30 +33,7 @@ const XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadshee
 const PREDICTION_GRANULARITY = "monthly_disease_district_cases";
 const DEFAULT_PREDICTION_REFRESH_TIMEOUT_MS = 12 * 60 * 1000;
 
-function optionalDeclaredCoverage(body = {}) {
-  const startText = String(body.coverageStart || "").trim();
-  const endText = String(body.coverageEnd || "").trim();
-  const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
-  if (!dateOnlyPattern.test(startText) || !dateOnlyPattern.test(endText)) {
-    return { coverageStart: null, coverageEnd: null };
-  }
 
-  const coverageStart = new Date(`${startText}T00:00:00.000Z`);
-  const coverageEnd = new Date(`${endText}T23:59:59.999Z`);
-  const todayEnd = new Date();
-  todayEnd.setUTCHours(23, 59, 59, 999);
-  if (
-    Number.isNaN(coverageStart.getTime())
-    || Number.isNaN(coverageEnd.getTime())
-    || coverageStart.toISOString().slice(0, 10) !== startText
-    || coverageEnd.toISOString().slice(0, 10) !== endText
-    || coverageStart > coverageEnd
-    || coverageEnd > todayEnd
-  ) {
-    return { coverageStart: null, coverageEnd: null };
-  }
-  return { coverageStart, coverageEnd };
-}
 
 function predictionRefreshTimeoutMs() {
   const parsed = Number.parseInt(process.env.PREDICTION_REFRESH_TIMEOUT_MS, 10);
@@ -195,7 +175,6 @@ async function streamObjectDownload(res, { object, filename, fallbackMimeType })
  */
 
 export const uploadDataset = async (req, res) => {
-  let dataset = null;
   let uploadedStorageKey = "";
 
   try {
@@ -204,9 +183,7 @@ export const uploadDataset = async (req, res) => {
     // server-side so a custom client cannot introduce another official source.
     const providerType = OFFICIAL_PROVIDER_TYPE;
     const providerName = OFFICIAL_PROVIDER_NAME;
-    const reportingFrequency = String(req.body.reportingFrequency || "weekly")
-      .trim()
-      .toLowerCase();
+    const reportingFrequency = "weekly";
     const coverageStartText = String(req.body.coverageStart || "").trim();
     const coverageEndText = String(req.body.coverageEnd || "").trim();
     const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -237,11 +214,8 @@ export const uploadDataset = async (req, res) => {
     }));
     if (!req.file)
       return res.status(400).json({ message: "No file uploaded." });
-    if (!name) {
+    if (typeof name !== "string" || !name.trim()) {
       return res.status(400).json({ message: "Name is required." });
-    }
-    if (!["weekly", "monthly"].includes(reportingFrequency)) {
-      return res.status(400).json({ message: "Reporting frequency must be weekly or monthly." });
     }
 
     const originalFileName = path.basename(req.file.originalname);
@@ -253,21 +227,43 @@ export const uploadDataset = async (req, res) => {
       });
     }
 
+    if (req.body.coverageVerified !== "true") {
+      return res.status(400).json({ message: "Confirm complete reporting coverage for all six districts." });
+    }
+    const fingerprint = previewFingerprint(req.file.buffer, req.body, req.user?._id || req.user?.id);
+    const previewOnly = req.path === "/validate";
+    if (!previewOnly && !verifyPreviewToken(req.body.validationToken, fingerprint)) {
+      return res.status(400).json({ message: "Validate this workbook and confirm its preview before uploading. The preview may have expired or the file or metadata changed." });
+    }
     const contentHash = calculateFileSha256(req.file.buffer);
     const duplicate = await Dataset.findOne({ contentHash })
-      .select("name originalFileName status createdAt")
+      .select("name originalFileName status createdAt formatType insertedRows skippedRows coverageStart coverageEnd diseases districts")
       .lean();
     if (duplicate) {
-      return res.status(409).json({
-        message: `This exact file was already uploaded as "${duplicate.name}". Renaming the file does not create a new dataset.`,
-        duplicate: {
-          datasetId: String(duplicate._id),
-          name: duplicate.name,
-          originalFileName: duplicate.originalFileName,
-          status: duplicate.status,
-          createdAt: duplicate.createdAt,
-        },
+      const message = `This exact file was already uploaded as "${duplicate.name}". Renaming it does not create a new dataset.`;
+      if (previewOnly) return res.status(200).json({
+        success: false, canUpload: false, reason: message, validationToken: null,
+        errorCount: 1, warningCount: 0, validRowCount: 0, totalRows: 0,
+        errors: [{ sheet: null, row: null, field: "workbook", message }], warnings: [], validRecords: [],
       });
+      if (duplicate.status === "validated") return res.status(200).json({
+        success: true, alreadyImported: true, datasetId: String(duplicate._id),
+        formatType: duplicate.formatType, insertedRows: duplicate.insertedRows,
+        skippedRows: duplicate.skippedRows, coverageStart: duplicate.coverageStart,
+        coverageEnd: duplicate.coverageEnd, diseases: duplicate.diseases, districts: duplicate.districts,
+      });
+      return res.status(409).json({ message });
+    }
+
+    const { normalized, ...preview } = await validateWorkbookIsolated({
+      fileBuffer: req.file.buffer, declaredCoverageStart: coverageStart, declaredCoverageEnd: coverageEnd,
+    });
+    if (previewOnly) {
+      return res.status(200).json({ ...preview, validationToken: preview.canUpload ? issuePreviewToken(fingerprint) : null });
+    }
+    if (!preview.canUpload) return res.status(400).json({ ...preview, validationErrors: preview.errors });
+    if (preview.requiresSkipConfirmation && req.body.confirmSkipMissing !== "true") {
+      return res.status(400).json({ message: `Confirm that ${preview.missingFieldRows} incomplete rows will be skipped and excluded from imported records and case totals.` });
     }
 
     const datasetId = new mongoose.Types.ObjectId();
@@ -289,6 +285,7 @@ export const uploadDataset = async (req, res) => {
       districtCoverage,
       declaredCoverageStart: coverageStart,
       declaredCoverageEnd: coverageEnd,
+      confirmSkipMissing: req.body.confirmSkipMissing === "true",
       beforePersist: async () => {
         await uploadDatasetObject({
           storageKey,
@@ -300,64 +297,12 @@ export const uploadDataset = async (req, res) => {
       },
     });
 
-    if (!result.success) {
-      dataset = await Dataset.create({
-        name,
-        dataSource: providerName,
-        providerType,
-        providerName,
-        reportingFrequency,
-        ingestionMethod: "excel",
-        coverageStart,
-        coverageEnd,
-        originalFileName,
-        storageProvider: "none",
-        mimeType: req.file.mimetype,
-        fileSize: req.file.size,
-        status: "failed",
-        uploadedBy: req.user?._id || req.user?.id,
-        errorMessage: result?.reason || "Validation failed.",
-        formatType: result?.formatType || "unrecognized_excel",
-        validationErrors: result?.validationErrors || null,
-        insertedRows: 0,
-        skippedRows:
-          result?.validationErrorCount || result?.validationErrors?.length || 0,
-        validationErrorCount:
-          result?.validationErrorCount || result?.validationErrors?.length || 0,
-        totalRows: 0,
-      });
-
-      await createNotification({
-        type: "dataset_failed",
-        title: "Dataset Validation Failed",
-        message: `${name}: ${result?.reason || "Validation failed."}`,
-        dotColor: "red",
-        metadata: {
-          datasetId: String(dataset._id),
-          name,
-          reason: result?.reason || null,
-        },
-      });
-      await logActivity({
-        actor: req.user?._id || req.user?.id,
-        actionType: "dataset_failed",
-        title: "Dataset validation failed",
-        subtitle: `${name} failed validation.`,
-        metadata: {
-          datasetId: String(dataset._id),
-          name,
-          filename: originalFileName,
-          reason: result?.reason || "Validation failed.",
-          result: "failed",
-        },
-      });
-      return res.status(400).json({ ...result, datasetId: String(dataset._id) });
-    }
+    if (!result.success) return res.status(400).json(result);
     // The database now owns the R2 object reference; later notification/audit
     // failures must not remove a successfully persisted original workbook.
     uploadedStorageKey = "";
 
-    await logActivity({
+    await afterDatasetSave(() => logActivity({
       actor: req.user?._id || req.user?.id,
       actionType: "dataset_uploaded",
       title: "Dataset uploaded",
@@ -368,9 +313,9 @@ export const uploadDataset = async (req, res) => {
         storageProvider: "r2",
         result: "success",
       },
-    });
+    }));
 
-    await logActivity({
+    await afterDatasetSave(() => logActivity({
       actor: req.user?._id || req.user?.id,
       actionType: "dataset_validated",
       title: "Official cases imported",
@@ -387,9 +332,9 @@ export const uploadDataset = async (req, res) => {
         skippedRows: result.skippedRows,
         result: "success",
       },
-    });
+    }));
 
-    await logActivity({
+    await afterDatasetSave(() => logActivity({
       actor: req.user?._id || req.user?.id,
       actionType: "dataset_processed",
       title: "Dataset processed",
@@ -401,9 +346,9 @@ export const uploadDataset = async (req, res) => {
         skippedRows: result.skippedRows,
         result: "success",
       },
-    });
+    }));
 
-    await createNotification({
+    await afterDatasetSave(() => createNotification({
       type: "dataset_validated",
       title: "Dataset Validated",
       message: `${name} validated successfully${Number.isFinite(result.insertedRows) ? ` (${result.insertedRows} records)` : ""}.`,
@@ -413,14 +358,14 @@ export const uploadDataset = async (req, res) => {
         name,
         insertedRows: result.insertedRows,
       },
-    });
+    }));
 
     // Create the durable job before responding so manual refreshes reuse it.
     console.log(
       "Starting monthly district prediction refresh for datasetId:",
       result.datasetId,
     );
-    await startDatasetPredictionRefresh(result.datasetId);
+    await afterDatasetSave(() => startDatasetPredictionRefresh(result.datasetId));
 
     return res.status(201).json(result);
   } catch (error) {
@@ -436,31 +381,6 @@ export const uploadDataset = async (req, res) => {
       });
     }
 
-    if (dataset) {
-      dataset.status = "failed";
-      dataset.errorMessage = "The file could not be processed.";
-      await dataset.save().catch((saveError) => {
-        logRequestError(saveError, req, "DATASET_STATUS_UPDATE_ERROR");
-      });
-      await createNotification({
-        type: "dataset_failed",
-        title: "Dataset Validation Failed",
-        message: `${dataset.name}: ${dataset.errorMessage}`,
-        dotColor: "red",
-        metadata: { datasetId: String(dataset._id), name: dataset.name },
-      });
-      await logActivity({
-        actor: req.user?._id || req.user?.id,
-        actionType: "dataset_failed",
-        title: "Dataset upload failed",
-        subtitle: `${dataset.name} upload failed.`,
-        metadata: {
-          datasetId: String(dataset._id),
-          name: dataset.name,
-          reason: dataset.errorMessage,
-        },
-      });
-    }
     logServerError(error, {
       errorId: req.errorId,
       code: "DATASET_UPLOAD_ERROR",
@@ -482,56 +402,6 @@ export const handleDatasetUploadError = async (err, req, res, next) => {
     : isSafePublicMessage(err?.message)
       ? err.message
       : "The file could not be processed.";
-
-  try {
-    const name = String(req.body?.name || "").trim() || "Unnamed upload";
-    const originalFileName =
-      req.file?.originalname || String(req.body?.originalFileName || "unknown");
-    const mimeType = req.file?.mimetype || String(req.body?.mimeType || "");
-    const { coverageStart, coverageEnd } = optionalDeclaredCoverage(req.body);
-    const failed = await Dataset.create({
-      name,
-      dataSource: "official_upload",
-      coverageStart,
-      coverageEnd,
-      originalFileName,
-      storageProvider: "none",
-      mimeType,
-      fileSize: req.file?.size || 0,
-      status: "failed",
-      uploadedBy: req.user?._id || req.user?.id || null,
-      errorMessage: reason,
-      formatType: "unrecognized_excel",
-      validationErrors: [{ field: "upload", message: reason }],
-      insertedRows: 0,
-      skippedRows: 0,
-      totalRows: 0,
-    });
-
-    await createNotification({
-      type: "dataset_failed",
-      title: "Dataset Upload Rejected",
-      message: `${name}: ${reason}`,
-      dotColor: "red",
-      metadata: { datasetId: String(failed._id), name, reason },
-    });
-
-    await logActivity({
-      actor: req.user?._id || req.user?.id,
-      actionType: "dataset_failed",
-      title: "Dataset upload rejected",
-      subtitle: `${name} was rejected during upload.`,
-      metadata: {
-        datasetId: String(failed._id),
-        name,
-        filename: originalFileName,
-        reason,
-        result: "failed",
-      },
-    });
-  } catch (saveErr) {
-    logRequestError(saveErr, req, "DATASET_REJECTION_PERSIST_ERROR");
-  }
 
   return res.status(400).json({ message: reason });
 };

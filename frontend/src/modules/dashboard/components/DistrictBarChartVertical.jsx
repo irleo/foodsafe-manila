@@ -22,16 +22,16 @@ export default function DistrictBarChartVertical({
     .slice(0, 6);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center justify-between gap-3 mb-6">
-        <h2 className="font-semibold">{title}</h2>
+    <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+      <div className="mb-6 flex min-w-0 flex-wrap items-center justify-between gap-3">
+        <h2 className="min-w-0 font-semibold">{title}</h2>
         {headerRight}
       </div>
 
       {chartData.length === 0 ? (
         <div className="text-sm text-gray-500">No district data available.</div>
       ) : (
-        <div className="w-full h-[300px]">
+        <div className="h-[300px] min-w-0 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData}>
               <XAxis
