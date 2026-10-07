@@ -1,4 +1,5 @@
 import { createElement, useState } from "react";
+import { createPortal } from "react-dom";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   MapIcon,
@@ -149,7 +150,7 @@ export default function Sidebar({ isOpen, onClose, isCollapsed = false }) {
           </div>
         )}
       </div>
-      {showLogoutConfirmation && (
+      {showLogoutConfirmation && createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
           role="presentation"
@@ -189,7 +190,8 @@ export default function Sidebar({ isOpen, onClose, isCollapsed = false }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </aside>
   );
