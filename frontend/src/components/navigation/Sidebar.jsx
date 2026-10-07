@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   MapIcon,
@@ -19,6 +19,7 @@ import { getErrorMessage, logClientError } from "../../utils/errors";
 export default function Sidebar({ isOpen, onClose, isCollapsed = false }) {
   const { auth, setAuth } = useAuth();
   const navigate = useNavigate();
+  const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -138,7 +139,7 @@ export default function Sidebar({ isOpen, onClose, isCollapsed = false }) {
         {auth?.accessToken && (
           <div className={`mt-auto border-t border-gray-200 py-2 ${isCollapsed ? "lg:px-3" : "px-4"}`}>
             <button
-              onClick={handleLogout}
+              onClick={() => setShowLogoutConfirmation(true)}
               title={isCollapsed ? "Logout" : undefined}
               className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-red-600 hover:bg-red-100 ${isCollapsed ? "lg:justify-center lg:px-0" : ""}`}
             >
@@ -148,6 +149,48 @@ export default function Sidebar({ isOpen, onClose, isCollapsed = false }) {
           </div>
         )}
       </div>
+      {showLogoutConfirmation && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="presentation"
+          onMouseDown={() => setShowLogoutConfirmation(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="logout-confirmation-title"
+            aria-describedby="logout-confirmation-description"
+            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <h2 id="logout-confirmation-title" className="text-lg font-semibold text-gray-900">
+              Log out
+            </h2>
+            <p id="logout-confirmation-description" className="mt-2 text-sm text-gray-600">
+              Are you sure you want to log out?
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirmation(false)}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLogoutConfirmation(false);
+                  void handleLogout();
+                }}
+                className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
+              >
+                Log out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
