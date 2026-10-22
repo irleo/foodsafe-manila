@@ -1,4 +1,5 @@
 import { isValidName, normalizeName, NAME_MESSAGE } from "../utils/nameValidation.js";
+import { isValidStructuredText, STRUCTURED_TEXT_MESSAGE } from "../utils/accessFieldValidation.js";
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
@@ -27,8 +28,8 @@ const userSchema = new mongoose.Schema(
       default: "pending",
       index: { name: "webUsersStatus" },
     },
-    organization: { type: String, trim: true },
-    position: { type: String, trim: true },
+    organization: { type: String, trim: true, validate: { validator: isValidStructuredText, message: STRUCTURED_TEXT_MESSAGE } },
+    position: { type: String, trim: true, validate: { validator: isValidStructuredText, message: STRUCTURED_TEXT_MESSAGE } },
     lastLoginAt: { type: Date },
 
     // optional audit fields
