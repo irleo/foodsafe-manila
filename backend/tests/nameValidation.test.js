@@ -4,8 +4,8 @@ import { isValidName } from "../utils/nameValidation.js";
 import { isValidName as frontendValid } from "../../frontend/src/modules/authentication/utils/nameValidation.js";
 import { requestAccess, sendRequestAccessOtp } from "../controllers/authController.js";
 import WebUser from "../models/WebUser.js";
-import { isRequiredText, isValidEmail } from "../utils/accessFieldValidation.js";
-import { isRequiredText as clientText, isValidEmail as clientEmail } from "../../frontend/src/modules/authentication/utils/accessFieldValidation.js";
+import { isRequiredText, isValidEmail, isValidStructuredText } from "../utils/accessFieldValidation.js";
+import { isRequiredText as clientText, isValidEmail as clientEmail, isValidStructuredText as clientStructuredText } from "../../frontend/src/modules/authentication/utils/accessFieldValidation.js";
 
 test("web signup rejects missing, blank, wrong-type, malformed and oversized fields before OTP work", async () => {
   const valid = { firstName: "Juan", lastName: "Cruz", email: "test@example.com", password: "StrongPassword1!", organization: "CESU", position: "Officer", requestedRole: "cesu" };
@@ -54,4 +54,61 @@ test("schema derives a safe display name and rejects invalid new identities", as
   assert.equal(user.username, "Juan Dela Cruz");
   user.firstName = "<script>";
   await assert.rejects(user.validate(), /firstName/);
+});
+
+
+test("organization and position validation rejects markup while allowing normal institutional text", async () => {
+  const allowed = [
+    "Department of Health",
+    "WHO Philippines",
+    "St. Luke's Medical Center",
+    "Research & Surveillance Unit",
+    "Health Officer II",
+    "Epidemiologist / Researcher",
+  ];
+  const rejected = [
+    "<script>alert('xss')</script>",
+    "<img src=x onerror=alert(1)>",
+    "<svg onload=alert(1)>",
+    "Officer\n<script>",
+    "a".repeat(121),
+    {},
+    [],
+  ];
+
+  for (const value of allowed) {
+    assert.equal(isValidStructuredText(value), true);
+    assert.equal(clientStructuredText(value), true);
+  }
+
+  for (const value of rejected) {
+    assert.equal(isValidStructuredText(value), false);
+    assert.equal(clientStructuredText(value), false);
+  }
+
+  const valid = {
+    firstName: "Juan",
+    lastName: "Cruz",
+    email: "xss-test@example.com",
+    password: "StrongPassword1!",
+    organization: "CESU",
+    position: "Officer",
+    requestedRole: "cesu",
+  };
+
+  for (const handler of [requestAccess, sendRequestAccessOtp]) {
+    for (const field of ["organization", "position"]) {
+      const response = {
+        statusCode: 0,
+        status(code) { this.statusCode = code; return this; },
+        json(body) { this.body = body; return this; },
+      };
+      await handler(
+        { body: { ...valid, [field]: "<script>alert('xss')</script>" } },
+        response,
+      );
+      assert.equal(response.statusCode, 400);
+      assert.match(response.body.message, /organization|position/i);
+    }
+  }
 });
