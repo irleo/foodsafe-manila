@@ -1,4 +1,4 @@
-import { isRequiredText, isValidEmail } from "../utils/accessFieldValidation.js";
+import { isValidEmail, isValidStructuredText, STRUCTURED_TEXT_MESSAGE } from "../utils/accessFieldValidation.js";
 import { isValidName, normalizeName, NAME_MESSAGE } from "../utils/nameValidation.js";
 import User from "../models/WebUser.js";
 import EmailOtp from "../models/EmailOtp.js";
@@ -102,8 +102,8 @@ function validateAccessRequestFields({
 }) {
   if (!isValidName(firstName) || !isValidName(lastName)) return `First and last name: ${NAME_MESSAGE}`;
   if (!isValidEmail(email)) return "A valid email address of up to 254 characters is required.";
-  if (!isRequiredText(organization)) return "Organization must contain 1-120 characters.";
-  if (!isRequiredText(position)) return "Position must contain 1-120 characters.";
+  if (!isValidStructuredText(organization)) return `Organization: ${STRUCTURED_TEXT_MESSAGE}`;
+  if (!isValidStructuredText(position)) return `Position/title: ${STRUCTURED_TEXT_MESSAGE}`;
   if (typeof password !== "string") return "Password is required.";
 
   const passwordValidation = validatePassword(password);
