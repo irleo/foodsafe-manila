@@ -1,5 +1,5 @@
 import { isValidEmail, isValidStructuredText, STRUCTURED_TEXT_MESSAGE } from "./utils/accessFieldValidation";
-import { isValidName, normalizeName, hasSupportedNameCharacters, NAME_MESSAGE } from "./utils/nameValidation";
+import { isValidName, normalizeName, NAME_MESSAGE } from "./utils/nameValidation";
 import axios from "axios";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -100,10 +100,6 @@ const RequestAccessPage = () => {
   const setField = (key) => (e) => {
     setError(null);
     const value = e.target.value;
-    if (["firstName", "lastName"].includes(key) && !hasSupportedNameCharacters(value)) {
-      setError(NAME_MESSAGE);
-      return;
-    }
     if (key === "email") {
       setOtpSent(false);
       setOtpModalOpen(false);
@@ -307,16 +303,24 @@ const RequestAccessPage = () => {
                       <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input id={field} name={field} type="text"
                         autoComplete={field === "firstName" ? "given-name" : "family-name"}
-                        className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent border-gray-300"
+                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#134c8c] focus:border-transparent ${
+                          form[field] && !isValidName(form[field])
+                            ? "border-red-400"
+                            : "border-gray-300"
+                        }`}
                         placeholder={placeholder} value={form[field]} onChange={setField(field)}
                         maxLength={80} disabled={loading} required
-                        aria-describedby="name-help"
+                        aria-describedby={`${field}-help`}
                         aria-invalid={Boolean(form[field]) && !isValidName(form[field])} />
                     </div>
+                    {form[field] && !isValidName(form[field]) && (
+                      <p id={`${field}-help`} className="mt-2 text-xs text-red-600">
+                        {label} contains unsupported characters. {NAME_MESSAGE}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
-              <p id="name-help" className="text-xs text-gray-500">{NAME_MESSAGE}</p>
 
               <div>
                 <label htmlFor="email" className="block mb-2 text-sm text-gray-700">
