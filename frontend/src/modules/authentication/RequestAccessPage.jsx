@@ -1,4 +1,4 @@
-import { isRequiredText, isValidEmail } from "./utils/accessFieldValidation";
+import { isValidEmail, isValidStructuredText } from "./utils/accessFieldValidation";
 import { isValidName, normalizeName, hasSupportedNameCharacters, NAME_MESSAGE } from "./utils/nameValidation";
 import axios from "axios";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -75,8 +75,8 @@ const RequestAccessPage = () => {
       isValidEmail(form.email) &&
       form.password &&
       form.confirmPassword &&
-      isRequiredText(form.organization) &&
-      isRequiredText(form.position) &&
+      isValidStructuredText(form.organization) &&
+      isValidStructuredText(form.position) &&
       form.requestedRole;
 
     return (
