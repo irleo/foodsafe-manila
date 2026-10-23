@@ -1,78 +1,119 @@
 # FoodSafe Manila
 
-FoodSafe Manila is a web and mobile foodborne-disease monitoring platform built as a capstone project for Manila. It combines official case records, citizen-submitted reports, analytics, geographic risk visualization, notifications, and monthly forecasting through a shared backend API.
+**A descriptive and predictive web-and-mobile platform for foodborne illness monitoring in Manila.**
 
-**Live web application:** https://foodsafe-manila.online
+[**Live web application**](https://foodsafe-manila.online) · [**Mobile setup**](mobile/README.md) · [**Forecasting documentation**](docs/forecast-production.md)
 
-## Overview
+> **Academic capstone project — not an official public-health service.** The platform is for research, demonstration, and controlled testing. Maps, analytics, and predictions are not medical advice or official health advisories.
 
-The project has three main parts:
+## Project overview
 
-- **Web dashboard** — React administration interface for authorized users.
-- **Mobile app** — Flutter application for citizens to submit reports, view alerts, inspect nearby risk, and review analytics.
-- **Backend API** — Express and MongoDB service used by both clients for authentication, reports, datasets, analytics, heat maps, notifications, and predictions.
+FoodSafe Manila brings together official case datasets, citizen-submitted food-exposure reports, geographic visualization, and monthly forecasting in one system. It consists of a **React administration dashboard**, a **Flutter citizen-facing mobile application**, and a **shared Express API** with MongoDB persistence.
 
-The backend is the source of truth for web and mobile data.
+The system maintains an important data boundary: **citizen reports are not automatically treated as verified official cases**. Official case data powers the forecasting series; citizen reports remain a separate reporting and review workflow.
 
-## Key Features
+## What the system does
 
-- Official dataset upload and validation
-- Analytics and case summaries
-- District and barangay heat maps
-- Citizen report logs
-- User administration
-- Notifications and activity logging
-- Phone-based mobile registration with SMS OTP
-- Location-aware nearby-risk information
-- Monthly Prophet forecasting and historical backtesting
-- Private Cloudflare R2 storage
+### Web administration dashboard
 
-## Technology Stack
+- View case summaries, historical trends, district and disease breakdowns, and interactive charts.
+- Explore district- and barangay-level geographic heat maps.
+- Upload and validate official datasets for analysis.
+- Inspect monthly district forecasts, forecast history, and model backtesting results.
+- Review citizen-submitted reports and their activity history.
+- Manage users, access, and operational notifications.
 
-### Web
-React 19, Vite, Tailwind CSS, Axios, React Router, Leaflet / React Leaflet, Recharts
+### Citizen mobile application
 
-### Mobile
-Flutter, Dart, flutter_map, geolocator, geocoding, local notifications, shared preferences
+- Register and sign in using a Philippine mobile number and SMS one-time password.
+- Explore case insights, trends, and available predictions.
+- Submit guided symptom and food-exposure reports and review report history.
+- Find health facilities on a location-aware map, with filters and distance information when location is available.
+- Review account settings, policies, and reporting/location disclosures.
+- Receive app notifications.
 
-### Backend
-Node.js, Express 5, MongoDB / Mongoose, JWT, bcrypt, Multer, XLSX, node-cron, Cloudflare R2
+## Screenshots
 
-### External Services and Deployment
-Render, Cloudflare R2, Brevo, Semaphore SMS, GitHub Actions
+A curated set of **24 web and mobile screenshots** is available for the portfolio. Image embeds will be enabled when the screenshot assets are committed to `docs/screenshots/` so the README does not display broken links.
 
-## Forecasting
+**Web:** landing page, dashboard, analytics, heat map, predictions, dataset upload, citizen report management, user management, and sign-in.
 
-FoodSafe uses **Prophet** for operational monthly district forecasts. Seasonal Naïve is retained as a historical benchmark rather than a fallback model. Whole-Manila point forecasts are calculated bottom-up from the six district forecasts. Citizen reports are surfaced separately and are not treated as official confirmed cases in the forecasting series.
+**Mobile:** home, insights, guided reporting, report history, sign-in, registration, terms, and account-related screens.
+
+## Technology stack
+
+| Component | Technologies |
+| --- | --- |
+| Web | React 19, Vite, React Router, Tailwind CSS, Axios |
+| Web charts and maps | Recharts, Leaflet, React Leaflet |
+| Mobile | Flutter, Dart, `fl_chart`, `flutter_map`, geolocator, geocoding |
+| Backend | Node.js, Express 5, MongoDB, Mongoose |
+| Security and auth | JWT, bcryptjs, rate limiting, CORS, SMS OTP |
+| File processing and storage | Multer, XLSX, private Cloudflare R2 |
+| Forecasting | Python Prophet, historical backtesting, Seasonal Naïve benchmark |
+| External services | Brevo, Semaphore SMS |
+| Hosting and automation | Render, GitHub Actions |
 
 ## Architecture
 
 ```text
-React Web Dashboard ─┐
-                     ├──> Express API ───> MongoDB
-Flutter Mobile App ──┘         │
-                               ├──> Cloudflare R2
-                               ├──> Brevo
-                               ├──> Semaphore
-                               └──> Prophet forecasting
+          React web dashboard         Flutter mobile app
+                   \                        /
+                    \                      /
+                     v                    v
+                         Express API
+                      Auth · validation
+                     Reporting · analytics
+                       /       |        \
+                      v        v         v
+                  MongoDB   Cloudflare  Email / SMS
+                               R2       integrations
+                      |
+                      v
+            Official historical case data
+                      |
+                      v
+            Prophet forecasting workflow
+                      |
+                      v
+            Monthly district predictions
 ```
 
-## Project Structure
+The API is the shared source of truth for both clients. Administrative operations, report workflows, analytics, and predictions are implemented in the backend rather than duplicated in the mobile and web applications.
+
+## Predictive analytics
+
+FoodSafe uses **Prophet** for monthly operational forecasts by Manila district. Its forecasting design includes:
+
+- **District-level predictions:** forecasts are generated for the six Manila districts.
+- **Bottom-up city totals:** whole-Manila point forecasts are aggregated from district forecasts.
+- **Historical backtesting:** model behavior is evaluated against historical observations.
+- **Benchmark comparison:** Seasonal Naïve is a historical benchmark, **not** an automatic production fallback.
+- **Data provenance:** unverified citizen reports are not mixed into official confirmed-case forecasting series.
+
+Forecast execution can be dispatched through GitHub Actions. Production activation depends on environment configuration and verification; see [forecast deployment](docs/forecast-production.md) and [forecast testing](docs/forecast-testing.md) for the operational details.
+
+Forecasts are statistical estimates, not guaranteed outcomes or individual risk assessments.
+
+## Repository structure
 
 ```text
 foodsafe-manila/
-├── backend/
-├── frontend/
-├── mobile/
-├── docs/
-├── load-tests/
-├── render.yaml
+├── backend/           # Express API, models, services, tests
+├── frontend/          # React administrative web app
+├── mobile/            # Flutter citizen application
+├── docs/              # Forecast and technical documentation
+├── load-tests/        # Performance testing resources
+├── render.yaml        # Render service configuration
 └── README.md
 ```
 
-## Local Setup
+## Local development
+
+**Prerequisites:** Node.js and npm, a MongoDB instance, and the Flutter SDK with Android tooling for mobile development.
 
 ### Backend
+
 ```bash
 cd backend
 npm install
@@ -80,7 +121,12 @@ cp .env.example .env
 npm run dev
 ```
 
+Configure the required environment variables in `backend/.env` using the example file. External integrations, storage, and forecast execution may require additional credentials or service configuration. Never commit real credentials.
+
 ### Web
+
+In a separate terminal:
+
 ```bash
 cd frontend
 npm install
@@ -88,16 +134,33 @@ npm run dev
 ```
 
 ### Mobile
+
 ```bash
 cd mobile
 flutter pub get
 flutter run
 ```
 
-## Security and Reliability
+The Android emulator's development API default is documented in [mobile/README.md](mobile/README.md), along with physical-device configuration and release-build requirements.
 
-The project includes rate limiting, CORS allowlisting, password hashing, access/refresh-token workflows, OTP verification controls, private object storage, sanitized production error messages, redacted backend logging, request identifiers, and prediction process safeguards.
+## Security, privacy, and reliability
 
-## Project Status
+The implementation includes JWT-based authentication and refresh flows, password hashing, OTP verification controls, role-aware API access, rate limiting, CORS allowlisting, sanitized production errors, redacted logs, request identifiers, and private object storage.
 
-FoodSafe Manila is an academic capstone project and remains under active development. It should not be treated as an official public-health service.
+Mobile reporting uses policy acknowledgements and reporting/location disclosures. **Testing should use simulated symptoms and fictional exposure details**, consistent with the project's private-testing documentation.
+
+The repository also includes automated checks for error disclosure, analytics data boundaries, authentication/report policies, and related defects.
+
+## Documentation
+
+- [Mobile application guide](mobile/README.md)
+- [Forecast production workflow](docs/forecast-production.md)
+- [Forecast testing](docs/forecast-testing.md)
+- [Project documentation](DOCU.md)
+- [Private testing privacy](backend/policies/private-testing-privacy.md)
+- [Private testing reporting](backend/policies/private-testing-reporting.md)
+- [Private testing terms](backend/policies/private-testing-terms.md)
+
+## Project status
+
+FoodSafe Manila is an **academic capstone under active development**. A live web deployment is available for demonstration, but that does not imply all mobile integrations, production forecast workflows, or public-health data feeds are independently verified or officially endorsed.
