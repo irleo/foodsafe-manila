@@ -1,7 +1,9 @@
 # Mobile Testing Policies
 
-Private testing policies are available with status `testing`, version
-`2026-10-05.testing.2`. Registration does not require legal publication. Testers
+Private testing policies are available with status `testing`. The Terms version is
+`2026-10-24.testing.1`; the terminology-only change retains required version
+`2026-10-05.testing.2` for existing acceptances. Other policy versions are defined
+in `mobilePolicies.js`. Registration does not require legal publication. Testers
 explicitly accept Terms and acknowledge Privacy using unchecked controls; these
 are not blanket consent to location or reports. Signing in stays available.
 

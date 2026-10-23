@@ -1,6 +1,6 @@
 # FoodSafe Manila
 
-**A descriptive and predictive web-and-mobile platform for foodborne illness monitoring in Manila.**
+**A descriptive and predictive web-and-mobile platform for foodborne disease monitoring in Manila.**
 
 [**Live web application**](https://foodsafe-manila.online) · [**Mobile setup**](mobile/README.md) · [**Forecasting documentation**](docs/forecast-production.md)
 

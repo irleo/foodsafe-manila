@@ -15,7 +15,7 @@ not authorize distribution of accounts, credentials, or identifiable test data.
 
 FoodSafe Manila is being evaluated for functionality, usability, and reliability.
 Its maps, analytics, predictions, and reports may contain incomplete, simulated,
-or inaccurate information. They must not be used to diagnose an illness, choose
+or inaccurate information. They must not be used to diagnose a disease, choose
 treatment, decide whether food is safe, or replace professional advice. For an
 actual health concern, use an appropriate healthcare or emergency service.
 

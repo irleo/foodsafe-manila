@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 /** @typedef {{accepted: boolean, version: string}} PolicyChoice */
 /** @typedef {{terms?: PolicyChoice, privacy?: PolicyChoice}} PolicyChoices */
 
-const version = "2026-10-05.testing.2";
+const version = "2026-10-24.testing.1";
 
 /** @type {Record<PolicyType, Policy>} */
 export const mobilePolicies = {
@@ -16,7 +16,7 @@ export const mobilePolicies = {
     text: readFileSync(new URL("./private-testing-privacy.md", import.meta.url), "utf8"),
   },
   terms: {
-    type: "terms", title: "Terms of Use", version, requiredVersion: version,
+    type: "terms", title: "Terms of Use", version, requiredVersion: "2026-10-05.testing.2",
     status: "testing",
     text: readFileSync(new URL("./private-testing-terms.md", import.meta.url), "utf8"),
   },

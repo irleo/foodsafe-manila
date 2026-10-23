@@ -1,6 +1,6 @@
 # FoodSafe Manila Mobile
 
-FoodSafe Manila is a Flutter mobile app for browsing foodborne illness information in Manila, exploring local health facilities, and submitting symptom and food-exposure reports. It connects to the shared FoodSafe Express API in `../backend/`; the React administration dashboard lives in `../frontend/`.
+FoodSafe Manila is a Flutter mobile app for browsing foodborne disease information in Manila, exploring local health facilities, and submitting symptom and food-exposure reports. It connects to the shared FoodSafe Express API in `../backend/`; the React administration dashboard lives in `../frontend/`.
 
 The current bundled policies describe a **private testing trial**. Test reports should use simulated symptoms and fictional exposure details. Maps, analytics, and forecasts are for evaluating the app and are not medical advice or an official health service.
 
