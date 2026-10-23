@@ -181,7 +181,9 @@ Mobile reporting uses policy acknowledgements and reporting/location disclosures
 
 The repository also includes automated checks for error disclosure, analytics data boundaries, authentication/report policies, and related defects.
 
-[FoodSafe CI](.github/workflows/ci.yml) defines frontend lint/tests/build, backend syntax/tests, synthetic Python forecasting tests, and Flutter analysis/tests. It runs on pull requests targeting `production` and pushes to `production`. A successful GitHub run and required-check enforcement must be verified before treating the release gate as active; adding the workflow alone does not configure repository protection.
+Read [SECURITY.md](SECURITY.md) for private vulnerability reporting and sensitive-data precautions. The [Phase 3 review](docs/security-review.md) records local check results, audit scope, and an unresolved historical-data finding; it does not certify the repository or live deployment as secure.
+
+[FoodSafe CI](.github/workflows/ci.yml) defines frontend lint/tests/build, backend syntax/tests, and synthetic Python forecasting tests. It runs on pull requests targeting `production` and pushes to `production`. Flutter checks are run locally when mobile changes need verification. A successful GitHub run and required-check enforcement must be verified before treating the release gate as active; adding the workflow alone does not configure repository protection.
 
 ## Documentation
 
@@ -191,6 +193,8 @@ The repository also includes automated checks for error disclosure, analytics da
 - [System architecture](docs/architecture.md)
 - [Backend API groups and request examples](docs/api.md)
 - [Existing checks and test commands](docs/testing.md)
+- [Security policy and vulnerability reporting](SECURITY.md)
+- [Phase 3 engineering and repository review](docs/security-review.md)
 - [Capstone contributions](docs/contributions.md)
 - [Deployment overview](docs/deployment-architecture-overview.md)
 - [CI workflow, branch protection, and deployment guide](docs/ci-cd-deployment-guide.md)

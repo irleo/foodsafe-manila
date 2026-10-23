@@ -10,6 +10,7 @@ This guide describes the implemented [FoodSafe CI workflow](../.github/workflows
 - `ci.yml` defines PR/push quality checks. Forecasting workflows separately use `workflow_dispatch` for operational compute/testing.
 - The unused root npm manifest and lockfile were removed. CI and Render use the separate frontend/backend manifests and lockfiles.
 - Backend, frontend, Python, and Flutter regression suites exist. Neither Node package has a generic `npm test` script. See [test commands](testing.md).
+- The approved local checks passed on 2026-10-23; see [review results](security-review.md) for runtime differences and the open historical-data finding. A successful GitHub run and required-check enforcement remain pending.
 
 ## 1. Work on a feature branch
 
@@ -32,23 +33,22 @@ For this documentation checkpoint, continue on `repo-cleanup`. Review `git statu
 | `Frontend quality` | Node 22; `npm ci`; ESLint; all Node frontend regressions; production build; 10-minute timeout |
 | `Backend quality` | Node 22; `npm ci`; JavaScript syntax checks; all Node backend regressions; 10-minute timeout |
 | `Forecast regression` | Python 3.12 and pinned requirements; synthetic `unittest` checks; 15-minute timeout |
-| `Mobile quality` | Flutter stable; dependency restore; `flutter analyze`; `flutter test`; 20-minute timeout |
 
-All four jobs use Ubuntu 24.04. Node setup selects the current Node 22 release, satisfying Vite's 22.12 minimum. `npm ci` installs the application lockfiles, including development dependencies needed for lint/build. Python setup installs `backend/services/prophet/requirements.txt`. Flutter currently follows the stable channel; pin the verified local SDK version in a future workflow change for repeatable SDK selection.
+All three jobs use Ubuntu 24.04. Node setup selects the current Node 22 release, satisfying Vite's 22.12 minimum. `npm ci` installs the application lockfiles, including development dependencies needed for lint/build. Python setup installs `backend/services/prophet/requirements.txt`. Flutter analysis/tests remain local and are excluded from CI at the maintainer's request.
 
 The workflow uses stable job names, read-only repository permissions, dependency caches, bounded durations, and cancellation for superseded quality runs. It has no path filters and does not supply production secrets or invoke operational forecast jobs. Forecast workflows retain separate concurrency/environment controls.
 
-Publish the feature branch and open a PR into `production` to observe the first run. Open **Checks**, inspect each job's failed step if necessary, and push fixes to the same branch. No green CI, test pass, or build result is claimed here; record actual results before making checks required.
+The initial [PR run](https://github.com/irleo/foodsafe-manila/actions/runs/39986974186) on `d8b2647` failed frontend lint and cancelled the backend email-timeout test. Both have local fixes, while forecast regression passed. After the historical-data release decision and publication of the corrected changes, inspect the next run on the same PR. Re-running the old commit does not include working-tree fixes. Local checks passed with the runtimes recorded in [review results](security-review.md); no successful corrected remote run is claimed.
 
 ## 3. Configure merge and deploy gates
 
 1. Publish the CI workflow through a reviewed branch/PR, then observe its named checks.
 2. In the repository's Rulesets settings, create an **Active** branch ruleset targeting `production`. Require a PR, restrict deletions, block force pushes, and leave the bypass list empty so administrators also follow the PR path. Leave **Restrict updates** off for this setup. Required approvals can be zero for solo maintenance or one when a teammate reviews; require conversation resolution. See [GitHub rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets).
-3. After the checks report, require `Frontend quality`, `Backend quality`, `Forecast regression`, and `Mobile quality` using their actual reported names. Select GitHub Actions as the expected source when available and require the branch to be up to date before merge. See [GitHub protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
+3. After the corrected checks report, require `Frontend quality`, `Backend quality`, and `Forecast regression` using their actual reported names. If the removed mobile job was previously required, remove it from the required-check list so merges do not wait for a job that no longer runs. Select GitHub Actions as the expected source when available and require the branch to be up to date before merge. See [GitHub protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
 4. Verify live Render services track `production` and use **After CI Checks Pass**, matching the Blueprint.
 5. Verify checks run on the merged commit too. Render does not automatically deploy if zero checks are detected or any check fails. See [Render CI integration](https://render.com/docs/deploys#integrating-with-ci).
 
-Repository files do not prove branch protection or live settings are enabled; verify them during rollout.
+Read-only GitHub inspection on 2026-10-23 confirmed an active `Protect prod` ruleset with a PR requirement, conversation resolution, force-push/deletion protection, zero required approvals, and an empty bypass list. Required status checks were absent, and no Actions run was returned for `repo-cleanup`. Recheck these mutable settings at rollout; Render settings were not inspected.
 
 ## 4. Prepare the application release
 

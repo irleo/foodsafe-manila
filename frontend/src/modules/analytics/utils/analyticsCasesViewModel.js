@@ -3,12 +3,12 @@ import {
   buildDiseaseDistributionComparison,
   buildDistrictDataFromCases,
   buildDiseaseTrendByMonth,
-} from "./analyticsCaseBuilders";
+} from "./analyticsCaseBuilders.js";
 
 import {
   buildDistrictStatisticsFromCases,
   buildYoYCaseStatsFromCases,
-} from "./statisticsCaseBuilders";
+} from "./statisticsCaseBuilders.js";
 
 export function buildAnalyticsCasesViewModel(caseRows = [], coverage = {}) {
   const coveredDistricts = Array.isArray(coverage?.coveredDistricts)

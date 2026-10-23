@@ -83,4 +83,4 @@ There is no generic `npm test` script. These Node tests exercise helpers and bou
 
 The [Render Blueprint](../render.yaml) builds with `npm ci && npm run build`, publishes `dist`, and rewrites client routes to `/index.html`. Set `VITE_API_BASE_URL` before building; changing it requires another build. Backend CORS must allow the deployed frontend origins. If the API hostname changes, also review the Blueprint's Content Security Policy `connect-src` value.
 
-The frontend job in [FoodSafe CI](../.github/workflows/ci.yml) runs `npm ci`, ESLint, all Node frontend regressions, and the production build. See the [system architecture](../docs/architecture.md) and [deployment guide](../docs/ci-cd-deployment-guide.md) for execution boundaries, first-run verification, and required-check setup.
+The frontend job in [FoodSafe CI](../.github/workflows/ci.yml) runs `npm ci`, ESLint, all Node frontend regressions, and the production build. See the [system architecture](../docs/architecture.md) and [deployment guide](../docs/ci-cd-deployment-guide.md) for execution boundaries, CI result verification, and required-check setup.

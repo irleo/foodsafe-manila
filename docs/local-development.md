@@ -1,6 +1,6 @@
 # Local Development
 
-Commands below use PowerShell and start from the repository root unless a working directory is stated. They describe setup; they are not evidence of a fresh-clone verification. Dependency installation, test execution, and live integrations were not performed for this documentation update.
+Commands below use PowerShell and start from the repository root unless a working directory is stated. They describe setup; they are not evidence of a fresh-clone verification. Existing local dependencies were used for the approved [Phase 3 regression run](security-review.md); dependency installation and live integration verification were not performed.
 
 ## Prerequisites
 

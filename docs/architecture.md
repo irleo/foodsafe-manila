@@ -70,7 +70,7 @@ In local mode, Node orchestrates Python on the API host. The monthly cron runs a
 | Frontend API | Build-time `VITE_API_BASE_URL`, an origin without `/api` |
 | Mobile API | `--dart-define=API_BASE_URL=.../api`, required for release builds |
 | Browser access | Exact frontend origins in backend `ALLOWED_ORIGINS`; frontend CSP must permit the API host |
-| Deploy gate | Both services declare `autoDeployTrigger: checksPass`; `ci.yml` defines four quality jobs for PRs into `production` and production pushes; actual runs/settings still require verification |
+| Deploy gate | Both services declare `autoDeployTrigger: checksPass`; `ci.yml` defines three frontend/backend/forecast jobs for PRs into `production` and production pushes; corrected changes need a successful remote run |
 
 The Blueprint does not establish the live Render dashboard settings. The declared Free backend can sleep while idle; continuous availability cannot be assumed. See [Render Free services](https://render.com/docs/free).
 

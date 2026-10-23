@@ -1,6 +1,6 @@
 # Existing Checks and Test Commands
 
-This guide documents the current checks. It does not claim they passed during the documentation update. See [local setup](local-development.md) for tool versions and dependencies. Project execution rules require approval before running local suites or installing dependencies; listing a command here is not permission for an agent to execute it.
+This guide documents the current checks. The approved local Phase 3 run on 2026-10-23 passed 19 frontend, 188 backend, four Python, and 99 Flutter tests, plus frontend lint/build, backend syntax checks, and Flutter analysis. See [review results](security-review.md) for runtime versions and audit limits; the corrected workflow still needs a successful GitHub run. Project execution rules require approval before running local suites or installing dependencies; listing a command here is not permission for an agent to execute it.
 
 ## Frontend
 
@@ -61,15 +61,14 @@ The `load-tests/` k6 scenarios and [project notes](../DOCU.md#load-testing) docu
 
 ## GitHub quality CI
 
-[FoodSafe CI](../.github/workflows/ci.yml) runs on pull requests targeting `production` and pushes to `production`. Its four independent Ubuntu 24.04 jobs are:
+[FoodSafe CI](../.github/workflows/ci.yml) runs on pull requests targeting `production` and pushes to `production`. Its three independent Ubuntu 24.04 jobs are:
 
 | Check name | Commands / runtime |
 | --- | --- |
 | `Frontend quality` | Node 22; `npm ci`, `npm run lint`, `node --test "tests/*.test.js"`, `npm run build` in `frontend/` |
 | `Backend quality` | Node 22; `npm ci`, JavaScript syntax checks, `node --test "tests/*.test.js"` in `backend/` |
 | `Forecast regression` | Python 3.12; install pinned requirements; `python -m unittest discover -s backend/tests -p 'forecast_monthly_*_test.py'` from the repository root |
-| `Mobile quality` | Flutter stable; `flutter pub get`, `flutter analyze`, `flutter test` in `mobile/` |
 
-The workflow uses read-only repository permissions, dependency caches, job timeouts, and cancellation of superseded quality runs. It does not dispatch operational forecasting or supply production service credentials. Flutter currently follows the stable channel; pinning the working SDK version would make that toolchain repeatable.
+The workflow uses read-only repository permissions, dependency caches, job timeouts, and cancellation of superseded quality runs. It does not dispatch operational forecasting or supply production service credentials. Flutter analysis/tests remain available locally using the commands above and are excluded from CI at the maintainer's request.
 
-Pushing a feature branch alone does not trigger this workflow unless it has an open PR targeting `production`. Inspect the first run's individual step logs, fix failures, and configure the observed check names as required before merge. The workflow's presence is not evidence that these commands passed. See [CI/CD setup](ci-cd-deployment-guide.md).
+Pushing a feature branch alone does not trigger this workflow unless it has an open PR targeting `production`. The initial PR run on `d8b2647` failed frontend lint and cancelled the backend email-timeout test; the fixes in the working tree need a new run. Inspect step logs and configure only the three remaining check names as required before merge. See [CI/CD setup](ci-cd-deployment-guide.md).

@@ -26,7 +26,7 @@ The Blueprint lists frontend domains `foodsafe-manila.online` and `www.foodsafe-
 
 ## Release strategy and activation
 
-Both services declare `autoDeployTrigger: checksPass`. The intended process is a feature branch, PR into `production`, passing checks, reviewed merge, and deployment of the merged commit. [FoodSafe CI](../.github/workflows/ci.yml) defines frontend, backend, synthetic forecasting, and Flutter quality jobs for PRs targeting `production` and pushes to `production`. Operational forecast workflows remain separately dispatched.
+Both services declare `autoDeployTrigger: checksPass`. The intended process is a feature branch, PR into `production`, passing checks, reviewed merge, and deployment of the merged commit. [FoodSafe CI](../.github/workflows/ci.yml) defines frontend, backend, and synthetic forecasting jobs for PRs targeting `production` and pushes to `production`. Flutter checks remain local. Operational forecast workflows remain separately dispatched.
 
 Publish the workflow, observe its actual results, and configure required checks and PR protection before treating this gate as complete. A local workflow file does not establish that a GitHub run succeeded or a repository ruleset is active. Render does not automatically deploy a commit with no detected checks under **After CI Checks Pass**. See [Render CI integration](https://render.com/docs/deploys#integrating-with-ci) and the [deployment guide](ci-cd-deployment-guide.md).
 

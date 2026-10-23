@@ -9,7 +9,7 @@ export const isRequiredText = (value, limit = 120) =>
  * Allows letters, combining marks, numbers, spaces, and common punctuation,
  * while rejecting HTML markup characters and control characters.
  */
-const STRUCTURED_TEXT_PATTERN = /^[\p{L}\p{M}\p{N} .,'’&()\/-]+$/u;
+const STRUCTURED_TEXT_PATTERN = /^[\p{L}\p{M}\p{N} .,'’&()/-]+$/u;
 
 export const STRUCTURED_TEXT_MESSAGE =
   "Use letters, numbers, spaces, and common punctuation only (.-,'’&()/).";
