@@ -1,6 +1,8 @@
 # FoodSafe Manila Project Status
 
-Updated on: 2026-08-31
+Documentation reviewed on: 2026-10-23
+
+This file combines implementation notes and historical change records. For current setup and contracts, start with [local development](docs/local-development.md), [architecture](docs/architecture.md), [API documentation](docs/api.md), and [testing](docs/testing.md). The review below describes repository state, not verified live deployment settings or a fresh test run.
 
 ## Overall Project Purpose
 
@@ -130,19 +132,17 @@ The backend is the source of truth. Both the React frontend and Flutter app call
 - The Whole-Manila point forecast is coherent and bottom-up: it is the sum of all six district Prophet point forecasts. Whole-Manila output is unavailable unless all six districts have valid Prophet target forecasts.
 - Whole-Manila district bounds are never added. When at least 19 common rolling-origin aggregate errors are available, the 95% interval uses the corrected empirical 95th percentile of absolute errors from the same bottom-up Prophet pipeline: `max(0, pointForecast - radius)` to `pointForecast + radius`. Otherwise, the interval is explicitly stored and displayed as not calculated.
 - Prediction runs use schema version 9 and are stored in MongoDB with model, granularity, dataset scope, basis period, forecast target period, trigger, status, payload methodology, calibration status, and coverage metadata.
-- Successful official uploads create one durable `running` prediction record and
-  automatically generate the forecast for that dataset.
+- Successful official uploads create/reuse a durable prediction job and request
+  a forecast for that dataset. Computation can still fail after import succeeds.
 - The manual admin refresh endpoint reuses an active upload job or the current
   saved forecast. It computes only when the latest validated dataset has no
   successful prediction, allowing recovery from a failed upload-triggered run
   without recomputing an unchanged dataset.
-- Prediction retrieval endpoint with optional district filtering.
+- Prediction retrieval accepts dataset scope and forecast horizon; the returned payload contains district results for client presentation.
 - Backtest and forecast payloads exposed to the frontend.
 - Prediction generated notifications.
-- A database-enforced partial unique index permits only one `running` forecast
-  per dataset scope across Render instances; the process-wide queue serializes
-  Python execution inside an instance.
-- Sequential district Prophet execution so the backend runs no more than one Python forecast child process at a time.
+- A database-enforced partial unique index limits active forecast work per scope. GitHub workers use persisted job state and atomic claims; local mode also serializes jobs through a process-wide queue.
+- District model concurrency is bounded: local execution defaults to one and GitHub workflows configure two.
 - Durable job IDs, bounded request/process/overall timeouts, and forecast
   queue-wait and execution-duration logging support client polling and Render
   monitoring without indefinitely pending loading toasts.
@@ -197,7 +197,7 @@ The backend is the source of truth. Both the React frontend and Flutter app call
 
 ## Render Performance Controls
 
-The backend is configured for Render compute plan `1c-2g` (1 CPU, 2 GB RAM) in `render.yaml`. The frontend remains a Render Static Site. The following controls reduce CPU, memory, database, and outbound-request pressure.
+The current `render.yaml` declares a Free Node backend and a separate static frontend. Its backend build is `npm ci`, with Python computation delegated to GitHub Actions in `FORECAST_EXECUTION_MODE=github`. Confirm the live Render plan separately. The following controls reduce API, database, and outbound-request pressure.
 
 ### Risk and Dashboard Caches
 
@@ -216,13 +216,13 @@ DASHBOARD_CACHE_TTL_MS=120000
 
 ### Prophet Resource Protection
 
-- Monthly and legacy yearly prediction refreshes share one process-wide queue.
+- In local execution mode, monthly and legacy yearly prediction refreshes share one process-wide queue.
 - A matching queued or active job is reused rather than duplicated.
 - Different jobs wait for the active job to finish.
-- District forecasts run sequentially instead of through `Promise.all`.
+- District model concurrency is bounded by `FORECAST_MODEL_CONCURRENCY`: local execution defaults to one; GitHub workflows configure two.
 - The queue logs wait time and total refresh duration.
 
-This protects the Express API from multiple simultaneous Python/Prophet processes. The lock is process-local and matches the current single-instance architecture. If the backend is horizontally scaled later, replace it with a MongoDB-backed distributed job lock or a separate worker.
+The local queue protects the API host from competing Python jobs and is process-local. GitHub mode instead uses persisted scoped prediction jobs and atomic worker claims. The monthly in-process cron skips GitHub mode; uploads/manual refreshes dispatch the remote worker. Review the active mode's coordination before scaling. See [forecast deployment](docs/forecast-production.md).
 
 ### MongoDB Pool Defaults
 
@@ -309,78 +309,47 @@ Missing or unclear:
 
 ### Prediction Environment
 
-The backend has Python Prophet scripts and Node wrappers, but predictions depend on a working Python/Prophet environment.
-
-Missing or unclear:
-
-- No automated setup script is documented for Python dependencies beyond `backend/services/prophet/requirements.txt`.
-- Runtime behavior depends on environment variables such as `PYTHON_BIN` or system Python availability.
-- No visible health check confirms Prophet readiness before upload or manual refresh.
+The backend supports local Python and GitHub worker execution. [Local setup](docs/local-development.md#local-forecasting) documents the Python 3.12 virtual environment, pinned requirements, and `PYTHON_BIN`. [Forecast deployment](docs/forecast-production.md) covers worker credentials, environment/database pairing, and activation checks. The Node-only Render build requires GitHub execution. `/api/health` does not prove worker or Python readiness.
 
 ### Mobile API Configuration
 
-`mobile/lib/config/api_config.dart` uses hardcoded LAN/hotspot host values for local development.
-
-Missing or unclear:
-
-- No environment/flavor-based configuration for dev, staging, and production.
-- Physical-device use requires manual IP changes.
+`mobile/lib/config/api_config.dart` accepts `--dart-define=API_BASE_URL=...`, including `/api`. Debug builds default to Android emulator host `http://10.0.2.2:5000/api`; release builds require an explicit URL. Physical devices use a reachable LAN/deployed URL through the same override, without source edits. See the [mobile guide](mobile/README.md).
 
 ### Mobile Analytics Filters
 
-`backend/controllers/mobileController.js` builds a `match` object from `year`, `month`, and `caseClassification`, but some summary aggregations ignore that filter.
-
-Missing or unclear:
-
-- `totalCases`, `topDistrict`, and `topDisease` currently aggregate all official cases instead of the selected filter scope.
-- Confirm whether the mobile analytics summary should reflect filters or always show global totals.
+The current official analytics controller accepts finite `period`, `district`, and `disease` filters, uses authoritative official history, and builds period-filtered totals/distributions. Its `overview` includes separate current/previous-month and cumulative measures. Do not interpret every overview value as a selected-period total. See [API documentation](docs/api.md) and the analytics boundary regressions for the current contract; the older `year`/`month` description is obsolete.
 
 ### Frontend Mock/Fallback Data
 
-Mock report and official-case data files remain in `frontend/src/data`, and `AnalyticsPage.jsx` still contains commented mock fallback references.
-
-Missing or unclear:
-
-- Decide whether mock data should stay as developer fixtures or be removed before production.
-- Ensure UI error states do not imply sample data is being shown when live data is required.
+The previous `frontend/src/data` inventory no longer matches the current tree. Analytical modules use API requests and feature transformation helpers. Preserve explicit loading, empty, error, and coverage states; do not silently replace unavailable official data with citizen reports or illustrative counts. Existing boundary regressions help check this separation.
 
 ### Testing and QA
 
-There are lint/build scripts for the frontend and generated Flutter test scaffolding, but no clear backend test suite and no end-to-end test coverage.
-
-Missing or unclear:
-
-- Backend unit/integration tests for uploads, auth, reports, analytics, heatmap, predictions, and mobile endpoints. The new k6 scenarios provide load coverage but do not replace correctness tests.
-- Frontend route/component regression tests.
-- Flutter widget/service tests beyond default platform scaffolding.
-- Seed data or reproducible fixtures for local QA.
+Backend Node regressions, frontend Node regressions, Python synthetic forecast checks, and Flutter service/widget tests are present. Commands and coverage limits are in [testing](docs/testing.md). Existing package scripts cover subsets; use the documented all-files commands for the current Node suites. General PR/push CI, full browser/device integration coverage, and fresh-clone verification remain separate work. The k6 scenarios measure load behavior and do not replace correctness checks.
 
 ## Known Gaps, TODOs, and Broken or Risky Pieces
 
-- `README.md` contains mojibake characters around dashes, likely from encoding conversion.
-- The web `AuthContext` calls `axios.get("/api/auth/refresh")`, relying on a dev proxy or same-origin deployment, while many other frontend files use `VITE_API_BASE_URL` or `http://localhost:5000`. This should be standardized.
-- `frontend/src/modules/authentication/LoginPage.jsx` displays sample admin/user credentials in the UI.
-- `mobile/lib/config/api_config.dart` contains a concrete local IP address (`192.168.1.8`), which is environment-specific.
-- `MAX_REPORTS_PER_24H` in `backend/controllers/reportController.js` is set to `Infinity`, so the DB-backed daily report rate limit is effectively disabled.
-- Several development logs remain in backend/frontend code, including auth refresh and report-route logging.
+- Frontend requests use Axios and fetch. `src/main.jsx` configures the Axios base URL; some fetch helpers have a localhost fallback. Set `VITE_API_BASE_URL` explicitly and preserve consistent behavior when adding requests.
+- Demo credential text remains commented out in `LoginPage.jsx`; it is not rendered and must not be treated as a provisioned account.
+- The current report controller limits submissions to three per 24-hour window; the previous `Infinity` description is obsolete.
+- Logging/error-disclosure regressions exist, but a full tracked-file and history audit remains outstanding.
 - CSV upload messaging says CSV is unsupported, but legacy CSV code remains below that branch.
 - Prediction failures are stored as failed `PredictionRun` records, but upload succeeds even if prediction fails. That behavior may be intended, but the UI should make prediction failures visible enough.
 - There are no root-level scripts for starting the full backend/frontend/mobile stack together.
 - Root `package.json` is an empty object, so monorepo orchestration is not currently implemented.
-- Raw spreadsheet files are ignored in `.gitignore`, but existing workbook files are present in the workspace.
+- The `files/` directory is ignored. Do not assume every spreadsheet filename elsewhere is ignored; review candidate files and `git check-ignore` before staging data.
 - New validated uploads are retained in private Cloudflare R2. Historical dataset records with local paths remain downloadable only while those files still exist.
-- Backend routes depend on environment secrets (`ACCESS_TOKEN_SECRET`, `REFRESH_TOKEN_SECRET`, SMTP values, Mongo URI), but production deployment guidance is minimal.
+- Backend routes depend on private JWT/OTP, MongoDB, R2, Brevo, Semaphore, and optional GitHub worker settings. See [local setup](docs/local-development.md) and [deployment guidance](docs/ci-cd-deployment-guide.md). Neither document establishes that live settings have been verified.
 
 ## File Inventory
 
 ### Root
 
-- `.gitignore`: Ignore rules for local data files, uploads, logs, dependencies, build output, environment files, editor folders, Vite cache, and this generated `DOCU.md`.
+- `.gitignore`: Excludes local data directories, uploads, logs, dependencies, builds, private environment files, editor folders, Vite/Python caches, and forecast artifacts. Documentation is tracked normally.
 - `README.md`: Setup and architecture overview for backend, frontend, and mobile app.
 - `package.json`: Empty root package manifest.
 - `package-lock.json`: Root npm lockfile.
-- `rawHealthOffice.xlsx`: Local raw health-office workbook, ignored by git rules.
-- `cleanedOfficialCases.xlsx`: Local cleaned official cases workbook, ignored by git rules.
+- Historical local workbook names are not a current inventory or an ignore guarantee. Keep private workbooks out of commits and verify each candidate path.
 
 ### Backend Configuration and Entry
 
@@ -459,7 +428,7 @@ Missing or unclear:
 ### Backend Services
 
 - `backend/services/combinedCaseRowsService.js`: Combines or prepares case rows for analytics-style views.
-- `backend/services/emailService.js`: SMTP email sending for OTP flows.
+- `backend/services/emailService.js`: Brevo transactional template delivery over HTTPS for staff OTP flows.
 - `backend/services/notificationService.js`: Notification creation helpers.
 - `backend/services/officialCaseImportService.js`: Official XLSX detection, validation, import, aggregation, and dataset persistence.
 - `backend/services/officialCaseNormalizer.js`: Raw/template normalization, including report-date-based calendar and morbidity derivation.
