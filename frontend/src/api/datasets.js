@@ -6,16 +6,28 @@ async function parseError(res) {
   const firstIssue = Array.isArray(j?.validationErrors)
     ? j.validationErrors.find((issue) => issue?.message)
     : null;
-  if (!firstIssue?.message || summary.includes(firstIssue.message)) return summary;
+  if (!firstIssue?.message || summary.includes(firstIssue.message))
+    return summary;
   const location = [
     firstIssue.sheet,
     firstIssue.row ? `row ${firstIssue.row}` : null,
-  ].filter(Boolean).join(", ");
+  ]
+    .filter(Boolean)
+    .join(", ");
   return `${summary} ${location ? `${location}: ` : ""}${firstIssue.message}`;
 }
 
-export async function fetchDatasets({ token, status, providerType, page = 1, limit = 20 } = {}) {
-  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+export async function fetchDatasets({
+  token,
+  status,
+  providerType,
+  page = 1,
+  limit = 20,
+} = {}) {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
   if (status) params.set("status", status);
   if (providerType) params.set("providerType", providerType);
   const res = await fetch(`${API_BASE}/api/datasets?${params.toString()}`, {
@@ -49,13 +61,16 @@ export async function uploadDataset({
   formData.append("confirmSkipMissing", String(confirmSkipMissing));
   if (validationToken) formData.append("validationToken", validationToken);
 
-  const res = await fetch(`${API_BASE}/api/datasets/${preview ? "validate" : "upload"}`, {
-    method: "POST",
-    headers: {
-      Authorization: token ? `Bearer ${token}` : "",
+  const res = await fetch(
+    `${API_BASE}/api/datasets/${preview ? "validate" : "upload"}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+      },
+      body: formData,
     },
-    body: formData,
-  });
+  );
 
   if (!res.ok) throw new Error(await parseError(res));
   return await res.json();

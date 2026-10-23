@@ -9,7 +9,13 @@ test("Brevo requests abort at the configured timeout", async (t) => {
   process.env.BREVO_API_KEY = "test-key";
   process.env.BREVO_TIMEOUT_MS = "10";
   globalThis.fetch = async (_url, { signal }) => new Promise((resolve, reject) => {
-    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    // An in-flight transport keeps Node alive; AbortSignal.timeout alone does not.
+    const completion = setTimeout(() => resolve(new Response(null, { status: 200 })), 1_000);
+    t.after(() => clearTimeout(completion));
+    signal.addEventListener("abort", () => {
+      clearTimeout(completion);
+      reject(signal.reason);
+    }, { once: true });
   });
 
   t.after(() => {

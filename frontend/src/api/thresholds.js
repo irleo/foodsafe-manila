@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE = import.meta.env?.VITE_API_BASE_URL || "http://localhost:5000";
 const THRESHOLD_CACHE_TTL_MS = 30_000;
 const THRESHOLD_CACHE_MAX_ENTRIES = 48;
 const currentThresholdCache = new Map();

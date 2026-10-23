@@ -80,30 +80,21 @@ A selection of **9 screens** highlighting the core web dashboard, predictive cap
 
 ## Architecture
 
-```text
-          React web dashboard         Flutter mobile app
-                   \                        /
-                    \                      /
-                     v                    v
-                         Express API
-                      Auth · validation
-                     Reporting · analytics
-                       /       |        \
-                      v        v         v
-                  MongoDB   Cloudflare  Email / SMS
-                               R2       integrations
-                      |
-                      v
-            Official historical case data
-                      |
-                      v
-            Prophet forecasting workflow
-                      |
-                      v
-            Monthly district predictions
+```mermaid
+flowchart LR
+    web["React staff dashboard"] --> api["Express API on Render"]
+    mobile["Flutter citizen app"] --> api
+    api <--> mongo[("MongoDB")]
+    api <--> r2[("Private R2 workbooks")]
+    api --> messaging["Brevo email / Semaphore SMS"]
+    api -->|"Dispatch forecast job"| worker["GitHub Actions + Python Prophet"]
+    mongo -->|"Official case history"| worker
+    worker -->|"Saved predictions"| mongo
 ```
 
 The API is the shared source of truth for both clients. Administrative operations, report workflows, analytics, and predictions are implemented in the backend rather than duplicated in the mobile and web applications.
+
+The diagram represents GitHub execution, required by the Node-only Render backend build. Local development can run Prophet through Python subprocesses instead. The in-process monthly fallback runs only in local mode; the forecasting workflows are dispatch-based. A separate CI workflow checks pull requests and production pushes. See the [detailed architecture](docs/architecture.md).
 
 ## Predictive analytics
 
@@ -134,38 +125,53 @@ foodsafe-manila/
 
 ## Local development
 
-**Prerequisites:** Node.js and npm, a MongoDB instance, and the Flutter SDK with Android tooling for mobile development.
+**Prerequisites:** Node.js 22.12 or newer within Node 22 with npm, an isolated MongoDB development database, and Flutter with Dart compatible with `^3.10.0` plus Android tooling. Transaction-dependent account flows require a MongoDB replica set or suitable Atlas deployment. Local forecasting additionally requires Python 3.12 and the pinned dependencies.
+
+The commands below use PowerShell from a new checkout. See [local development](docs/local-development.md) for environment variables, integrations, local Python setup, and troubleshooting. Edit existing `.env` files instead of overwriting them.
 
 ### Backend
 
-```bash
+```powershell
 cd backend
-npm install
-cp .env.example .env
+npm ci
+Copy-Item -LiteralPath .env.example -Destination .env
+```
+
+Configure the database and replace the sample secrets before starting the API:
+
+```powershell
 npm run dev
 ```
 
-Configure the required environment variables in `backend/.env` using the example file. External integrations, storage, and forecast execution may require additional credentials or service configuration. Never commit real credentials.
+Use [backend/.env.example](backend/.env.example) as the configuration reference. R2 imports/downloads, email/SMS flows, and forecast execution require their corresponding dependencies and credentials. The example selects local forecasting; install its Python environment before exercising forecasts. Never commit real credentials. Staff access requires an approved development account; no working demo account is provisioned by these commands.
 
 ### Web
 
 In a separate terminal:
 
-```bash
+```powershell
 cd frontend
-npm install
+npm ci
+Set-Content -LiteralPath .env -Value 'VITE_API_BASE_URL=http://localhost:5000'
 npm run dev
 ```
 
+The frontend API value is the backend origin **without `/api`**. Backend `ALLOWED_ORIGINS` must include Vite's exact printed origin. See the [frontend guide](frontend/README.md) for routing, hooks, API integration, charts, and maps.
+
 ### Mobile
 
-```bash
+```powershell
 cd mobile
+flutter doctor
 flutter pub get
 flutter run
 ```
 
 The Android emulator's development API default is documented in [mobile/README.md](mobile/README.md), along with physical-device configuration and release-build requirements.
+
+## Contributors
+
+`irleo` carried out most of the development and integration across the web dashboard, shared backend, mobile app, and forecasting pipeline. `benrichardss` helped with the mobile UI/UX. See the [contribution statement](docs/contributions.md) for scope and attribution.
 
 ## Security, privacy, and reliability
 
@@ -175,9 +181,23 @@ Mobile reporting uses policy acknowledgements and reporting/location disclosures
 
 The repository also includes automated checks for error disclosure, analytics data boundaries, authentication/report policies, and related defects.
 
+Read [SECURITY.md](SECURITY.md) for private vulnerability reporting and sensitive-data precautions. The [Phase 3 review](docs/security-review.md) records local check results, audit scope, and an unresolved historical-data finding; it does not certify the repository or live deployment as secure.
+
+[FoodSafe CI](.github/workflows/ci.yml) defines frontend lint/tests/build, backend syntax/tests, and synthetic Python forecasting tests. It runs on pull requests targeting `production` and pushes to `production`. Flutter checks are run locally when mobile changes need verification. A successful GitHub run and required-check enforcement must be verified before treating the release gate as active; adding the workflow alone does not configure repository protection.
+
 ## Documentation
 
+- [Local development and environment configuration](docs/local-development.md)
+- [React dashboard guide](frontend/README.md)
 - [Mobile application guide](mobile/README.md)
+- [System architecture](docs/architecture.md)
+- [Backend API groups and request examples](docs/api.md)
+- [Existing checks and test commands](docs/testing.md)
+- [Security policy and vulnerability reporting](SECURITY.md)
+- [Phase 3 engineering and repository review](docs/security-review.md)
+- [Capstone contributions](docs/contributions.md)
+- [Deployment overview](docs/deployment-architecture-overview.md)
+- [CI workflow, branch protection, and deployment guide](docs/ci-cd-deployment-guide.md)
 - [Forecast production workflow](docs/forecast-production.md)
 - [Forecast testing](docs/forecast-testing.md)
 - [Project documentation](DOCU.md)

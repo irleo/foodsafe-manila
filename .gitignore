@@ -1,25 +1,35 @@
+# Python / Prophet
+__pycache__/
+*.py[cod]
+*.pyc.*
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+.venv/
+venv/
+
 # Specific Files
 AGENTS.md
 
 # Folders
 uploads
-docs
 files
 .agents
 backend/scripts
 
-# Keep source-controlled operational review artifacts.
-!docs/
-docs/*
-!docs/index-review.md
+# Keep source-controlled operational scripts.
 !backend/scripts/
 backend/scripts/*
 !backend/scripts/reviewIndexes.js
 !backend/scripts/runMonthlyForecastDryRun.js
 !backend/scripts/runMonthlyForecastWriteTrial.js
 !backend/scripts/runGitHubForecastJob.js
-!docs/forecast-testing.md
-!docs/forecast-production.md
 /forecast-artifacts/
 /forecast-write-artifacts/
 

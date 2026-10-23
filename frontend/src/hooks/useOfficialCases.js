@@ -2,7 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
-export function useOfficialCases({ token, datasetId, year, month, district, disease, caseClassification, limit = 5000 } = {}) {
+export function useOfficialCases({
+  token,
+  datasetId,
+  year,
+  month,
+  district,
+  disease,
+  caseClassification,
+  limit = 5000,
+} = {}) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -11,7 +20,10 @@ export function useOfficialCases({ token, datasetId, year, month, district, dise
     if (!datasetId) return null;
     const params = new URLSearchParams();
     params.set("page", "1");
-    params.set("limit", String(Math.min(Math.max(Number(limit) || 50, 1), 5000)));
+    params.set(
+      "limit",
+      String(Math.min(Math.max(Number(limit) || 50, 1), 5000)),
+    );
     if (year != null && year !== "All") params.set("year", String(year));
     if (month != null && month !== "All") params.set("month", String(month));
     if (district) params.set("district", district);
@@ -78,4 +90,3 @@ export function useOfficialCases({ token, datasetId, year, month, district, dise
 
   return { items, loading, errorMsg };
 }
-

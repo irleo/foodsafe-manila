@@ -25,13 +25,15 @@ Prerequisites:
 
 - A Flutter SDK with Dart compatible with the `^3.10.0` constraint in `pubspec.yaml`.
 - Android SDK tools and an Android emulator or connected device.
-- The shared backend configured and running on port `5000`; see the repository's [setup instructions](../README.md#backend).
+- The shared backend configured and running on port `5000`; see [local setup](../docs/local-development.md), including database transaction support and provider settings for account verification.
 
 From the repository root:
 
 ```powershell
 cd mobile
+flutter doctor
 flutter pub get
+flutter devices
 flutter run
 ```
 
@@ -44,6 +46,8 @@ flutter run --dart-define=API_BASE_URL=http://192.168.1.100:5000/api
 ```
 
 Replace the example IP with your development machine's LAN address. The phone must be able to reach that host and port. API configuration is defined in `lib/config/api_config.dart`; editing source code is not required to override the URL.
+
+For browser, desktop, or iOS simulator development, supply the reachable backend address explicitly rather than using Android's `10.0.2.2` default. Mobile API URLs include `/api`; the React dashboard's API origin setting omits it.
 
 Use the shared backend in `../backend/`. The legacy `mobile/backend/` API is deprecated.
 
@@ -81,3 +85,13 @@ Replace the example with your deployed API URL. The Android release configuratio
 ```powershell
 flutter analyze
 ```
+
+## Tests and shared documentation
+
+From `mobile/`, after restoring dependencies:
+
+```powershell
+flutter test
+```
+
+The suite contains service/widget regressions for authentication, OTP and recovery, sessions, reporting confirmation, policies, location, and screen layout. It does not establish real-device location, SMS delivery, local notification delivery, or production signing behavior. See [test commands](../docs/testing.md) for coverage boundaries and [API documentation](../docs/api.md) for shared backend routes.
