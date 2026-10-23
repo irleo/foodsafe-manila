@@ -34,11 +34,77 @@ The system maintains an important data boundary: **citizen reports are not autom
 
 ## Screenshots
 
-A curated set of **24 web and mobile screenshots** is available for the portfolio. Image embeds will be enabled when the screenshot assets are committed to `docs/screenshots/` so the README does not display broken links.
+### Web dashboard
 
-**Web:** landing page, dashboard, analytics, heat map, predictions, dataset upload, citizen report management, user management, and sign-in.
+**Landing page**
 
-**Mobile:** home, insights, guided reporting, report history, sign-in, registration, terms, and account-related screens.
+![FoodSafe Manila landing page](docs/screenshots/landing-page.png)
+
+**Dashboard and analytics**
+
+| Dashboard overview | Dashboard detail |
+| --- | --- |
+| ![Web dashboard overview](docs/screenshots/web-dashboard1.png) | ![Web dashboard detail](docs/screenshots/web-dashboard2.png) |
+
+| Analytics overview | Analytics detail |
+| --- | --- |
+| ![Analytics overview](docs/screenshots/analytics1.png) | ![Analytics detail](docs/screenshots/analytics2.png) |
+
+**Geographic heat map**
+
+![Geographic heat map](docs/screenshots/heatmap.png)
+
+**Forecasting and predictions**
+
+| Forecast view | Forecast details |
+| --- | --- |
+| ![Predictions overview](docs/screenshots/predictions1.png) | ![Predictions detail](docs/screenshots/predictions2.png) |
+
+![Additional forecasting view](docs/screenshots/predictions3.png)
+
+<details>
+<summary><strong>More web screens — datasets, reports, users, and login</strong></summary>
+
+| Dataset upload | Citizen report management |
+| --- | --- |
+| ![Dataset upload](docs/screenshots/data-upload.png) | ![Citizen report management](docs/screenshots/citizen-report-management.png) |
+
+| User management | Web login |
+| --- | --- |
+| ![User management](docs/screenshots/user-management.png) | ![Web login](docs/screenshots/web-login.png) |
+
+</details>
+
+### Flutter mobile application
+
+**Home and insights**
+
+| Mobile home | Additional home view |
+| --- | --- |
+| <img src="docs/screenshots/mobile-home1.jpg" alt="Mobile home screen" width="280"> | <img src="docs/screenshots/mobile-home2.jpg" alt="Additional mobile home view" width="280"> |
+
+| Insights | Additional insights |
+| --- | --- |
+| <img src="docs/screenshots/mobile-insights1.jpg" alt="Mobile insights" width="280"> | <img src="docs/screenshots/mobile-insights2.jpg" alt="Additional mobile insights" width="280"> |
+
+**Guided citizen reporting**
+
+| Report step 1 | Report step 2 | Report step 3 |
+| --- | --- | --- |
+| <img src="docs/screenshots/mobile-report1.jpg" alt="Report form step 1" width="240"> | <img src="docs/screenshots/mobile-report2.jpg" alt="Report form step 2" width="240"> | <img src="docs/screenshots/mobile-report3.jpg" alt="Report form step 3" width="240"> |
+
+<details>
+<summary><strong>More mobile screens — account access, report history, and terms</strong></summary>
+
+| Sign in | Register |
+| --- | --- |
+| <img src="docs/screenshots/mobile-login.jpg" alt="Mobile sign-in" width="280"> | <img src="docs/screenshots/mobile-register.jpg" alt="Mobile registration" width="280"> |
+
+| Report history | Terms and conditions |
+| --- | --- |
+| <img src="docs/screenshots/mobile-report-history.jpg" alt="Mobile report history" width="280"> | <img src="docs/screenshots/terms-and-conditions.jpg" alt="Terms and conditions" width="280"> |
+
+</details>
 
 ## Technology stack
 
