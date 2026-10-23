@@ -12,7 +12,7 @@ Commands below use PowerShell and start from the repository root unless a workin
 | Mobile | Flutter with Dart satisfying `^3.10.0`, Android SDK tools, emulator or connected device |
 | Integrations | Internet access and authorized development configuration for email, SMS, private R2, or remote Actions forecasts when exercising those features |
 
-The root `package.json` has no orchestration scripts. Install and run `frontend` and `backend` separately. The legacy `mobile/backend/` API is deprecated; use the shared root `backend/`.
+The unused root `package.json` and `package-lock.json` have been removed. Install and run `frontend` and `backend` separately using their own manifests and lockfiles; there is no root npm command. The legacy `mobile/backend/` API is deprecated; use the shared root `backend/`.
 
 ## Backend
 

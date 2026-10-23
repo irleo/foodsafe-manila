@@ -24,11 +24,11 @@ The frontend receives build-time `VITE_API_BASE_URL`, using the backend origin w
 
 The Blueprint lists frontend domains `foodsafe-manila.online` and `www.foodsafe-manila.online`. Backend `ALLOWED_ORIGINS` must allow the actual browser origins. If the API hostname changes, update the frontend API setting and Blueprint CSP `connect-src` together, then rebuild. DNS ownership and live domain verification are operational settings outside this repository.
 
-## Release strategy and current gap
+## Release strategy and activation
 
-Both services declare `autoDeployTrigger: checksPass`. The intended process is a feature branch, PR into `production`, passing checks, reviewed merge, and deployment of the merged commit. Current Actions files are dispatch-based forecasting workflows; they do not provide general PR/push quality checks.
+Both services declare `autoDeployTrigger: checksPass`. The intended process is a feature branch, PR into `production`, passing checks, reviewed merge, and deployment of the merged commit. [FoodSafe CI](../.github/workflows/ci.yml) defines frontend, backend, synthetic forecasting, and Flutter quality jobs for PRs targeting `production` and pushes to `production`. Operational forecast workflows remain separately dispatched.
 
-Implement and observe quality CI in Phase 3 before treating this gate as complete. Render does not automatically deploy a commit with no detected checks under **After CI Checks Pass**. See [Render CI integration](https://render.com/docs/deploys#integrating-with-ci) and the [deployment guide](ci-cd-deployment-guide.md).
+Publish the workflow, observe its actual results, and configure required checks and PR protection before treating this gate as complete. A local workflow file does not establish that a GitHub run succeeded or a repository ruleset is active. Render does not automatically deploy a commit with no detected checks under **After CI Checks Pass**. See [Render CI integration](https://render.com/docs/deploys#integrating-with-ci) and the [deployment guide](ci-cd-deployment-guide.md).
 
 Render checks new web instances before sending them traffic. `/api/health` confirms that Express responds; it does not establish database or forecast readiness. Verify an authenticated data view and completed forecast separately. See [Render health checks](https://render.com/docs/health-checks).
 

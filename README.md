@@ -94,7 +94,7 @@ flowchart LR
 
 The API is the shared source of truth for both clients. Administrative operations, report workflows, analytics, and predictions are implemented in the backend rather than duplicated in the mobile and web applications.
 
-The diagram represents GitHub execution, required by the Node-only Render backend build. Local development can run Prophet through Python subprocesses instead. The in-process monthly fallback runs only in local mode; current GitHub workflows are dispatch-based. See the [detailed architecture](docs/architecture.md).
+The diagram represents GitHub execution, required by the Node-only Render backend build. Local development can run Prophet through Python subprocesses instead. The in-process monthly fallback runs only in local mode; the forecasting workflows are dispatch-based. A separate CI workflow checks pull requests and production pushes. See the [detailed architecture](docs/architecture.md).
 
 ## Predictive analytics
 
@@ -181,6 +181,8 @@ Mobile reporting uses policy acknowledgements and reporting/location disclosures
 
 The repository also includes automated checks for error disclosure, analytics data boundaries, authentication/report policies, and related defects.
 
+[FoodSafe CI](.github/workflows/ci.yml) defines frontend lint/tests/build, backend syntax/tests, synthetic Python forecasting tests, and Flutter analysis/tests. It runs on pull requests targeting `production` and pushes to `production`. A successful GitHub run and required-check enforcement must be verified before treating the release gate as active; adding the workflow alone does not configure repository protection.
+
 ## Documentation
 
 - [Local development and environment configuration](docs/local-development.md)
@@ -191,7 +193,7 @@ The repository also includes automated checks for error disclosure, analytics da
 - [Existing checks and test commands](docs/testing.md)
 - [Capstone contributions](docs/contributions.md)
 - [Deployment overview](docs/deployment-architecture-overview.md)
-- [CI/CD deployment guide and remaining CI work](docs/ci-cd-deployment-guide.md)
+- [CI workflow, branch protection, and deployment guide](docs/ci-cd-deployment-guide.md)
 - [Forecast production workflow](docs/forecast-production.md)
 - [Forecast testing](docs/forecast-testing.md)
 - [Project documentation](DOCU.md)

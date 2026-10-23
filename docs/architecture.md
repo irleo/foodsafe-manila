@@ -70,7 +70,7 @@ In local mode, Node orchestrates Python on the API host. The monthly cron runs a
 | Frontend API | Build-time `VITE_API_BASE_URL`, an origin without `/api` |
 | Mobile API | `--dart-define=API_BASE_URL=.../api`, required for release builds |
 | Browser access | Exact frontend origins in backend `ALLOWED_ORIGINS`; frontend CSP must permit the API host |
-| Deploy gate | Both services declare `autoDeployTrigger: checksPass`; general PR/push CI is still missing |
+| Deploy gate | Both services declare `autoDeployTrigger: checksPass`; `ci.yml` defines four quality jobs for PRs into `production` and production pushes; actual runs/settings still require verification |
 
 The Blueprint does not establish the live Render dashboard settings. The declared Free backend can sleep while idle; continuous availability cannot be assumed. See [Render Free services](https://render.com/docs/free).
 
@@ -86,6 +86,6 @@ The Blueprint does not establish the live Render dashboard settings. The declare
 | `backend/services/prophet` | Python forecast implementation |
 | `backend/scripts/runGitHubForecastJob.js` | Actions worker entry point |
 | `backend/jobs/predictionCron.js` | Local-mode monthly fallback |
-| `.github/workflows` | Dispatch-based worker and manual testing trials |
+| `.github/workflows` | PR/push quality CI, dispatch-based forecast worker, and manual forecast testing trials |
 
 Local-mode queue/cron coordination is process-local. GitHub mode stores scoped job state in MongoDB and uses worker claims and existing indexes. Review both modes before horizontal scaling; their coordination guarantees differ.

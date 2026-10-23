@@ -59,4 +59,17 @@ Current checks include auth/OTP flows, session handling, reporting confirmation,
 
 The `load-tests/` k6 scenarios and [project notes](../DOCU.md#load-testing) document workload testing. Keep load checks on an authorized nonproduction target; they do not replace correctness checks. Do not run a database-writing trial or production load test as part of a routine documentation validation.
 
-General PR/push CI remains Phase 3 work. The existing Actions workflows are dispatch-based forecasting jobs.
+## GitHub quality CI
+
+[FoodSafe CI](../.github/workflows/ci.yml) runs on pull requests targeting `production` and pushes to `production`. Its four independent Ubuntu 24.04 jobs are:
+
+| Check name | Commands / runtime |
+| --- | --- |
+| `Frontend quality` | Node 22; `npm ci`, `npm run lint`, `node --test "tests/*.test.js"`, `npm run build` in `frontend/` |
+| `Backend quality` | Node 22; `npm ci`, JavaScript syntax checks, `node --test "tests/*.test.js"` in `backend/` |
+| `Forecast regression` | Python 3.12; install pinned requirements; `python -m unittest discover -s backend/tests -p 'forecast_monthly_*_test.py'` from the repository root |
+| `Mobile quality` | Flutter stable; `flutter pub get`, `flutter analyze`, `flutter test` in `mobile/` |
+
+The workflow uses read-only repository permissions, dependency caches, job timeouts, and cancellation of superseded quality runs. It does not dispatch operational forecasting or supply production service credentials. Flutter currently follows the stable channel; pinning the working SDK version would make that toolchain repeatable.
+
+Pushing a feature branch alone does not trigger this workflow unless it has an open PR targeting `production`. Inspect the first run's individual step logs, fix failures, and configure the observed check names as required before merge. The workflow's presence is not evidence that these commands passed. See [CI/CD setup](ci-cd-deployment-guide.md).

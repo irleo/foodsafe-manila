@@ -325,7 +325,7 @@ The previous `frontend/src/data` inventory no longer matches the current tree. A
 
 ### Testing and QA
 
-Backend Node regressions, frontend Node regressions, Python synthetic forecast checks, and Flutter service/widget tests are present. Commands and coverage limits are in [testing](docs/testing.md). Existing package scripts cover subsets; use the documented all-files commands for the current Node suites. General PR/push CI, full browser/device integration coverage, and fresh-clone verification remain separate work. The k6 scenarios measure load behavior and do not replace correctness checks.
+Backend Node regressions, frontend Node regressions, Python synthetic forecast checks, and Flutter service/widget tests are present. Commands and coverage limits are in [testing](docs/testing.md). Existing package scripts cover subsets; CI uses all-files commands for the Node suites. [FoodSafe CI](.github/workflows/ci.yml) defines four jobs for PRs targeting `production` and pushes to `production`. Its first GitHub run and required-check enforcement still need verification. Full browser/device integration coverage and fresh-clone validation remain separate work. The k6 scenarios measure load behavior and do not replace correctness checks.
 
 ## Known Gaps, TODOs, and Broken or Risky Pieces
 
@@ -336,7 +336,7 @@ Backend Node regressions, frontend Node regressions, Python synthetic forecast c
 - CSV upload messaging says CSV is unsupported, but legacy CSV code remains below that branch.
 - Prediction failures are stored as failed `PredictionRun` records, but upload succeeds even if prediction fails. That behavior may be intended, but the UI should make prediction failures visible enough.
 - There are no root-level scripts for starting the full backend/frontend/mobile stack together.
-- Root `package.json` is an empty object, so monorepo orchestration is not currently implemented.
+- The unused root npm manifest and empty lockfile have been removed. Frontend and backend retain their own manifests/lockfiles and run independently.
 - The `files/` directory is ignored. Do not assume every spreadsheet filename elsewhere is ignored; review candidate files and `git check-ignore` before staging data.
 - New validated uploads are retained in private Cloudflare R2. Historical dataset records with local paths remain downloadable only while those files still exist.
 - Backend routes depend on private JWT/OTP, MongoDB, R2, Brevo, Semaphore, and optional GitHub worker settings. See [local setup](docs/local-development.md) and [deployment guidance](docs/ci-cd-deployment-guide.md). Neither document establishes that live settings have been verified.
@@ -347,8 +347,8 @@ Backend Node regressions, frontend Node regressions, Python synthetic forecast c
 
 - `.gitignore`: Excludes local data directories, uploads, logs, dependencies, builds, private environment files, editor folders, Vite/Python caches, and forecast artifacts. Documentation is tracked normally.
 - `README.md`: Setup and architecture overview for backend, frontend, and mobile app.
-- `package.json`: Empty root package manifest.
-- `package-lock.json`: Root npm lockfile.
+- `.github/workflows/ci.yml`: Frontend, backend, synthetic Python forecasting, and Flutter quality checks on PRs into `production` and pushes to `production`.
+- The unused root `package.json` and `package-lock.json` were removed; application manifests/lockfiles remain in `frontend/` and `backend/`.
 - Historical local workbook names are not a current inventory or an ignore guarantee. Keep private workbooks out of commits and verify each candidate path.
 
 ### Backend Configuration and Entry
